@@ -7,15 +7,19 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const path = require('path');
 const { parseStringPromise } = require('xml2js');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const app = express();
+
+const PROXY_URL = process.env.HTTPS_PROXY || process.env.https_proxy || 'http://127.0.0.1:7890';
+const proxyAgent = new HttpsProxyAgent(PROXY_URL);
 
 function makeParser(signal) {
   return new Parser({
     timeout: 10000,
     headers: { 'User-Agent': 'RSS-Reader/1.0' },
     customFields: { item: [['content:encoded', 'contentEncoded']] },
-    requestOptions: { signal },
+    requestOptions: { signal, agent: proxyAgent },
   });
 }
 
@@ -196,6 +200,14 @@ app.post('/api/feeds/import-opml', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: 'Failed to parse OPML', detail: err.message });
   }
+});
+
+app.patch('/api/feeds/:id', (req, res) => {
+  const { name, category } = req.body;
+  const info = db.prepare('UPDATE feeds SET name = ?, category = ? WHERE id = ?')
+    .run(name || null, category || null, req.params.id);
+  if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
 });
 
 app.delete('/api/feeds/:id', (req, res) => {

@@ -3,13 +3,15 @@ import FeedSidebar from './components/FeedSidebar';
 import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
 import AddFeedModal from './components/AddFeedModal';
+import ManageFeedsModal from './components/ManageFeedsModal';
 
 const API = '/api';
 
 export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [feeds, setFeeds] = useState([]);
-  const [selectedView, setSelectedView] = useState({ type: 'all' });
+  const [selectedView, setSelectedView] = useState({ type: 'today' });
   const [articles, setArticles] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingArticles, setLoadingArticles] = useState(false);
@@ -92,6 +94,15 @@ export default function App() {
     }
   }, [selectedView]);
 
+  const handleUpdateFeed = useCallback(async (feedId, { name, category }) => {
+    await fetch(`${API}/feeds/${feedId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, category }),
+    });
+    setFeeds(prev => prev.map(f => f.id === feedId ? { ...f, name, category } : f));
+  }, []);
+
   const unreadCount = articles.filter(a => !a.isRead).length;
 
   return (
@@ -100,11 +111,11 @@ export default function App() {
         feeds={feeds}
         selectedView={selectedView}
         onSelectView={setSelectedView}
-        onDeleteFeed={handleDeleteFeed}
         unreadCount={unreadCount}
         starredCount={starredCount}
         onRefresh={() => loadArticles(selectedView)}
         onOpenAddModal={() => setShowAddModal(true)}
+        onOpenManageModal={() => setShowManageModal(true)}
       />
       <ArticleList
         articles={articles}
@@ -126,6 +137,14 @@ export default function App() {
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddFeed}
           onImport={(newFeeds) => setFeeds(prev => [...prev, ...newFeeds])}
+        />
+      )}
+      {showManageModal && (
+        <ManageFeedsModal
+          feeds={feeds}
+          onClose={() => setShowManageModal(false)}
+          onDelete={handleDeleteFeed}
+          onUpdate={handleUpdateFeed}
         />
       )}
     </div>

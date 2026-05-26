@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, X, Sun, Star, Circle, Rss } from 'lucide-react';
+import { RefreshCw, Plus, Sun, Star, Circle, Rss, Settings } from 'lucide-react';
 
 function FeedIcon({ url }) {
   const [failed, setFailed] = useState(false);
@@ -35,10 +35,9 @@ function groupByCategory(feeds) {
 }
 
 export default function FeedSidebar({
-  feeds, selectedView, onSelectView, onDeleteFeed,
-  unreadCount, starredCount, onRefresh, onOpenAddModal,
+  feeds, selectedView, onSelectView,
+  unreadCount, starredCount, onRefresh, onOpenAddModal, onOpenManageModal,
 }) {
-  const [hoveredFeed, setHoveredFeed] = useState(null);
   const groups = groupByCategory(feeds);
 
   return (
@@ -61,6 +60,7 @@ export default function FeedSidebar({
         </span>
         <div style={{ display: 'flex', gap: 4 }}>
           <IconBtn onClick={onRefresh} title="刷新"><RefreshCw size={13} /></IconBtn>
+          <IconBtn onClick={onOpenManageModal} title="管理订阅源"><Settings size={13} /></IconBtn>
           <IconBtn onClick={onOpenAddModal} title="添加订阅"><Plus size={13} /></IconBtn>
         </div>
       </div>
@@ -100,33 +100,13 @@ export default function FeedSidebar({
             {catFeeds.map(feed => {
               const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
               return (
-                <div key={feed.id} style={{ position: 'relative' }}
-                  onMouseEnter={() => setHoveredFeed(feed.id)}
-                  onMouseLeave={() => setHoveredFeed(null)}
-                >
-                  <NavItem
-                    label={feed.name}
-                    icon={<FeedIcon url={feed.url} />}
-                    selected={isSelected}
-                    onClick={() => onSelectView({ type: 'feed', feed })}
-                  />
-                  {hoveredFeed === feed.id && (
-                    <button
-                      onClick={() => onDeleteFeed(feed.id)}
-                      style={{
-                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                        color: 'var(--text-tertiary)', padding: 3, borderRadius: 3,
-                        lineHeight: 1, transition: 'color 0.15s', zIndex: 1,
-                        background: 'none', border: 'none', cursor: 'pointer',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
-                      title="删除"
-                    >
-                      <X size={11} />
-                    </button>
-                  )}
-                </div>
+                <NavItem
+                  key={feed.id}
+                  label={feed.name}
+                  icon={<FeedIcon url={feed.url} />}
+                  selected={isSelected}
+                  onClick={() => onSelectView({ type: 'feed', feed })}
+                />
               );
             })}
           </div>
