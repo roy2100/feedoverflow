@@ -2,6 +2,9 @@
   "name": "rss-reader-server",
   "version": "1.0.0",
   "main": "index.js",
+  "scripts": {
+    "test": "node --test *.test.js"
+  },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",

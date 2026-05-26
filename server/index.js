@@ -1,4 +1,6 @@
 process.title = 'rss-reader';
+// Needed for proxy TLS compat (local single-user app)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const express = require('express');
 const cors = require('cors');
@@ -14,7 +16,7 @@ const { JSDOM } = require('jsdom');
 const app = express();
 
 const PROXY_URL = process.env.HTTPS_PROXY || process.env.https_proxy || 'http://127.0.0.1:7890';
-const proxyAgent = new HttpsProxyAgent(PROXY_URL);
+const proxyAgent = new HttpsProxyAgent(PROXY_URL, { rejectUnauthorized: false });
 
 function makeParser(signal) {
   return new Parser({
@@ -23,6 +25,18 @@ function makeParser(signal) {
     customFields: { item: [['content:encoded', 'contentEncoded']] },
     requestOptions: { signal, agent: proxyAgent },
   });
+}
+
+async function parseURL(url, signal) {
+  try {
+    return await makeParser(signal).parseURL(url);
+  } catch (err) {
+    // Trailing-slash URLs trigger a 308 redirect; the second TLS connection after
+    // redirect fails with "bad record mac" due to proxy session-resumption issues.
+    // Strip the slash to avoid the redirect entirely.
+    if (url.endsWith('/')) return makeParser(signal).parseURL(url.slice(0, -1));
+    throw err;
+  }
 }
 
 app.use(cors());
@@ -124,7 +138,7 @@ const feedCache = new Map(); // feedId → { items, feedName, fetchedAt }
 const CACHE_TTL = 5 * 60 * 1000;
 
 async function fetchAndCache(feed) {
-  const parsed = await makeParser().parseURL(feed.url);
+  const parsed = await parseURL(feed.url);
   feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
   return feedCache.get(feed.id);
 }
@@ -132,7 +146,7 @@ async function fetchAndCache(feed) {
 async function getCachedFeed(feed, signal) {
   const cached = feedCache.get(feed.id);
   if (!cached) {
-    const parsed = await makeParser(signal).parseURL(feed.url);
+    const parsed = await parseURL(feed.url, signal);
     if (signal?.aborted) return null;
     feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
     return feedCache.get(feed.id);
@@ -212,12 +226,9 @@ app.delete('/api/feeds/:id', (req, res) => {
 app.get('/api/fetch-content', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url required' });
+  const fetchHeaders = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
   try {
-    const response = await fetch(url, {
-      agent: proxyAgent,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-      signal: AbortSignal.timeout(15000),
-    });
+    const response = await fetch(url, { agent: proxyAgent, headers: fetchHeaders, signal: AbortSignal.timeout(15000) });
     if (!response.ok) return res.status(502).json({ error: `Upstream ${response.status}` });
     const html = await response.text();
     const dom = new JSDOM(html, { url });
@@ -314,4 +325,8 @@ app.post('/api/articles/star', (req, res) => {
 });
 
 const PORT = 3002;
-app.listen(PORT, () => console.log(`RSS server on http://localhost:${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`RSS server on http://localhost:${PORT}`));
+}
+
+module.exports = { parseURL };
