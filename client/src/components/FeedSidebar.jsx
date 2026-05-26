@@ -1,34 +1,5 @@
 import { useState } from 'react';
-
-const ICONS = {
-  all: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
-      <path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  feed: (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <path d="M3 3.5A.5.5 0 013.5 3h9a.5.5 0 010 1h-9A.5.5 0 013 3.5zM3 8a.5.5 0 01.5-.5h9a.5.5 0 010 1h-9A.5.5 0 013 8zM3.5 12a.5.5 0 000 1h9a.5.5 0 000-1h-9z" fill="currentColor"/>
-    </svg>
-  ),
-  add: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-  refresh: (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-      <path d="M14 8A6 6 0 112 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M14 4v4h-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  ),
-  delete: (
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-      <path d="M2 2l8 8M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  ),
-};
+import { RefreshCw, Plus, X } from 'lucide-react';
 
 function groupByCategory(feeds) {
   const groups = {};
@@ -83,7 +54,7 @@ export default function FeedSidebar({
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
             title="刷新"
           >
-            {ICONS.refresh}
+            <RefreshCw size={13} />
           </button>
           <button
             onClick={onOpenAddModal}
@@ -92,7 +63,7 @@ export default function FeedSidebar({
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
             title="添加订阅"
           >
-            {ICONS.add}
+            <Plus size={13} />
           </button>
         </div>
       </div>
@@ -157,7 +128,7 @@ export default function FeedSidebar({
                       onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
                       title="删除"
                     >
-                      {ICONS.delete}
+                      <X size={11} />
                     </button>
                   )}
                 </div>

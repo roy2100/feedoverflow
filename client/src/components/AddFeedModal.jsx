@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 
 export default function AddFeedModal({ onClose, onAdd }) {
   const [url, setUrl] = useState('');
@@ -73,13 +74,13 @@ export default function AddFeedModal({ onClose, onAdd }) {
               background: 'var(--bg-hover)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'var(--text-secondary)',
-              fontSize: 16, lineHeight: 1,
+              lineHeight: 1,
               transition: 'background 0.12s',
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-selected)'}
             onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-hover)'}
           >
-            ×
+            <X size={14} />
           </button>
         </div>
 
