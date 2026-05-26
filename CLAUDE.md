@@ -5,20 +5,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run both server and client in parallel
-npm run dev
+# Development
+npm run dev              # server (3002) + client (3000) in parallel
+npm run server           # server only (port 3002)
+npm run client           # client only (port 3000)
 
-# Run server only (port 3002)
-npm run server
-
-# Run client only (port 3000)
-npm run client
-
-# Install all dependencies (run in root, server/, and client/)
+# Install all dependencies
 npm install && cd server && npm install && cd ../client && npm install
+
+# Production deploy
+./deploy.sh              # install deps, build frontend, reload Caddy, restart backend service
+
+# Service management
+launchctl start rss-reader.backend
+launchctl stop rss-reader.backend
+launchctl kickstart -k "gui/$(id -u)/rss-reader.backend"   # force restart
+tail -f /tmp/rss-reader-backend.log
 ```
 
 There are no test or lint scripts configured.
+
+## Deployment context
+
+Single-user app running locally on macOS, served at `http://rss.local` via Caddy. Not exposed to the public internet. No need for authentication, multi-tenancy, rate limiting, or cloud infrastructure. Prefer simple, lightweight solutions (in-memory cache, SQLite, local files) over over-engineered ones.
+
+**Production stack:**
+- Backend: launchd service (`rss-reader.backend`) running `server/index.js` on port 3002, auto-starts on boot
+- Frontend: Vite build → `client/dist/`, served as static files by Caddy
+- Caddy: reverse-proxies `/api/*` → `localhost:3002`, SPA fallback for all other paths
+- `/etc/hosts`: `127.0.0.1 rss.local`
+- Caddyfile lives in the networth repo: `/Users/lielienan/Project/networth/Caddyfile`
+
+**Port allocation (no conflicts with networth.local):**
+- `networth.local` backend → 3001
+- `rss.local` backend → 3002
+- Dev client → 3000
 
 ## Architecture
 
