@@ -1,119 +1,196 @@
 const express = require('express');
 const cors = require('cors');
 const Parser = require('rss-parser');
-const fs = require('fs');
+const crypto = require('crypto');
+const Database = require('better-sqlite3');
 const path = require('path');
 
 const app = express();
 const parser = new Parser({
   timeout: 10000,
   headers: { 'User-Agent': 'RSS-Reader/1.0' },
-  customFields: {
-    item: [['media:thumbnail', 'thumbnail'], ['content:encoded', 'contentEncoded']],
-  },
+  customFields: { item: [['content:encoded', 'contentEncoded']] },
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
-const DATA_FILE = path.join(__dirname, 'feeds.json');
+// ── Database ──────────────────────────────────────────────────────────────────
+const db = new Database(path.join(__dirname, 'rss.db'));
+db.pragma('journal_mode = WAL');
 
-const DEFAULT_FEEDS = [
-  { id: '1', name: '少数派', url: 'https://sspai.com/feed', category: '科技' },
-  { id: '2', name: '虎嗅', url: 'https://feeds.feedburner.com/huxiu', category: '科技' },
-  { id: '3', name: '36氪', url: 'https://36kr.com/feed', category: '财经' },
-  { id: '4', name: '阮一峰的网络日志', url: 'https://feeds.feedburner.com/ruanyifeng', category: '技术' },
-];
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feeds (
+    id       TEXT PRIMARY KEY,
+    name     TEXT NOT NULL,
+    url      TEXT NOT NULL,
+    category TEXT DEFAULT '未分类'
+  );
+  CREATE TABLE IF NOT EXISTS article_states (
+    article_id TEXT PRIMARY KEY,
+    feed_id    TEXT,
+    feed_name  TEXT,
+    title      TEXT,
+    link       TEXT,
+    pub_date   TEXT,
+    summary    TEXT,
+    content    TEXT,
+    author     TEXT,
+    is_read    INTEGER DEFAULT 0,
+    is_starred INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
 
-function loadFeeds() {
-  if (fs.existsSync(DATA_FILE)) {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-  }
-  fs.writeFileSync(DATA_FILE, JSON.stringify(DEFAULT_FEEDS, null, 2));
-  return DEFAULT_FEEDS;
+// Seed default feeds once
+if (db.prepare('SELECT COUNT(*) AS n FROM feeds').get().n === 0) {
+  const ins = db.prepare('INSERT INTO feeds (id,name,url,category) VALUES (?,?,?,?)');
+  [
+    ['1', '少数派',       'https://sspai.com/feed',                    '科技'],
+    ['2', '虎嗅',         'https://feeds.feedburner.com/huxiu',        '科技'],
+    ['3', '36氪',         'https://36kr.com/feed',                     '财经'],
+    ['4', '阮一峰的网络日志', 'https://feeds.feedburner.com/ruanyifeng', '技术'],
+  ].forEach(r => ins.run(...r));
 }
 
-function saveFeeds(feeds) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(feeds, null, 2));
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function makeId(link, title, pubDate) {
+  return crypto.createHash('md5')
+    .update(link || `${title}${pubDate}`)
+    .digest('hex').slice(0, 12);
 }
 
-// GET /api/feeds
-app.get('/api/feeds', (req, res) => {
-  const feeds = loadFeeds();
-  res.json(feeds);
+const getState = db.prepare('SELECT is_read, is_starred FROM article_states WHERE article_id = ?');
+
+function enrich(items, feedId, feedName) {
+  return items.map((item, i) => {
+    const id = makeId(item.link, item.title, item.pubDate || item.isoDate || String(i));
+    const st = getState.get(id) || { is_read: 0, is_starred: 0 };
+    return {
+      id,
+      feedId,
+      feedName,
+      title:   item.title || 'Untitled',
+      summary: item.contentSnippet || item.summary || '',
+      content: item.contentEncoded || item.content || item.summary || '',
+      link:    item.link || '',
+      pubDate: item.pubDate || item.isoDate || '',
+      author:  item.creator || item.author || '',
+      isRead:     !!st.is_read,
+      isStarred:  !!st.is_starred,
+    };
+  });
+}
+
+const upsertState = db.prepare(`
+  INSERT INTO article_states
+    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,is_read,is_starred)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  ON CONFLICT(article_id) DO UPDATE SET
+    is_read    = CASE WHEN excluded.is_read    IS NOT NULL THEN excluded.is_read    ELSE is_read    END,
+    is_starred = CASE WHEN excluded.is_starred IS NOT NULL THEN excluded.is_starred ELSE is_starred END,
+    updated_at = datetime('now')
+`);
+
+function saveState(article, patch) {
+  upsertState.run(
+    article.id, article.feedId, article.feedName,
+    article.title, article.link, article.pubDate,
+    article.summary, article.content, article.author,
+    patch.is_read    ?? null,
+    patch.is_starred ?? null,
+  );
+}
+
+// ── Feeds API ─────────────────────────────────────────────────────────────────
+app.get('/api/feeds', (_req, res) => {
+  res.json(db.prepare('SELECT * FROM feeds ORDER BY rowid').all());
 });
 
-// POST /api/feeds
 app.post('/api/feeds', (req, res) => {
   const { url, name, category } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL is required' });
-  const feeds = loadFeeds();
+  if (!url) return res.status(400).json({ error: 'URL required' });
   const id = Date.now().toString();
-  const newFeed = { id, name: name || url, url, category: category || '未分类' };
-  feeds.push(newFeed);
-  saveFeeds(feeds);
-  res.json(newFeed);
+  db.prepare('INSERT INTO feeds (id,name,url,category) VALUES (?,?,?,?)').run(
+    id, name || url, url, category || '未分类'
+  );
+  res.json({ id, name: name || url, url, category: category || '未分类' });
 });
 
-// DELETE /api/feeds/:id
 app.delete('/api/feeds/:id', (req, res) => {
-  const feeds = loadFeeds();
-  const idx = feeds.findIndex(f => f.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Feed not found' });
-  feeds.splice(idx, 1);
-  saveFeeds(feeds);
+  const info = db.prepare('DELETE FROM feeds WHERE id = ?').run(req.params.id);
+  if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 
-// GET /api/feeds/:id/articles
+// ── Articles API ──────────────────────────────────────────────────────────────
 app.get('/api/feeds/:id/articles', async (req, res) => {
-  const feeds = loadFeeds();
-  const feed = feeds.find(f => f.id === req.params.id);
-  if (!feed) return res.status(404).json({ error: 'Feed not found' });
-
+  const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(req.params.id);
+  if (!feed) return res.status(404).json({ error: 'Not found' });
   try {
     const parsed = await parser.parseURL(feed.url);
-    const articles = parsed.items.slice(0, 50).map((item, i) => ({
-      id: `${feed.id}-${i}`,
-      title: item.title || 'Untitled',
-      summary: item.contentSnippet || item.summary || '',
-      content: item.contentEncoded || item.content || item.summary || '',
-      link: item.link || '',
-      pubDate: item.pubDate || item.isoDate || '',
-      author: item.creator || item.author || '',
-    }));
-    res.json({ feedName: parsed.title || feed.name, articles });
+    res.json({ feedName: parsed.title || feed.name, articles: enrich(parsed.items.slice(0, 50), feed.id, feed.name) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch feed', detail: err.message });
   }
 });
 
-// GET /api/all-articles  — aggregated unread view (first 5 from each feed)
 app.get('/api/all-articles', async (req, res) => {
-  const feeds = loadFeeds();
+  const feeds = db.prepare('SELECT * FROM feeds').all();
   const results = await Promise.allSettled(
-    feeds.map(async feed => {
-      const parsed = await parser.parseURL(feed.url);
-      return parsed.items.slice(0, 5).map((item, i) => ({
-        id: `${feed.id}-${i}`,
-        feedId: feed.id,
-        feedName: feed.name,
-        title: item.title || 'Untitled',
-        summary: item.contentSnippet || '',
-        content: item.contentEncoded || item.content || item.summary || '',
-        link: item.link || '',
-        pubDate: item.pubDate || item.isoDate || '',
-      }));
-    })
+    feeds.map(async f => { const p = await parser.parseURL(f.url); return enrich(p.items.slice(0, 5), f.id, f.name); })
   );
-
-  const articles = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value)
+  const articles = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-
   res.json({ articles });
 });
 
+app.get('/api/today', async (req, res) => {
+  const feeds = db.prepare('SELECT * FROM feeds').all();
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const results = await Promise.allSettled(
+    feeds.map(async f => {
+      const p = await parser.parseURL(f.url);
+      const todayItems = p.items.filter(item => new Date(item.pubDate || item.isoDate || 0) >= todayStart);
+      return enrich(todayItems, f.id, f.name);
+    })
+  );
+  const articles = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  res.json({ articles });
+});
+
+app.get('/api/starred', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC').all();
+  res.json({
+    articles: rows.map(r => ({
+      id: r.article_id, feedId: r.feed_id, feedName: r.feed_name,
+      title: r.title, summary: r.summary, content: r.content,
+      link: r.link, pubDate: r.pub_date, author: r.author,
+      isRead: !!r.is_read, isStarred: true,
+    })),
+  });
+});
+
+// GET /api/starred/count — lightweight count for sidebar badge
+app.get('/api/starred/count', (_req, res) => {
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1').get();
+  res.json({ count: n });
+});
+
+app.post('/api/articles/read', (req, res) => {
+  const { article } = req.body;
+  if (!article?.id) return res.status(400).json({ error: 'article required' });
+  saveState(article, { is_read: 1 });
+  res.json({ ok: true });
+});
+
+app.post('/api/articles/star', (req, res) => {
+  const { article, starred } = req.body;
+  if (!article?.id) return res.status(400).json({ error: 'article required' });
+  saveState(article, { is_starred: starred ? 1 : 0 });
+  res.json({ ok: true, isStarred: !!starred });
+});
+
 const PORT = 3002;
-app.listen(PORT, () => console.log(`RSS server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`RSS server on http://localhost:${PORT}`));

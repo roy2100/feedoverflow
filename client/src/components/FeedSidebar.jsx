@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, X } from 'lucide-react';
+import { RefreshCw, Plus, X, Sun, Star, Circle } from 'lucide-react';
 
 function groupByCategory(feeds) {
   const groups = {};
@@ -12,22 +12,18 @@ function groupByCategory(feeds) {
 }
 
 export default function FeedSidebar({
-  feeds, selectedView, onSelectView, onDeleteFeed, totalUnread, onRefresh, onOpenAddModal
+  feeds, selectedView, onSelectView, onDeleteFeed,
+  unreadCount, starredCount, onRefresh, onOpenAddModal,
 }) {
   const [hoveredFeed, setHoveredFeed] = useState(null);
-
   const groups = groupByCategory(feeds);
-
-  const isAllSelected = selectedView.type === 'all';
 
   return (
     <aside style={{
-      width: 220,
-      flexShrink: 0,
+      width: 220, flexShrink: 0,
       background: 'var(--bg-panel)',
       borderRight: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
+      display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
       animation: 'slideIn 0.2s ease',
     }}>
@@ -35,72 +31,53 @@ export default function FeedSidebar({
       <div style={{
         padding: '16px 14px 12px',
         borderBottom: '1px solid var(--border-light)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{
-          fontSize: 12,
-          fontWeight: 500,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: 'var(--text-tertiary)',
-        }}>订阅源</span>
+        <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
+          订阅源
+        </span>
         <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            onClick={onRefresh}
-            style={{ color: 'var(--text-tertiary)', padding: 4, borderRadius: 4, transition: 'color 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
-            title="刷新"
-          >
-            <RefreshCw size={13} />
-          </button>
-          <button
-            onClick={onOpenAddModal}
-            style={{ color: 'var(--text-tertiary)', padding: 4, borderRadius: 4, transition: 'color 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
-            title="添加订阅"
-          >
-            <Plus size={13} />
-          </button>
+          <IconBtn onClick={onRefresh} title="刷新"><RefreshCw size={13} /></IconBtn>
+          <IconBtn onClick={onOpenAddModal} title="添加订阅"><Plus size={13} /></IconBtn>
         </div>
       </div>
 
       {/* Nav */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-        {/* Smart Feeds */}
-        <div style={{ padding: '2px 12px 6px', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
-          智能订阅
-        </div>
+        <SectionLabel>智能订阅</SectionLabel>
+
+        <NavItem
+          label="Today"
+          icon={<Sun size={13} strokeWidth={2} />}
+          iconColor="#F5A623"
+          selected={selectedView.type === 'today'}
+          onClick={() => onSelectView({ type: 'today' })}
+        />
         <NavItem
           label="全部未读"
-          count={totalUnread}
-          selected={isAllSelected}
+          icon={<Circle size={9} fill="var(--dot-unread)" strokeWidth={0} />}
+          iconColor="var(--dot-unread)"
+          count={unreadCount}
+          selected={selectedView.type === 'all'}
           onClick={() => onSelectView({ type: 'all' })}
-          icon="●"
+        />
+        <NavItem
+          label="Starred"
+          icon={<Star size={13} strokeWidth={2} />}
+          iconColor="#F5C518"
+          count={starredCount}
+          selected={selectedView.type === 'starred'}
+          onClick={() => onSelectView({ type: 'starred' })}
         />
 
         {/* Feed groups */}
         {Object.entries(groups).map(([cat, catFeeds]) => (
           <div key={cat}>
-            <div style={{
-              padding: '10px 12px 4px',
-              fontSize: 10.5,
-              fontWeight: 600,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--text-tertiary)',
-            }}>
-              {cat}
-            </div>
+            <SectionLabel style={{ marginTop: 8 }}>{cat}</SectionLabel>
             {catFeeds.map(feed => {
               const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
               return (
-                <div
-                  key={feed.id}
-                  style={{ position: 'relative' }}
+                <div key={feed.id} style={{ position: 'relative' }}
                   onMouseEnter={() => setHoveredFeed(feed.id)}
                   onMouseLeave={() => setHoveredFeed(null)}
                 >
@@ -113,16 +90,10 @@ export default function FeedSidebar({
                     <button
                       onClick={() => onDeleteFeed(feed.id)}
                       style={{
-                        position: 'absolute',
-                        right: 10,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        color: 'var(--text-tertiary)',
-                        padding: 3,
-                        borderRadius: 3,
-                        lineHeight: 1,
-                        transition: 'color 0.15s',
-                        zIndex: 1,
+                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        color: 'var(--text-tertiary)', padding: 3, borderRadius: 3,
+                        lineHeight: 1, transition: 'color 0.15s', zIndex: 1,
+                        background: 'none', border: 'none', cursor: 'pointer',
                       }}
                       onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
                       onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
@@ -141,45 +112,54 @@ export default function FeedSidebar({
   );
 }
 
-function NavItem({ label, count, selected, onClick, icon }) {
+function IconBtn({ onClick, title, children }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{ color: 'var(--text-tertiary)', padding: 4, borderRadius: 4, transition: 'color 0.15s', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+      onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ padding: '2px 12px 6px', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
+      {children}
+    </div>
+  );
+}
+
+function NavItem({ label, icon, iconColor, count, selected, onClick }) {
   return (
     <button
       onClick={onClick}
       style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '6px 12px',
-        gap: 8,
+        width: '100%', display: 'flex', alignItems: 'center',
+        padding: '6px 12px', gap: 8,
         background: selected ? 'var(--bg-selected)' : 'transparent',
         color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
-        fontSize: 13,
-        fontWeight: selected ? 500 : 400,
-        textAlign: 'left',
-        borderRadius: 0,
+        fontSize: 13, fontWeight: selected ? 500 : 400,
+        textAlign: 'left', border: 'none', cursor: 'pointer',
         transition: 'background 0.1s, color 0.1s',
-        cursor: 'pointer',
       }}
       onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'var(--bg-hover)'; }}
       onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
     >
       {icon && (
-        <span style={{ fontSize: 7, color: 'var(--dot-unread)', lineHeight: 1 }}>{icon}</span>
+        <span style={{ color: iconColor, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          {icon}
+        </span>
       )}
-      <span style={{
-        flex: 1,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-      }}>{label}</span>
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
       {count != null && count > 0 && (
-        <span style={{
-          fontSize: 11,
-          color: selected ? 'var(--accent)' : 'var(--text-tertiary)',
-          fontWeight: 500,
-          minWidth: 20,
-          textAlign: 'right',
-        }}>
+        <span style={{ fontSize: 11, color: selected ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: 500, flexShrink: 0 }}>
           {count > 999 ? '999+' : count}
         </span>
       )}

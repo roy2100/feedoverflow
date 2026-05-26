@@ -1,3 +1,5 @@
+import { Star } from 'lucide-react';
+
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -8,7 +10,7 @@ function formatFullDate(dateStr) {
   });
 }
 
-export default function ArticleReader({ article }) {
+export default function ArticleReader({ article, onToggleStar }) {
   if (!article) {
     return (
       <div style={{
@@ -92,13 +94,29 @@ export default function ArticleReader({ article }) {
           <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
             {formatFullDate(article.pubDate)}
           </span>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Star button */}
+            <button
+              onClick={() => onToggleStar(article)}
+              title={article.isStarred ? '取消收藏' : '收藏'}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
+                display: 'flex', alignItems: 'center', padding: 4, borderRadius: 5,
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => { if (!article.isStarred) e.currentTarget.style.color = '#F5C518'; }}
+              onMouseLeave={e => { if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+            >
+              <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
+            </button>
+
           {article.link && (
             <a
               href={article.link}
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                marginLeft: 'auto',
                 fontSize: 12,
                 color: 'var(--accent)',
                 textDecoration: 'none',
@@ -117,6 +135,7 @@ export default function ArticleReader({ article }) {
               </svg>
             </a>
           )}
+          </div>
         </div>
 
         {/* Content */}

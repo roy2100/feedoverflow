@@ -9,24 +9,15 @@ const API = '/api';
 export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [feeds, setFeeds] = useState([]);
-  const [selectedView, setSelectedView] = useState({ type: 'all' }); // {type:'all'} | {type:'feed', feed}
+  const [selectedView, setSelectedView] = useState({ type: 'all' });
   const [articles, setArticles] = useState([]);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingArticles, setLoadingArticles] = useState(false);
-  const [readSet, setReadSet] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('rss_read') || '[]')); }
-    catch { return new Set(); }
-  });
+  const [starredCount, setStarredCount] = useState(0);
 
   useEffect(() => {
-    fetch(`${API}/feeds`)
-      .then(r => r.json())
-      .then(setFeeds)
-      .catch(console.error);
-  }, []);
-
-  const persistRead = useCallback((set) => {
-    localStorage.setItem('rss_read', JSON.stringify([...set]));
+    fetch(`${API}/feeds`).then(r => r.json()).then(setFeeds).catch(console.error);
+    fetch(`${API}/starred/count`).then(r => r.json()).then(d => setStarredCount(d.count || 0)).catch(console.error);
   }, []);
 
   const loadArticles = useCallback(async (view) => {
@@ -34,16 +25,10 @@ export default function App() {
     setLoadingArticles(true);
     setArticles([]);
     try {
-      let data;
-      if (view.type === 'all') {
-        const r = await fetch(`${API}/all-articles`);
-        data = await r.json();
-        setArticles(data.articles || []);
-      } else {
-        const r = await fetch(`${API}/feeds/${view.feed.id}/articles`);
-        data = await r.json();
-        setArticles(data.articles || []);
-      }
+      const urlMap = { all: `${API}/all-articles`, today: `${API}/today`, starred: `${API}/starred` };
+      const url = urlMap[view.type] ?? `${API}/feeds/${view.feed.id}/articles`;
+      const data = await fetch(url).then(r => r.json());
+      setArticles(data.articles || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -51,23 +36,37 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    loadArticles(selectedView);
-  }, [selectedView, loadArticles]);
-
-  const markRead = useCallback((articleId) => {
-    setReadSet(prev => {
-      const next = new Set(prev);
-      next.add(articleId);
-      persistRead(next);
-      return next;
-    });
-  }, [persistRead]);
+  useEffect(() => { loadArticles(selectedView); }, [selectedView, loadArticles]);
 
   const handleSelectArticle = useCallback((article) => {
     setSelectedArticle(article);
-    markRead(article.id);
-  }, [markRead]);
+    if (article.isRead) return;
+    // Optimistic update
+    setArticles(prev => prev.map(a => a.id === article.id ? { ...a, isRead: true } : a));
+    setSelectedArticle(a => a ? { ...a, isRead: true } : a);
+    fetch(`${API}/articles/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article }),
+    }).catch(console.error);
+  }, []);
+
+  const handleToggleStar = useCallback((article) => {
+    const newStarred = !article.isStarred;
+    // Optimistic update
+    setArticles(prev => prev.map(a => a.id === article.id ? { ...a, isStarred: newStarred } : a));
+    setSelectedArticle(prev => prev?.id === article.id ? { ...prev, isStarred: newStarred } : prev);
+    setStarredCount(n => Math.max(0, n + (newStarred ? 1 : -1)));
+    fetch(`${API}/articles/star`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article, starred: newStarred }),
+    }).catch(console.error);
+    // If in starred view, refresh list
+    if (selectedView.type === 'starred' && !newStarred) {
+      setArticles(prev => prev.filter(a => a.id !== article.id));
+    }
+  }, [selectedView]);
 
   const handleAddFeed = useCallback(async ({ url, name, category }) => {
     const r = await fetch(`${API}/feeds`, {
@@ -87,40 +86,38 @@ export default function App() {
     }
   }, [selectedView]);
 
-  const unreadCount = articles.filter(a => !readSet.has(a.id)).length;
+  const unreadCount = articles.filter(a => !a.isRead).length;
 
   return (
-    <div style={{
-      display: 'flex',
-      height: '100vh',
-      overflow: 'hidden',
-      background: 'var(--bg)',
-    }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
       <FeedSidebar
         feeds={feeds}
         selectedView={selectedView}
         onSelectView={setSelectedView}
         onDeleteFeed={handleDeleteFeed}
-        totalUnread={unreadCount}
+        unreadCount={unreadCount}
+        starredCount={starredCount}
         onRefresh={() => loadArticles(selectedView)}
         onOpenAddModal={() => setShowAddModal(true)}
       />
-      {showAddModal && (
-        <AddFeedModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddFeed}
-        />
-      )}
       <ArticleList
         articles={articles}
         selectedArticle={selectedArticle}
         onSelectArticle={handleSelectArticle}
+        onToggleStar={handleToggleStar}
         loading={loadingArticles}
-        readSet={readSet}
-        viewTitle={selectedView.type === 'all' ? '全部未读' : selectedView.feed?.name}
+        viewTitle={
+          selectedView.type === 'all'     ? '全部未读' :
+          selectedView.type === 'today'   ? '今日' :
+          selectedView.type === 'starred' ? '已收藏' :
+          selectedView.feed?.name
+        }
         onRefresh={() => loadArticles(selectedView)}
       />
-      <ArticleReader article={selectedArticle} />
+      <ArticleReader article={selectedArticle} onToggleStar={handleToggleStar} />
+      {showAddModal && (
+        <AddFeedModal onClose={() => setShowAddModal(false)} onAdd={handleAddFeed} />
+      )}
     </div>
   );
 }
