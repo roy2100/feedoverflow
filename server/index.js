@@ -1,3 +1,5 @@
+process.title = 'rss-reader';
+
 const express = require('express');
 const cors = require('cors');
 const Parser = require('rss-parser');
@@ -67,6 +69,11 @@ function makeId(link, title, pubDate) {
 
 const getState = db.prepare('SELECT is_read, is_starred FROM article_states WHERE article_id = ?');
 
+function dedupById(articles) {
+  const seen = new Set();
+  return articles.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
+}
+
 function enrich(items, feedId, feedName) {
   return items.map((item, i) => {
     const id = makeId(item.link, item.title, item.pubDate || item.isoDate || String(i));
@@ -106,6 +113,31 @@ function saveState(article, patch) {
     patch.is_starred ?? null,
   );
 }
+
+// ── Feed cache (stale-while-revalidate) ───────────────────────────────────────
+const feedCache = new Map(); // feedId → { items, feedName, fetchedAt }
+const CACHE_TTL = 5 * 60 * 1000;
+
+async function fetchAndCache(feed) {
+  const parsed = await makeParser().parseURL(feed.url);
+  feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
+  return feedCache.get(feed.id);
+}
+
+async function getCachedFeed(feed, signal) {
+  const cached = feedCache.get(feed.id);
+  if (!cached) {
+    const parsed = await makeParser(signal).parseURL(feed.url);
+    if (signal?.aborted) return null;
+    feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
+    return feedCache.get(feed.id);
+  }
+  if (Date.now() - cached.fetchedAt >= CACHE_TTL) fetchAndCache(feed).catch(() => {});
+  return cached;
+}
+
+// Warm cache on startup
+db.prepare('SELECT * FROM feeds').all().forEach(f => fetchAndCache(f).catch(() => {}));
 
 // ── Feeds API ─────────────────────────────────────────────────────────────────
 app.get('/api/feeds', (_req, res) => {
@@ -179,9 +211,9 @@ app.get('/api/feeds/:id/articles', async (req, res) => {
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   try {
-    const parsed = await makeParser(ac.signal).parseURL(feed.url);
+    const cached = await getCachedFeed(feed, ac.signal);
     if (ac.signal.aborted) return;
-    res.json({ feedName: parsed.title || feed.name, articles: enrich(parsed.items.slice(0, 50), feed.id, feed.name) });
+    res.json({ feedName: cached.feedName, articles: dedupById(enrich(cached.items.slice(0, 50), feed.id, feed.name)) });
   } catch (err) {
     if (ac.signal.aborted) return;
     res.status(500).json({ error: 'Failed to fetch feed', detail: err.message });
@@ -193,11 +225,14 @@ app.get('/api/all-articles', async (req, res) => {
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
-    feeds.map(async f => { const p = await makeParser(ac.signal).parseURL(f.url); return enrich(p.items.slice(0, 5), f.id, f.name); })
+    feeds.map(async f => {
+      const cached = await getCachedFeed(f, ac.signal);
+      return cached ? enrich(cached.items.slice(0, 5), f.id, f.name) : [];
+    })
   );
   if (ac.signal.aborted) return;
-  const articles = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
-    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const articles = dedupById(results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)));
   res.json({ articles });
 });
 
@@ -208,14 +243,15 @@ app.get('/api/today', async (req, res) => {
   req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
     feeds.map(async f => {
-      const p = await makeParser(ac.signal).parseURL(f.url);
-      const todayItems = p.items.filter(item => new Date(item.pubDate || item.isoDate || 0) >= todayStart);
+      const cached = await getCachedFeed(f, ac.signal);
+      if (!cached) return [];
+      const todayItems = cached.items.filter(item => new Date(item.pubDate || item.isoDate || 0) >= todayStart);
       return enrich(todayItems, f.id, f.name);
     })
   );
   if (ac.signal.aborted) return;
-  const articles = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
-    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const articles = dedupById(results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)));
   res.json({ articles });
 });
 
