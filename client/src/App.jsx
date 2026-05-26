@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import FeedSidebar from './components/FeedSidebar';
 import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
+import AddFeedModal from './components/AddFeedModal';
 
 const API = '/api';
 
 export default function App() {
+  const [showAddModal, setShowAddModal] = useState(false);
   const [feeds, setFeeds] = useState([]);
   const [selectedView, setSelectedView] = useState({ type: 'all' }); // {type:'all'} | {type:'feed', feed}
   const [articles, setArticles] = useState([]);
@@ -98,11 +100,17 @@ export default function App() {
         feeds={feeds}
         selectedView={selectedView}
         onSelectView={setSelectedView}
-        onAddFeed={handleAddFeed}
         onDeleteFeed={handleDeleteFeed}
         totalUnread={unreadCount}
         onRefresh={() => loadArticles(selectedView)}
+        onOpenAddModal={() => setShowAddModal(true)}
       />
+      {showAddModal && (
+        <AddFeedModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddFeed}
+        />
+      )}
       <ArticleList
         articles={articles}
         selectedArticle={selectedArticle}

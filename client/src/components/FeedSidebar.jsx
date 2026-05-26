@@ -41,29 +41,11 @@ function groupByCategory(feeds) {
 }
 
 export default function FeedSidebar({
-  feeds, selectedView, onSelectView, onAddFeed, onDeleteFeed, totalUnread, onRefresh
+  feeds, selectedView, onSelectView, onDeleteFeed, totalUnread, onRefresh, onOpenAddModal
 }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [addUrl, setAddUrl] = useState('');
-  const [addName, setAddName] = useState('');
-  const [addCat, setAddCat] = useState('');
-  const [adding, setAdding] = useState(false);
   const [hoveredFeed, setHoveredFeed] = useState(null);
 
   const groups = groupByCategory(feeds);
-
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!addUrl.trim()) return;
-    setAdding(true);
-    try {
-      await onAddFeed({ url: addUrl.trim(), name: addName.trim(), category: addCat.trim() });
-      setAddUrl(''); setAddName(''); setAddCat('');
-      setShowAdd(false);
-    } finally {
-      setAdding(false);
-    }
-  };
 
   const isAllSelected = selectedView.type === 'all';
 
@@ -104,71 +86,16 @@ export default function FeedSidebar({
             {ICONS.refresh}
           </button>
           <button
-            onClick={() => setShowAdd(v => !v)}
-            style={{
-              color: showAdd ? 'var(--accent)' : 'var(--text-tertiary)',
-              padding: 4, borderRadius: 4, transition: 'color 0.15s',
-            }}
-            onMouseEnter={e => !showAdd && (e.currentTarget.style.color = 'var(--accent)')}
-            onMouseLeave={e => !showAdd && (e.currentTarget.style.color = 'var(--text-tertiary)')}
+            onClick={onOpenAddModal}
+            style={{ color: 'var(--text-tertiary)', padding: 4, borderRadius: 4, transition: 'color 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
             title="添加订阅"
           >
             {ICONS.add}
           </button>
         </div>
       </div>
-
-      {/* Add feed form */}
-      {showAdd && (
-        <form onSubmit={handleAdd} style={{
-          padding: '10px 12px',
-          borderBottom: '1px solid var(--border-light)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          animation: 'fadeIn 0.15s ease',
-        }}>
-          {[
-            { value: addUrl, setter: setAddUrl, placeholder: 'RSS URL *', required: true },
-            { value: addName, setter: setAddName, placeholder: '名称（可选）' },
-            { value: addCat, setter: setAddCat, placeholder: '分类（可选）' },
-          ].map(({ value, setter, placeholder, required }) => (
-            <input
-              key={placeholder}
-              value={value}
-              onChange={e => setter(e.target.value)}
-              placeholder={placeholder}
-              required={required}
-              style={{
-                width: '100%',
-                padding: '5px 8px',
-                fontSize: 11.5,
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 5,
-                color: 'var(--text-primary)',
-                outline: 'none',
-              }}
-            />
-          ))}
-          <button
-            type="submit"
-            disabled={adding}
-            style={{
-              padding: '5px 0',
-              background: 'var(--accent)',
-              color: '#fff',
-              borderRadius: 5,
-              fontSize: 11.5,
-              fontWeight: 500,
-              opacity: adding ? 0.6 : 1,
-              transition: 'opacity 0.15s',
-            }}
-          >
-            {adding ? '添加中…' : '添加'}
-          </button>
-        </form>
-      )}
 
       {/* Nav */}
       <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
