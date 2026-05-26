@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import FeedSidebar from './components/FeedSidebar';
 import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
@@ -20,19 +20,25 @@ export default function App() {
     fetch(`${API}/starred/count`).then(r => r.json()).then(d => setStarredCount(d.count || 0)).catch(console.error);
   }, []);
 
+  const loadAbortRef = useRef(null);
+
   const loadArticles = useCallback(async (view) => {
+    if (loadAbortRef.current) loadAbortRef.current.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+
     setSelectedArticle(null);
     setLoadingArticles(true);
     setArticles([]);
     try {
       const urlMap = { all: `${API}/all-articles`, today: `${API}/today`, starred: `${API}/starred` };
       const url = urlMap[view.type] ?? `${API}/feeds/${view.feed.id}/articles`;
-      const data = await fetch(url).then(r => r.json());
+      const data = await fetch(url, { signal: controller.signal }).then(r => r.json());
       setArticles(data.articles || []);
     } catch (e) {
-      console.error(e);
+      if (e.name !== 'AbortError') console.error(e);
     } finally {
-      setLoadingArticles(false);
+      if (!controller.signal.aborted) setLoadingArticles(false);
     }
   }, []);
 

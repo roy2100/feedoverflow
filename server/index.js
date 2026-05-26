@@ -7,11 +7,15 @@ const path = require('path');
 const { parseStringPromise } = require('xml2js');
 
 const app = express();
-const parser = new Parser({
-  timeout: 10000,
-  headers: { 'User-Agent': 'RSS-Reader/1.0' },
-  customFields: { item: [['content:encoded', 'contentEncoded']] },
-});
+
+function makeParser(signal) {
+  return new Parser({
+    timeout: 10000,
+    headers: { 'User-Agent': 'RSS-Reader/1.0' },
+    customFields: { item: [['content:encoded', 'contentEncoded']] },
+    requestOptions: { signal },
+  });
+}
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
@@ -172,19 +176,26 @@ app.delete('/api/feeds/:id', (req, res) => {
 app.get('/api/feeds/:id/articles', async (req, res) => {
   const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(req.params.id);
   if (!feed) return res.status(404).json({ error: 'Not found' });
+  const ac = new AbortController();
+  req.on('close', () => ac.abort());
   try {
-    const parsed = await parser.parseURL(feed.url);
+    const parsed = await makeParser(ac.signal).parseURL(feed.url);
+    if (ac.signal.aborted) return;
     res.json({ feedName: parsed.title || feed.name, articles: enrich(parsed.items.slice(0, 50), feed.id, feed.name) });
   } catch (err) {
+    if (ac.signal.aborted) return;
     res.status(500).json({ error: 'Failed to fetch feed', detail: err.message });
   }
 });
 
 app.get('/api/all-articles', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all();
+  const ac = new AbortController();
+  req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
-    feeds.map(async f => { const p = await parser.parseURL(f.url); return enrich(p.items.slice(0, 5), f.id, f.name); })
+    feeds.map(async f => { const p = await makeParser(ac.signal).parseURL(f.url); return enrich(p.items.slice(0, 5), f.id, f.name); })
   );
+  if (ac.signal.aborted) return;
   const articles = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
   res.json({ articles });
@@ -193,13 +204,16 @@ app.get('/api/all-articles', async (req, res) => {
 app.get('/api/today', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const ac = new AbortController();
+  req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
     feeds.map(async f => {
-      const p = await parser.parseURL(f.url);
+      const p = await makeParser(ac.signal).parseURL(f.url);
       const todayItems = p.items.filter(item => new Date(item.pubDate || item.isoDate || 0) >= todayStart);
       return enrich(todayItems, f.id, f.name);
     })
   );
+  if (ac.signal.aborted) return;
   const articles = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
   res.json({ articles });

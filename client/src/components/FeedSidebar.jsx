@@ -1,5 +1,28 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, X, Sun, Star, Circle } from 'lucide-react';
+import { RefreshCw, Plus, X, Sun, Star, Circle, Rss } from 'lucide-react';
+
+function FeedIcon({ url }) {
+  const [failed, setFailed] = useState(false);
+  let domain = '';
+  try {
+    domain = new URL(url).hostname;
+  } catch {
+    // ignore
+  }
+  if (failed || !domain) {
+    return <Rss size={13} style={{ color: 'var(--text-tertiary)' }} />;
+  }
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+      alt=""
+      width={14}
+      height={14}
+      style={{ borderRadius: 3, objectFit: 'contain', flexShrink: 0 }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 function groupByCategory(feeds) {
   const groups = {};
@@ -83,6 +106,7 @@ export default function FeedSidebar({
                 >
                   <NavItem
                     label={feed.name}
+                    icon={<FeedIcon url={feed.url} />}
                     selected={isSelected}
                     onClick={() => onSelectView({ type: 'feed', feed })}
                   />
