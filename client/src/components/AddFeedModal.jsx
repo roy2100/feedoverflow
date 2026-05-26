@@ -82,7 +82,6 @@ export default function AddFeedModal({ onClose, onAdd, onImport }) {
 function ManualTab({ onAdd, onClose }) {
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
   const urlRef = useRef(null);
@@ -94,7 +93,7 @@ function ManualTab({ onAdd, onClose }) {
     if (!url.trim()) return;
     setAdding(true); setError('');
     try {
-      await onAdd({ url: url.trim(), name: name.trim(), category: category.trim() });
+      await onAdd({ url: url.trim(), name: name.trim() });
       onClose();
     } catch {
       setError('添加失败，请检查 URL 是否正确');
@@ -107,7 +106,6 @@ function ManualTab({ onAdd, onClose }) {
     <form onSubmit={handleSubmit} style={{ padding: '18px 20px 20px' }}>
       <Field ref={urlRef} label="Feed URL" placeholder="https://example.com/feed.xml" value={url} onChange={setUrl} required />
       <Field label="名称" placeholder="（可选）" value={name} onChange={setName} />
-      <Field label="分类" placeholder="（可选，如：科技、新闻）" value={category} onChange={setCategory} />
       {error && <p style={{ fontSize: 12, color: 'var(--red)', marginBottom: 14 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <GhostBtn onClick={onClose}>取消</GhostBtn>

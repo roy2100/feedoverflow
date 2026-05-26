@@ -32,10 +32,9 @@ db.pragma('journal_mode = WAL');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS feeds (
-    id       TEXT PRIMARY KEY,
-    name     TEXT NOT NULL,
-    url      TEXT NOT NULL,
-    category TEXT DEFAULT '未分类'
+    id   TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    url  TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS article_states (
     article_id TEXT PRIMARY KEY,
@@ -55,12 +54,12 @@ db.exec(`
 
 // Seed default feeds once
 if (db.prepare('SELECT COUNT(*) AS n FROM feeds').get().n === 0) {
-  const ins = db.prepare('INSERT INTO feeds (id,name,url,category) VALUES (?,?,?,?)');
+  const ins = db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)');
   [
-    ['1', '少数派',       'https://sspai.com/feed',                    '科技'],
-    ['2', '虎嗅',         'https://feeds.feedburner.com/huxiu',        '科技'],
-    ['3', '36氪',         'https://36kr.com/feed',                     '财经'],
-    ['4', '阮一峰的网络日志', 'https://feeds.feedburner.com/ruanyifeng', '技术'],
+    ['1', '少数派',       'https://sspai.com/feed'],
+    ['2', '虎嗅',         'https://feeds.feedburner.com/huxiu'],
+    ['3', '36氪',         'https://36kr.com/feed'],
+    ['4', '阮一峰的网络日志', 'https://feeds.feedburner.com/ruanyifeng'],
   ].forEach(r => ins.run(...r));
 }
 
@@ -149,13 +148,11 @@ app.get('/api/feeds', (_req, res) => {
 });
 
 app.post('/api/feeds', (req, res) => {
-  const { url, name, category } = req.body;
+  const { url, name } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
   const id = Date.now().toString();
-  db.prepare('INSERT INTO feeds (id,name,url,category) VALUES (?,?,?,?)').run(
-    id, name || url, url, category || '未分类'
-  );
-  res.json({ id, name: name || url, url, category: category || '未分类' });
+  db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, name || url, url);
+  res.json({ id, name: name || url, url });
 });
 
 app.post('/api/feeds/import-opml', async (req, res) => {
@@ -166,32 +163,26 @@ app.post('/api/feeds/import-opml', async (req, res) => {
     const bodyOutlines = parsed?.opml?.body?.[0]?.outline || [];
 
     const candidates = [];
-    function extract(nodes, category) {
+    function extract(nodes) {
       for (const node of nodes) {
         const attrs = node.$ || {};
         if (attrs.xmlUrl) {
-          candidates.push({
-            name: attrs.text || attrs.title || attrs.xmlUrl,
-            url: attrs.xmlUrl,
-            category: category || attrs.category || '未分类',
-          });
+          candidates.push({ name: attrs.text || attrs.title || attrs.xmlUrl, url: attrs.xmlUrl });
         }
-        if (node.outline?.length) {
-          extract(node.outline, attrs.text || attrs.title || category);
-        }
+        if (node.outline?.length) extract(node.outline);
       }
     }
-    extract(bodyOutlines, null);
+    extract(bodyOutlines);
 
     const existingUrls = new Set(db.prepare('SELECT url FROM feeds').all().map(f => f.url));
-    const ins = db.prepare('INSERT OR IGNORE INTO feeds (id,name,url,category) VALUES (?,?,?,?)');
+    const ins = db.prepare('INSERT OR IGNORE INTO feeds (id,name,url) VALUES (?,?,?)');
     const importedFeeds = [];
     let skipped = 0;
 
     for (const feed of candidates) {
       if (existingUrls.has(feed.url)) { skipped++; continue; }
       const id = `${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
-      ins.run(id, feed.name, feed.url, feed.category);
+      ins.run(id, feed.name, feed.url);
       importedFeeds.push({ id, ...feed });
       existingUrls.add(feed.url);
     }
@@ -203,9 +194,8 @@ app.post('/api/feeds/import-opml', async (req, res) => {
 });
 
 app.patch('/api/feeds/:id', (req, res) => {
-  const { name, category } = req.body;
-  const info = db.prepare('UPDATE feeds SET name = ?, category = ? WHERE id = ?')
-    .run(name || null, category || null, req.params.id);
+  const { name } = req.body;
+  const info = db.prepare('UPDATE feeds SET name = ? WHERE id = ?').run(name || null, req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });

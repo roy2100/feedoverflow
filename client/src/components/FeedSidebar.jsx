@@ -24,22 +24,10 @@ function FeedIcon({ url }) {
   );
 }
 
-function groupByCategory(feeds) {
-  const groups = {};
-  for (const f of feeds) {
-    const cat = f.category || '未分类';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(f);
-  }
-  return groups;
-}
-
 export default function FeedSidebar({
   feeds, selectedView, onSelectView,
   unreadCount, starredCount, onRefresh, onOpenAddModal, onOpenManageModal,
 }) {
-  const groups = groupByCategory(feeds);
-
   return (
     <aside style={{
       width: 220, flexShrink: 0,
@@ -93,24 +81,20 @@ export default function FeedSidebar({
           onClick={() => onSelectView({ type: 'starred' })}
         />
 
-        {/* Feed groups */}
-        {Object.entries(groups).map(([cat, catFeeds]) => (
-          <div key={cat}>
-            <SectionLabel style={{ marginTop: 8 }}>{cat}</SectionLabel>
-            {catFeeds.map(feed => {
-              const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
-              return (
-                <NavItem
-                  key={feed.id}
-                  label={feed.name}
-                  icon={<FeedIcon url={feed.url} />}
-                  selected={isSelected}
-                  onClick={() => onSelectView({ type: 'feed', feed })}
-                />
-              );
-            })}
-          </div>
-        ))}
+        {/* Feed list */}
+        {feeds.length > 0 && <SectionLabel style={{ marginTop: 8 }}>订阅源</SectionLabel>}
+        {feeds.map(feed => {
+          const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
+          return (
+            <NavItem
+              key={feed.id}
+              label={feed.name}
+              icon={<FeedIcon url={feed.url} />}
+              selected={isSelected}
+              onClick={() => onSelectView({ type: 'feed', feed })}
+            />
+          );
+        })}
       </nav>
     </aside>
   );

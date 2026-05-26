@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck } from 'lucide-react';
 
+function fallbackCopy(text, onDone) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); onDone(); } catch {}
+  document.body.removeChild(ta);
+}
+
 function FeedIcon({ url }) {
   const [failed, setFailed] = useState(false);
   let domain = '';
@@ -21,13 +31,6 @@ export default function ManageFeedsModal({ feeds, onClose, onDelete, onUpdate })
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  const groups = {};
-  for (const f of feeds) {
-    const cat = f.category || '未分类';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(f);
-  }
 
   return createPortal(
     <div
@@ -75,22 +78,9 @@ export default function ManageFeedsModal({ feeds, onClose, onDelete, onUpdate })
             <p style={{ fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center', padding: '32px 0' }}>
               暂无订阅源
             </p>
-          ) : (
-            Object.entries(groups).map(([cat, catFeeds]) => (
-              <div key={cat}>
-                <div style={{
-                  padding: '8px 20px 4px',
-                  fontSize: 10.5, fontWeight: 600, letterSpacing: '0.1em',
-                  textTransform: 'uppercase', color: 'var(--text-tertiary)',
-                }}>
-                  {cat}
-                </div>
-                {catFeeds.map(feed => (
-                  <FeedRow key={feed.id} feed={feed} onDelete={onDelete} onUpdate={onUpdate} />
-                ))}
-              </div>
-            ))
-          )}
+          ) : feeds.map(feed => (
+            <FeedRow key={feed.id} feed={feed} onDelete={onDelete} onUpdate={onUpdate} />
+          ))}
         </div>
       </div>
 
@@ -106,35 +96,34 @@ export default function ManageFeedsModal({ feeds, onClose, onDelete, onUpdate })
 function FeedRow({ feed, onDelete, onUpdate }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(feed.name);
-  const [category, setCategory] = useState(feed.category || '');
   const [hovered, setHovered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const nameRef = useRef(null);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(feed.url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1500); };
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(feed.url).then(done).catch(() => fallbackCopy(feed.url, done));
+    } else {
+      fallbackCopy(feed.url, done);
+    }
   };
 
   useEffect(() => {
     setName(feed.name);
-    setCategory(feed.category || '');
-  }, [feed.name, feed.category]);
+  }, [feed.name]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
-    await onUpdate(feed.id, { name: name.trim(), category: category.trim() });
+    await onUpdate(feed.id, { name: name.trim() });
     setSaving(false);
     setEditing(false);
   };
 
   const handleCancel = () => {
     setName(feed.name);
-    setCategory(feed.category || '');
     setEditing(false);
   };
 
@@ -166,13 +155,6 @@ function FeedRow({ feed, onDelete, onUpdate }) {
           onChange={e => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           autoFocus
-          style={{ ...inputStyle, flex: 2, minWidth: 0 }}
-        />
-        <input
-          value={category}
-          onChange={e => setCategory(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="分类"
           style={{ ...inputStyle, flex: 1, minWidth: 0 }}
         />
         <button
@@ -224,15 +206,6 @@ function FeedRow({ feed, onDelete, onUpdate }) {
       }}>
         {feed.name}
       </span>
-      {feed.category && (
-        <span style={{
-          fontSize: 11, color: 'var(--text-tertiary)',
-          background: 'var(--bg-selected)', borderRadius: 4,
-          padding: '1px 6px', flexShrink: 0,
-        }}>
-          {feed.category}
-        </span>
-      )}
       {hovered && (
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <ActionBtn onClick={handleCopy} title={copied ? '已复制' : '复制链接'} color={copied ? 'var(--accent)' : 'var(--text-tertiary)'} hoverColor="var(--accent)">

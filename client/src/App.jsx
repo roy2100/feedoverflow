@@ -76,11 +76,11 @@ export default function App() {
     }
   }, [selectedView]);
 
-  const handleAddFeed = useCallback(async ({ url, name, category }) => {
+  const handleAddFeed = useCallback(async ({ url, name }) => {
     const r = await fetch(`${API}/feeds`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, name, category }),
+      body: JSON.stringify({ url, name }),
     });
     const newFeed = await r.json();
     setFeeds(prev => [...prev, newFeed]);
@@ -94,13 +94,13 @@ export default function App() {
     }
   }, [selectedView]);
 
-  const handleUpdateFeed = useCallback(async (feedId, { name, category }) => {
+  const handleUpdateFeed = useCallback(async (feedId, { name }) => {
     await fetch(`${API}/feeds/${feedId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, category }),
+      body: JSON.stringify({ name }),
     });
-    setFeeds(prev => prev.map(f => f.id === feedId ? { ...f, name, category } : f));
+    setFeeds(prev => prev.map(f => f.id === feedId ? { ...f, name } : f));
   }, []);
 
   const unreadCount = articles.filter(a => !a.isRead).length;
