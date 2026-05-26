@@ -76,14 +76,15 @@ export default function App() {
     }
   }, [selectedView]);
 
-  const handleAddFeed = useCallback(async ({ url, name }) => {
+  const handleAddFeed = useCallback(async ({ url }) => {
     const r = await fetch(`${API}/feeds`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, name }),
+      body: JSON.stringify({ url }),
     });
-    const newFeed = await r.json();
-    setFeeds(prev => [...prev, newFeed]);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || '添加失败');
+    setFeeds(prev => [...prev, data]);
   }, []);
 
   const handleDeleteFeed = useCallback(async (feedId) => {

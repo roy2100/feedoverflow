@@ -163,12 +163,19 @@ app.get('/api/feeds', (_req, res) => {
   res.json(db.prepare('SELECT * FROM feeds ORDER BY rowid').all());
 });
 
-app.post('/api/feeds', (req, res) => {
-  const { url, name } = req.body;
+app.post('/api/feeds', async (req, res) => {
+  const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
+  let feedTitle;
+  try {
+    const parsed = await parseURL(url);
+    feedTitle = parsed.title?.trim() || url;
+  } catch {
+    return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确' });
+  }
   const id = Date.now().toString();
-  db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, name || url, url);
-  res.json({ id, name: name || url, url });
+  db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
+  res.json({ id, name: feedTitle, url });
 });
 
 app.post('/api/feeds/import-opml', async (req, res) => {
