@@ -4,6 +4,7 @@ const Parser = require('rss-parser');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const path = require('path');
+const { parseStringPromise } = require('xml2js');
 
 const app = express();
 const parser = new Parser({
@@ -115,6 +116,50 @@ app.post('/api/feeds', (req, res) => {
     id, name || url, url, category || '未分类'
   );
   res.json({ id, name: name || url, url, category: category || '未分类' });
+});
+
+app.post('/api/feeds/import-opml', async (req, res) => {
+  const { opml } = req.body;
+  if (!opml) return res.status(400).json({ error: 'opml content required' });
+  try {
+    const parsed = await parseStringPromise(opml, { explicitArray: true });
+    const bodyOutlines = parsed?.opml?.body?.[0]?.outline || [];
+
+    const candidates = [];
+    function extract(nodes, category) {
+      for (const node of nodes) {
+        const attrs = node.$ || {};
+        if (attrs.xmlUrl) {
+          candidates.push({
+            name: attrs.text || attrs.title || attrs.xmlUrl,
+            url: attrs.xmlUrl,
+            category: category || attrs.category || '未分类',
+          });
+        }
+        if (node.outline?.length) {
+          extract(node.outline, attrs.text || attrs.title || category);
+        }
+      }
+    }
+    extract(bodyOutlines, null);
+
+    const existingUrls = new Set(db.prepare('SELECT url FROM feeds').all().map(f => f.url));
+    const ins = db.prepare('INSERT OR IGNORE INTO feeds (id,name,url,category) VALUES (?,?,?,?)');
+    const importedFeeds = [];
+    let skipped = 0;
+
+    for (const feed of candidates) {
+      if (existingUrls.has(feed.url)) { skipped++; continue; }
+      const id = `${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
+      ins.run(id, feed.name, feed.url, feed.category);
+      importedFeeds.push({ id, ...feed });
+      existingUrls.add(feed.url);
+    }
+
+    res.json({ imported: importedFeeds.length, skipped, feeds: importedFeeds });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to parse OPML', detail: err.message });
+  }
 });
 
 app.delete('/api/feeds/:id', (req, res) => {

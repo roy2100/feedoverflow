@@ -116,7 +116,11 @@ export default function App() {
       />
       <ArticleReader article={selectedArticle} onToggleStar={handleToggleStar} />
       {showAddModal && (
-        <AddFeedModal onClose={() => setShowAddModal(false)} onAdd={handleAddFeed} />
+        <AddFeedModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddFeed}
+          onImport={(newFeeds) => setFeeds(prev => [...prev, ...newFeeds])}
+        />
       )}
     </div>
   );
