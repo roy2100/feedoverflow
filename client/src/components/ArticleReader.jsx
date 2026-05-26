@@ -1,4 +1,5 @@
-import { Star } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Star, AlignLeft } from 'lucide-react';
 
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
@@ -11,6 +12,22 @@ function formatFullDate(dateStr) {
 }
 
 export default function ArticleReader({ article, onToggleStar }) {
+  const [fullContent, setFullContent] = useState(null); // null | 'loading' | { html } | { error }
+
+  useEffect(() => { setFullContent(null); }, [article?.id]);
+
+  const handleFetchFull = async () => {
+    if (!article?.link) return;
+    setFullContent('loading');
+    try {
+      const r = await fetch(`/api/fetch-content?url=${encodeURIComponent(article.link)}`);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'failed');
+      setFullContent({ html: data.content });
+    } catch (err) {
+      setFullContent({ error: err.message });
+    }
+  };
   if (!article) {
     return (
       <div style={{
@@ -31,8 +48,7 @@ export default function ArticleReader({ article, onToggleStar }) {
     );
   }
 
-  const rawContent = article.content || article.summary || '';
-
+  const rawContent = fullContent?.html || article.content || article.summary || '';
   const hasHtml = /<[a-z][\s\S]*>/i.test(rawContent);
 
   return (
@@ -111,20 +127,55 @@ export default function ArticleReader({ article, onToggleStar }) {
               <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
             </button>
 
+          {article.link && !fullContent && (
+            <button
+              onClick={handleFetchFull}
+              title="从原始网页提取全文"
+              style={{
+                fontSize: 12, color: 'var(--text-tertiary)',
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 5, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 8px', transition: 'color 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              <AlignLeft size={11} />
+              加载全文
+            </button>
+          )}
+          {fullContent === 'loading' && (
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 11, height: 11, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+              加载中…
+            </span>
+          )}
+          {fullContent?.html && (
+            <button
+              onClick={() => setFullContent(null)}
+              title="恢复 RSS 原文"
+              style={{
+                fontSize: 12, color: 'var(--accent)',
+                background: 'none', border: '1px solid var(--accent)',
+                borderRadius: 5, cursor: 'pointer',
+                padding: '3px 8px', opacity: 0.7, transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = 1}
+              onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
+            >
+              全文模式
+            </button>
+          )}
           {article.link && (
             <a
               href={article.link}
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                fontSize: 12,
-                color: 'var(--accent)',
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                opacity: 0.8,
-                transition: 'opacity 0.15s',
+                fontSize: 12, color: 'var(--accent)',
+                textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
+                opacity: 0.8, transition: 'opacity 0.15s',
               }}
               onMouseEnter={e => e.currentTarget.style.opacity = 1}
               onMouseLeave={e => e.currentTarget.style.opacity = 0.8}
@@ -139,7 +190,12 @@ export default function ArticleReader({ article, onToggleStar }) {
         </div>
 
         {/* Content */}
-        {hasHtml ? (
+        {fullContent?.error ? (
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
+            加载失败：{fullContent.error}。
+            <button onClick={() => setFullContent(null)} style={{ marginLeft: 8, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>重置</button>
+          </div>
+        ) : hasHtml ? (
           <div
             className="rss-article"
             style={articleContentStyle}

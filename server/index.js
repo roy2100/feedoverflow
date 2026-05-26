@@ -8,6 +8,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { parseStringPromise } = require('xml2js');
 const { HttpsProxyAgent } = require('https-proxy-agent');
+const { Readability } = require('@mozilla/readability');
+const { JSDOM } = require('jsdom');
 
 const app = express();
 
@@ -204,6 +206,28 @@ app.delete('/api/feeds/:id', (req, res) => {
   const info = db.prepare('DELETE FROM feeds WHERE id = ?').run(req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
+});
+
+// ── Full content fetch ────────────────────────────────────────────────────────
+app.get('/api/fetch-content', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url required' });
+  try {
+    const response = await fetch(url, {
+      agent: proxyAgent,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) return res.status(502).json({ error: `Upstream ${response.status}` });
+    const html = await response.text();
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+    if (!article) return res.status(422).json({ error: 'Could not extract content' });
+    res.json({ content: article.content, title: article.title, byline: article.byline });
+  } catch (err) {
+    res.status(500).json({ error: 'Fetch failed', detail: err.message });
+  }
 });
 
 // ── Articles API ──────────────────────────────────────────────────────────────

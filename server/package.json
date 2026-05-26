@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "https-proxy-agent": "^9.0.0",
+    "jsdom": "^29.1.1",
     "rss-parser": "^3.13.0",
     "xml2js": "^0.6.2"
   }
