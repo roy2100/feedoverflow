@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Star, AlignLeft } from 'lucide-react';
+import { Star, AlignLeft, Mic } from 'lucide-react';
 
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
@@ -188,6 +188,37 @@ export default function ArticleReader({ article, onToggleStar }) {
           )}
           </div>
         </div>
+
+        {/* Podcast Player */}
+        {article.audioUrl && (
+          <div style={{
+            marginBottom: 32,
+            padding: '14px 16px',
+            background: 'var(--bg-panel)',
+            borderRadius: 8,
+            border: '1px solid var(--border-light)',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              marginBottom: 10, fontSize: 12,
+              color: 'var(--text-tertiary)', fontWeight: 500,
+            }}>
+              <Mic size={13} strokeWidth={2} style={{ color: 'var(--accent-light)' }} />
+              <span>收听播客</span>
+              {article.audioDuration && (
+                <span style={{ marginLeft: 4 }}>· {article.audioDuration}</span>
+              )}
+            </div>
+            <audio
+              controls
+              src={article.audioUrl}
+              style={{ width: '100%', height: 36, outline: 'none' }}
+              preload="metadata"
+            >
+              您的浏览器不支持 audio 元素。
+            </audio>
+          </div>
+        )}
 
         {/* Content */}
         {fullContent?.error ? (

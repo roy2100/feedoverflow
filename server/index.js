@@ -63,6 +63,10 @@ db.exec(`
   );
 `);
 
+// Migrate: add podcast columns if not yet present (safe to re-run)
+try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_url      TEXT DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_duration TEXT DEFAULT ''`); } catch {}
+
 // Seed default feeds once
 if (db.prepare('SELECT COUNT(*) AS n FROM feeds').get().n === 0) {
   const ins = db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)');
@@ -88,10 +92,25 @@ function dedupById(articles) {
   return articles.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
 }
 
+function normalizeDuration(dur) {
+  if (!dur) return '';
+  if (/^\d+:\d{2}(:\d{2})?$/.test(dur)) return dur; // already MM:SS or HH:MM:SS
+  const secs = parseInt(dur, 10);
+  if (isNaN(secs)) return dur;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
 function enrich(items, feedId, feedName) {
   return items.map((item, i) => {
     const id = makeId(item.link, item.title, item.pubDate || item.isoDate || String(i));
     const st = getState.get(id) || { is_read: 0, is_starred: 0 };
+    const enc = item.enclosure;
+    const audioUrl      = (enc?.url && enc?.type?.startsWith('audio')) ? enc.url : '';
+    const audioDuration = audioUrl ? normalizeDuration(item.itunes?.duration || '') : '';
     return {
       id,
       feedId,
@@ -102,17 +121,21 @@ function enrich(items, feedId, feedName) {
       link:    item.link || '',
       pubDate: item.pubDate || item.isoDate || '',
       author:  item.creator || item.author || '',
-      isRead:     !!st.is_read,
-      isStarred:  !!st.is_starred,
+      audioUrl,
+      audioDuration,
+      isRead:    !!st.is_read,
+      isStarred: !!st.is_starred,
     };
   });
 }
 
 const upsertState = db.prepare(`
   INSERT INTO article_states
-    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,is_read,is_starred)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_read,is_starred)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(article_id) DO UPDATE SET
+    audio_url      = COALESCE(excluded.audio_url, audio_url),
+    audio_duration = COALESCE(excluded.audio_duration, audio_duration),
     is_read    = CASE WHEN excluded.is_read    IS NOT NULL THEN excluded.is_read    ELSE is_read    END,
     is_starred = CASE WHEN excluded.is_starred IS NOT NULL THEN excluded.is_starred ELSE is_starred END,
     updated_at = datetime('now')
@@ -123,6 +146,8 @@ function saveState(article, patch) {
     article.id, article.feedId, article.feedName,
     article.title, article.link, article.pubDate,
     article.summary, article.content, article.author,
+    article.audioUrl      || null,
+    article.audioDuration || null,
     patch.is_read    ?? null,
     patch.is_starred ?? null,
   );
@@ -301,6 +326,7 @@ app.get('/api/starred', (_req, res) => {
       id: r.article_id, feedId: r.feed_id, feedName: r.feed_name,
       title: r.title, summary: r.summary, content: r.content,
       link: r.link, pubDate: r.pub_date, author: r.author,
+      audioUrl: r.audio_url || '', audioDuration: r.audio_duration || '',
       isRead: !!r.is_read, isStarred: true,
     })),
   });

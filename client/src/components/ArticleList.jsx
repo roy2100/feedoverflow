@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Star } from 'lucide-react';
+import { Star, Mic } from 'lucide-react';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -102,11 +102,18 @@ function ArticleItem({ article, selected, onClick, onStar, style }) {
           <div style={{ fontSize: 13, fontWeight: article.isRead ? 400 : 500, color: article.isRead ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.45, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {article.title}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {summary}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {article.audioUrl ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--accent-light)', fontWeight: 500 }}>
+                <Mic size={10} strokeWidth={2} />
+                {article.audioDuration || '播客'}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {summary}
+              </span>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, marginLeft: 'auto' }}>
               {formatDate(article.pubDate)}
             </span>
           </div>
