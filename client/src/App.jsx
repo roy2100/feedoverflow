@@ -125,7 +125,6 @@ export default function App() {
         articles={articles}
         selectedArticle={selectedArticle}
         onSelectArticle={handleSelectArticle}
-        onToggleStar={handleToggleStar}
         loading={loadingArticles}
         viewTitle={
           selectedView.type === 'all'     ? '全部未读' :

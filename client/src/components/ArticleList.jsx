@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Star, Mic } from 'lucide-react';
+import { Mic } from 'lucide-react';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -13,7 +13,7 @@ function formatDate(dateStr) {
 }
 
 export default function ArticleList({
-  articles, selectedArticle, onSelectArticle, onToggleStar,
+  articles, selectedArticle, onSelectArticle,
   loading, viewTitle, onRefresh,
 }) {
   return (
@@ -55,7 +55,6 @@ export default function ArticleList({
               article={article}
               selected={selectedArticle?.id === article.id}
               onClick={() => onSelectArticle(article)}
-              onStar={e => { e.stopPropagation(); onToggleStar(article); }}
               style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
             />
           ))
@@ -65,7 +64,7 @@ export default function ArticleList({
   );
 }
 
-function ArticleItem({ article, selected, onClick, onStar, style }) {
+function ArticleItem({ article, selected, onClick, style }) {
   const [hovered, setHovered] = useState(false);
   const summary = (article.summary || '').replace(/<[^>]+>/g, '').slice(0, 80);
 
@@ -120,25 +119,6 @@ function ArticleItem({ article, selected, onClick, onStar, style }) {
         </div>
       </div>
 
-      {/* Star button — visible on hover or when starred */}
-      {(hovered || article.isStarred) && (
-        <button
-          onClick={onStar}
-          title={article.isStarred ? '取消收藏' : '收藏'}
-          style={{
-            position: 'absolute', right: 10, top: 10,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
-            display: 'flex', alignItems: 'center',
-            padding: 2, borderRadius: 3,
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => { if (!article.isStarred) e.currentTarget.style.color = '#F5C518'; }}
-          onMouseLeave={e => { if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
-        >
-          <Star size={12} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
-        </button>
-      )}
     </div>
   );
 }

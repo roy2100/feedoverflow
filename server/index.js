@@ -205,8 +205,8 @@ app.post('/api/feeds', async (req, res) => {
   try {
     const parsed = await parseURL(resolveUrl(url));
     feedTitle = parsed.title?.trim() || url;
-  } catch {
-    return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确' });
+  } catch (err) {
+    return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确', detail: err?.message || String(err) });
   }
   const id = Date.now().toString();
   db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
