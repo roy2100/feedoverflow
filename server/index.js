@@ -10,33 +10,46 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { parseStringPromise } = require('xml2js');
 const { HttpsProxyAgent } = require('https-proxy-agent');
+const { ProxyAgent, fetch: undiciFetch } = require('undici');
 const { Readability } = require('@mozilla/readability');
 const { JSDOM } = require('jsdom');
 
 const app = express();
 
 const PROXY_URL = process.env.HTTPS_PROXY || process.env.https_proxy || 'http://127.0.0.1:7890';
-const proxyAgent = new HttpsProxyAgent(PROXY_URL, { rejectUnauthorized: false });
+const proxyAgent = new HttpsProxyAgent(PROXY_URL, { rejectUnauthorized: false }); // kept for /api/fetch-content (uses node fetch)
+const undiciProxyAgent = new ProxyAgent({ uri: PROXY_URL, connect: { rejectUnauthorized: false } });
 
-function makeParser(signal) {
+function makeParser() {
   return new Parser({
     timeout: 10000,
     headers: { 'User-Agent': 'RSS-Reader/1.0' },
     customFields: { item: [['content:encoded', 'contentEncoded']] },
-    requestOptions: { signal, agent: proxyAgent },
   });
 }
 
-async function parseURL(url, signal) {
+// Fetch feed XML: try direct first (undici), fall back to undici + ProxyAgent.
+// Built-in fetch (undici) ignores http.Agent, so proxy must be passed as undici's
+// own ProxyAgent. Direct-first avoids proxy CDN bans (e.g. Reddit returns 403
+// for this proxy's exit IP, but allows direct residential connections).
+async function fetchFeedXml(url, signal) {
+  const headers = { 'User-Agent': 'RSS-Reader/1.0', 'Accept': '*/*' };
+  const timeout = signal ?? AbortSignal.timeout(10000);
+  // 1. Try direct
   try {
-    return await makeParser(signal).parseURL(url);
-  } catch (err) {
-    // Trailing-slash URLs trigger a 308 redirect; the second TLS connection after
-    // redirect fails with "bad record mac" due to proxy session-resumption issues.
-    // Strip the slash to avoid the redirect entirely.
-    if (url.endsWith('/')) return makeParser(signal).parseURL(url.slice(0, -1));
-    throw err;
-  }
+    const res = await fetch(url, { headers, signal: timeout });
+    if (res.ok) return await res.text();
+  } catch { /* fall through */ }
+  // 2. Fallback: route through proxy via undici ProxyAgent
+  const res = await undiciFetch(url, { headers, signal: AbortSignal.timeout(10000), dispatcher: undiciProxyAgent });
+  if (!res.ok) throw new Error(`Status code ${res.status}`);
+  return await res.text();
+}
+
+async function parseURL(url, signal) {
+  const targetUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+  const xml = await fetchFeedXml(targetUrl, signal);
+  return makeParser().parseString(xml);
 }
 
 app.use(cors());
