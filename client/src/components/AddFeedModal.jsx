@@ -83,9 +83,20 @@ function ManualTab({ onAdd, onClose }) {
   const [url, setUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [rsshubBase, setRsshubBase] = useState('http://localhost:1200');
   const urlRef = useRef(null);
 
   useEffect(() => { urlRef.current?.focus(); }, []);
+  useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(s => {
+      if (s.rsshub_base_url) setRsshubBase(s.rsshub_base_url);
+    }).catch(() => {});
+  }, []);
+
+  const isRsshub = url.trim().startsWith('rsshub://');
+  const resolvedPreview = isRsshub
+    ? rsshubBase.replace(/\/$/, '') + '/' + url.trim().slice('rsshub://'.length)
+    : null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -103,7 +114,17 @@ function ManualTab({ onAdd, onClose }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ padding: '18px 20px 20px' }}>
-      <Field ref={urlRef} label="Feed URL" placeholder="https://example.com/feed.xml" value={url} onChange={setUrl} required />
+      <Field ref={urlRef} label="Feed URL" placeholder="https://example.com/feed.xml 或 rsshub://路由/路径" value={url} onChange={setUrl} required />
+      {resolvedPreview && (
+        <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: -8, marginBottom: 12, lineHeight: 1.5 }}>
+          → <span style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>{resolvedPreview}</span>
+        </p>
+      )}
+      {!isRsshub && !error && (
+        <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: -8, marginBottom: 12 }}>
+          💡 支持 <code style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>rsshub://路由/路径</code> 格式
+        </p>
+      )}
       {error && <p style={{ fontSize: 12, color: 'var(--red)', marginBottom: 14 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <GhostBtn onClick={onClose}>取消</GhostBtn>

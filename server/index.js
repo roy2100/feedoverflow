@@ -61,11 +61,18 @@ db.exec(`
     is_starred INTEGER DEFAULT 0,
     updated_at TEXT DEFAULT (datetime('now'))
   );
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
 // Migrate: add podcast columns if not yet present (safe to re-run)
 try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_url      TEXT DEFAULT ''`); } catch {}
 try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_duration TEXT DEFAULT ''`); } catch {}
+
+// Seed default settings
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`).run();
 
 // Seed default feeds once
 if (db.prepare('SELECT COUNT(*) AS n FROM feeds').get().n === 0) {
@@ -153,12 +160,20 @@ function saveState(article, patch) {
   );
 }
 
+// ── RSSHub URL resolver ───────────────────────────────────────────────────────
+function resolveUrl(url) {
+  if (!url || !url.startsWith('rsshub://')) return url;
+  const base = db.prepare("SELECT value FROM settings WHERE key = 'rsshub_base_url'").get()?.value
+    || 'http://localhost:1200';
+  return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
+}
+
 // ── Feed cache (stale-while-revalidate) ───────────────────────────────────────
 const feedCache = new Map(); // feedId → { items, feedName, fetchedAt }
 const CACHE_TTL = 5 * 60 * 1000;
 
 async function fetchAndCache(feed) {
-  const parsed = await parseURL(feed.url);
+  const parsed = await parseURL(resolveUrl(feed.url));
   feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
   return feedCache.get(feed.id);
 }
@@ -166,7 +181,7 @@ async function fetchAndCache(feed) {
 async function getCachedFeed(feed, signal) {
   const cached = feedCache.get(feed.id);
   if (!cached) {
-    const parsed = await parseURL(feed.url, signal);
+    const parsed = await parseURL(resolveUrl(feed.url), signal);
     if (signal?.aborted) return null;
     feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
     return feedCache.get(feed.id);
@@ -188,7 +203,7 @@ app.post('/api/feeds', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'URL required' });
   let feedTitle;
   try {
-    const parsed = await parseURL(url);
+    const parsed = await parseURL(resolveUrl(url));
     feedTitle = parsed.title?.trim() || url;
   } catch {
     return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确' });
@@ -246,6 +261,26 @@ app.patch('/api/feeds/:id', (req, res) => {
 app.delete('/api/feeds/:id', (req, res) => {
   const info = db.prepare('DELETE FROM feeds WHERE id = ?').run(req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+// ── Settings API ─────────────────────────────────────────────────────────────
+app.get('/api/settings', (_req, res) => {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  res.json(settings);
+});
+
+app.patch('/api/settings', (req, res) => {
+  const allowed = ['rsshub_base_url'];
+  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  for (const key of allowed) {
+    if (key in req.body) {
+      upsert.run(key, String(req.body[key]).trim());
+    }
+  }
+  // Invalidate feed cache so all feeds re-fetch with new base URL
+  feedCache.clear();
   res.json({ ok: true });
 });
 

@@ -4,12 +4,14 @@ import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
 import AddFeedModal from './components/AddFeedModal';
 import ManageFeedsModal from './components/ManageFeedsModal';
+import SettingsModal from './components/SettingsModal';
 
 const API = '/api';
 
 export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [feeds, setFeeds] = useState([]);
   const [selectedView, setSelectedView] = useState({ type: 'today' });
   const [articles, setArticles] = useState([]);
@@ -117,6 +119,7 @@ export default function App() {
         onRefresh={() => loadArticles(selectedView)}
         onOpenAddModal={() => setShowAddModal(true)}
         onOpenManageModal={() => setShowManageModal(true)}
+        onOpenSettings={() => setShowSettingsModal(true)}
       />
       <ArticleList
         articles={articles}
@@ -147,6 +150,9 @@ export default function App() {
           onDelete={handleDeleteFeed}
           onUpdate={handleUpdateFeed}
         />
+      )}
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, Sun, Star, Circle, Rss, Settings } from 'lucide-react';
+import { RefreshCw, Plus, Sun, Star, Circle, Rss, Settings, SlidersHorizontal } from 'lucide-react';
 
 function FeedIcon({ url }) {
   const [failed, setFailed] = useState(false);
@@ -26,7 +26,7 @@ function FeedIcon({ url }) {
 
 export default function FeedSidebar({
   feeds, selectedView, onSelectView,
-  unreadCount, starredCount, onRefresh, onOpenAddModal, onOpenManageModal,
+  unreadCount, starredCount, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
 }) {
   return (
     <aside style={{
@@ -54,7 +54,7 @@ export default function FeedSidebar({
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+      <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0 0' }}>
         <SectionLabel>智能订阅</SectionLabel>
 
         <NavItem
@@ -96,6 +96,17 @@ export default function FeedSidebar({
           );
         })}
       </nav>
+
+      {/* Footer */}
+      <div style={{
+        borderTop: '1px solid var(--border-light)',
+        padding: '8px 12px',
+        display: 'flex', justifyContent: 'flex-end',
+      }}>
+        <IconBtn onClick={onOpenSettings} title="设置">
+          <SlidersHorizontal size={13} />
+        </IconBtn>
+      </div>
     </aside>
   );
 }
