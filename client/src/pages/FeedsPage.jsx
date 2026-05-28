@@ -1,15 +1,13 @@
-import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import FeedSidebar from '../components/FeedSidebar';
 
-export default function FeedsPage({ onOpenAddModal }) {
-  const navigate = useNavigate();
+export default function FeedsPage({ onOpenAddModal, onNavigate }) {
   const { feeds, selectedView, articles, starredCount, selectView, loadArticles } = useStore();
   const unreadCount = articles.filter(a => !a.isRead).length;
 
   const handleSelectView = (view) => {
     selectView(view);
-    navigate('/list');
+    onNavigate('list');
   };
 
   return (

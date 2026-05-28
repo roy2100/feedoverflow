@@ -1,11 +1,9 @@
-import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useAudio } from '../AudioContext';
 import ArticleList from '../components/ArticleList';
 
-export default function ListPage() {
-  const navigate = useNavigate();
-  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles, listScrollTop, setListScrollTop } = useStore();
+export default function ListPage({ onNavigate }) {
+  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } = useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
 
   const viewTitle =
@@ -16,13 +14,13 @@ export default function ListPage() {
 
   const handleSelectArticle = (article) => {
     selectArticle(article);
-    navigate(`/article/${article.id}`);
+    onNavigate('article');
   };
 
   return (
     <ArticleList
       isMobile
-      onBack={() => navigate('/')}
+      onBack={() => onNavigate('feeds')}
       articles={articles}
       selectedArticle={selectedArticle}
       onSelectArticle={handleSelectArticle}
@@ -32,8 +30,6 @@ export default function ListPage() {
       onPlay={onPlay}
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
-      scrollTop={listScrollTop}
-      onScroll={setListScrollTop}
     />
   );
 }

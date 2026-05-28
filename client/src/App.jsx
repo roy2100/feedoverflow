@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
 import { useStore } from './store';
 import { AudioContext } from './AudioContext';
 import { useIsMobile } from './hooks/useIsMobile';
@@ -16,6 +15,7 @@ import ReaderPage from './pages/ReaderPage';
 
 export default function App() {
   const isMobile = useIsMobile();
+  const [mobilePage, setMobilePage] = useState('feeds');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -99,16 +99,27 @@ export default function App() {
   );
 
   if (isMobile) {
+    const positions = {
+      feeds:   { feeds: 'translateX(0)',     list: 'translateX(100%)',  article: 'translateX(100%)' },
+      list:    { feeds: 'translateX(-100%)', list: 'translateX(0)',     article: 'translateX(100%)' },
+      article: { feeds: 'translateX(-100%)', list: 'translateX(0)',     article: 'translateX(0)'   },
+    };
+    const tx = positions[mobilePage];
+    const transition = 'transform 0.28s ease';
+
     return (
       <AudioContext.Provider value={audioCtx}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: 'var(--bg)' }}>
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-            <Routes>
-              <Route path="/" element={<FeedsPage onOpenAddModal={() => setShowAddModal(true)} />} />
-              <Route path="/list" element={<ListPage />} />
-              <Route path="/article/:id" element={<ReaderPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <div style={{ position: 'absolute', inset: 0, transform: tx.feeds, transition, willChange: 'transform' }}>
+              <FeedsPage onOpenAddModal={() => setShowAddModal(true)} onNavigate={setMobilePage} />
+            </div>
+            <div style={{ position: 'absolute', inset: 0, transform: tx.list, transition, willChange: 'transform' }}>
+              <ListPage onNavigate={setMobilePage} />
+            </div>
+            <div style={{ position: 'absolute', inset: 0, transform: tx.article, transition, willChange: 'transform', zIndex: 10 }}>
+              <ReaderPage onNavigate={setMobilePage} />
+            </div>
           </div>
           {currentEpisode && (
             <PodcastPlayer

@@ -10,8 +10,6 @@ export const useStore = create((set, get) => ({
   selectedArticle: null,
   loadingArticles: false,
   starredCount: 0,
-  listScrollTop: 0,
-  setListScrollTop: (top) => set({ listScrollTop: top }),
 
   init: async () => {
     try {
@@ -43,7 +41,7 @@ export const useStore = create((set, get) => ({
   },
 
   selectView: (view) => {
-    set({ selectedView: view, listScrollTop: 0 });
+    set({ selectedView: view });
     get().loadArticles(view);
   },
 

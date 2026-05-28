@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useState } from 'react';
 import { ChevronLeft, Mic } from 'lucide-react';
 
 function formatDate(dateStr) {
@@ -17,16 +17,7 @@ export default function ArticleList({
   articles, selectedArticle, onSelectArticle,
   loading, viewTitle, onRefresh,
   onPlay, currentEpisode, isPlaying,
-  scrollTop, onScroll,
 }) {
-  const scrollRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (isMobile && scrollRef.current && scrollTop != null) {
-      scrollRef.current.scrollTop = scrollTop;
-    }
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
     <div style={{
       width: isMobile ? '100%' : 300,
@@ -69,11 +60,7 @@ export default function ArticleList({
         </span>
       </div>
 
-      <div
-        ref={scrollRef}
-        onScroll={isMobile && onScroll ? (e) => onScroll(e.currentTarget.scrollTop) : undefined}
-        style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}
-      >
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--text-tertiary)', fontSize: 13 }}>
             <span style={{ width: 14, height: 14, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
