@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Play, Pause, X } from 'lucide-react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePlay, onClose }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -50,6 +52,83 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
     borderRadius: 5, flexShrink: 0, transition: 'background 0.12s',
   };
 
+  if (isMobile) {
+    return (
+      <div style={{
+        flexShrink: 0,
+        background: 'var(--bg-panel)',
+        borderTop: '1px solid var(--border)',
+        padding: '8px 12px 10px',
+        display: 'flex', flexDirection: 'column', gap: 6,
+      }}>
+        {/* Row 1: play + title + speed + close */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={onTogglePlay}
+            style={{ ...btnStyle, padding: 4, color: 'var(--accent)' }}
+          >
+            {isPlaying ? <Pause size={18} strokeWidth={2} /> : <Play size={18} strokeWidth={2} />}
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+              {episode.title}
+            </div>
+            {episode.feedName && (
+              <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+                {episode.feedName}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={cycleSpeed}
+            style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--accent-light)', padding: '2px 6px', minWidth: 28 }}
+          >
+            {speed}×
+          </button>
+          <button
+            onClick={onClose}
+            style={{ ...btnStyle, padding: 4, color: 'var(--text-tertiary)' }}
+          >
+            <X size={15} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Row 2: skip + seek + time + skip */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => skip(-15)}
+            style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', padding: '2px 5px' }}
+          >
+            -15
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            value={currentTime}
+            step={1}
+            onChange={e => {
+              const t = parseFloat(e.target.value);
+              audioRef.current.currentTime = t;
+              setCurrentTime(t);
+            }}
+            style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
+          />
+          <button
+            onClick={() => skip(15)}
+            style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', padding: '2px 5px' }}
+          >
+            +15
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 38, textAlign: 'right' }}>
+            {fmt(currentTime)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop layout (unchanged)
   return (
     <div style={{
       height: 56, flexShrink: 0,
@@ -58,7 +137,6 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
       display: 'flex', alignItems: 'center',
       padding: '0 16px', gap: 10,
     }}>
-      {/* Play/Pause */}
       <button
         onClick={onTogglePlay}
         style={{ ...btnStyle, padding: 6, color: 'var(--accent)' }}
@@ -68,7 +146,6 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         {isPlaying ? <Pause size={17} strokeWidth={2} /> : <Play size={17} strokeWidth={2} />}
       </button>
 
-      {/* Episode info */}
       <div style={{ minWidth: 0, width: 180, flexShrink: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
           {episode.title}
@@ -80,7 +157,6 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         )}
       </div>
 
-      {/* Skip back */}
       <button
         onClick={() => skip(-15)}
         title="-15秒"
@@ -91,12 +167,10 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         -15
       </button>
 
-      {/* Current time */}
       <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 32, textAlign: 'right' }}>
         {fmt(currentTime)}
       </span>
 
-      {/* Seek bar */}
       <input
         type="range"
         min={0}
@@ -111,12 +185,10 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
       />
 
-      {/* Duration */}
       <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 32 }}>
         {fmt(duration)}
       </span>
 
-      {/* Skip forward */}
       <button
         onClick={() => skip(15)}
         title="+15秒"
@@ -127,7 +199,6 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         +15
       </button>
 
-      {/* Speed */}
       <button
         onClick={cycleSpeed}
         title="切换播放速度"
@@ -138,7 +209,6 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         {speed}×
       </button>
 
-      {/* Close */}
       <button
         onClick={onClose}
         title="关闭播放器"

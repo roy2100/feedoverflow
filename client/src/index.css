@@ -28,6 +28,19 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Mobile viewport fix */
+@supports (height: 100dvh) {
+  html, body, #root {
+    height: 100dvh;
+  }
+}
+
+/* Prevent pull-to-refresh and momentum scroll issues on iOS */
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   font-family: var(--font-ui);
   background: var(--bg);

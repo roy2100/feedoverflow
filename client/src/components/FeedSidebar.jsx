@@ -25,56 +25,71 @@ function FeedIcon({ url }) {
 }
 
 export default function FeedSidebar({
+  isMobile,
   feeds, selectedView, onSelectView,
   unreadCount, starredCount, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
 }) {
   return (
     <aside style={{
-      width: 220, flexShrink: 0,
+      width: isMobile ? '100%' : 220,
+      flexShrink: 0,
       background: 'var(--bg-panel)',
-      borderRight: '1px solid var(--border)',
+      borderRight: isMobile ? 'none' : '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
+      height: isMobile ? '100%' : undefined,
       animation: 'slideIn 0.2s ease',
     }}>
       {/* Header */}
       <div style={{
-        padding: '16px 14px 12px',
+        padding: isMobile ? '16px 16px 14px' : '16px 14px 12px',
         borderBottom: '1px solid var(--border-light)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: 12, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
-          订阅源
+        <span style={{
+          fontSize: isMobile ? 15 : 12,
+          fontWeight: 600,
+          letterSpacing: isMobile ? 0 : '0.08em',
+          textTransform: isMobile ? 'none' : 'uppercase',
+          color: isMobile ? 'var(--text-primary)' : 'var(--text-tertiary)',
+        }}>
+          订阅
         </span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <IconBtn onClick={onRefresh} title="刷新"><RefreshCw size={13} /></IconBtn>
-          <IconBtn onClick={onOpenManageModal} title="管理订阅源"><Settings size={13} /></IconBtn>
-          <IconBtn onClick={onOpenAddModal} title="添加订阅"><Plus size={13} /></IconBtn>
+        <div style={{ display: 'flex', gap: isMobile ? 8 : 4 }}>
+          <IconBtn onClick={onRefresh} title="刷新" isMobile={isMobile}><RefreshCw size={isMobile ? 17 : 13} /></IconBtn>
+          {!isMobile && onOpenManageModal && (
+            <IconBtn onClick={onOpenManageModal} title="管理订阅源"><Settings size={13} /></IconBtn>
+          )}
+          <IconBtn onClick={onOpenAddModal} title="添加订阅" isMobile={isMobile}><Plus size={isMobile ? 17 : 13} /></IconBtn>
         </div>
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0 0' }}>
-        <SectionLabel>智能订阅</SectionLabel>
+      <nav style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 0 0' : '8px 0 0' }}>
+        {!isMobile && <SectionLabel>智能订阅</SectionLabel>}
+        {isMobile && <SectionLabel>智能订阅</SectionLabel>}
 
         <NavItem
+          isMobile={isMobile}
           label="Today"
-          icon={<Sun size={13} strokeWidth={2} />}
+          icon={<Sun size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5A623"
           selected={selectedView.type === 'today'}
           onClick={() => onSelectView({ type: 'today' })}
         />
         <NavItem
+          isMobile={isMobile}
           label="全部未读"
-          icon={<Circle size={9} fill="var(--dot-unread)" strokeWidth={0} />}
+          icon={<Circle size={isMobile ? 11 : 9} fill="var(--dot-unread)" strokeWidth={0} />}
           iconColor="var(--dot-unread)"
           count={unreadCount}
           selected={selectedView.type === 'all'}
           onClick={() => onSelectView({ type: 'all' })}
         />
         <NavItem
+          isMobile={isMobile}
           label="Starred"
-          icon={<Star size={13} strokeWidth={2} />}
+          icon={<Star size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5C518"
           count={starredCount}
           selected={selectedView.type === 'starred'}
@@ -88,6 +103,7 @@ export default function FeedSidebar({
           return (
             <NavItem
               key={feed.id}
+              isMobile={isMobile}
               label={feed.name}
               icon={<FeedIcon url={feed.url} />}
               selected={isSelected}
@@ -97,26 +113,35 @@ export default function FeedSidebar({
         })}
       </nav>
 
-      {/* Footer */}
-      <div style={{
-        borderTop: '1px solid var(--border-light)',
-        padding: '8px 12px',
-        display: 'flex', justifyContent: 'flex-end',
-      }}>
-        <IconBtn onClick={onOpenSettings} title="设置">
-          <SlidersHorizontal size={13} />
-        </IconBtn>
-      </div>
+      {/* Footer — desktop only */}
+      {!isMobile && onOpenSettings && (
+        <div style={{
+          borderTop: '1px solid var(--border-light)',
+          padding: '8px 12px',
+          display: 'flex', justifyContent: 'flex-end',
+        }}>
+          <IconBtn onClick={onOpenSettings} title="设置">
+            <SlidersHorizontal size={13} />
+          </IconBtn>
+        </div>
+      )}
     </aside>
   );
 }
 
-function IconBtn({ onClick, title, children }) {
+function IconBtn({ onClick, title, isMobile, children }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      style={{ color: 'var(--text-tertiary)', padding: 4, borderRadius: 4, transition: 'color 0.15s', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+      style={{
+        color: 'var(--text-tertiary)',
+        padding: isMobile ? 6 : 4,
+        borderRadius: 6,
+        transition: 'color 0.15s',
+        background: 'none', border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center',
+      }}
       onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
       onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}
     >
@@ -125,26 +150,29 @@ function IconBtn({ onClick, title, children }) {
   );
 }
 
-function SectionLabel({ children }) {
+function SectionLabel({ children, style }) {
   return (
-    <div style={{ padding: '2px 12px 6px', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
+    <div style={{ padding: '2px 12px 6px', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', ...style }}>
       {children}
     </div>
   );
 }
 
-function NavItem({ label, icon, iconColor, count, selected, onClick }) {
+function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }) {
   return (
     <button
       onClick={onClick}
       style={{
         width: '100%', display: 'flex', alignItems: 'center',
-        padding: '6px 12px', gap: 8,
+        padding: isMobile ? '11px 16px' : '6px 12px',
+        gap: isMobile ? 12 : 8,
         background: selected ? 'var(--bg-selected)' : 'transparent',
         color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
-        fontSize: 13, fontWeight: selected ? 500 : 400,
+        fontSize: isMobile ? 15 : 13,
+        fontWeight: selected ? 500 : 400,
         textAlign: 'left', border: 'none', cursor: 'pointer',
         transition: 'background 0.1s, color 0.1s',
+        borderBottom: isMobile ? '1px solid var(--border-light)' : 'none',
       }}
       onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'var(--bg-hover)'; }}
       onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
@@ -158,7 +186,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick }) {
         {label}
       </span>
       {count != null && count > 0 && (
-        <span style={{ fontSize: 11, color: selected ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: 500, flexShrink: 0 }}>
+        <span style={{ fontSize: 12, color: selected ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: 500, flexShrink: 0 }}>
           {count > 999 ? '999+' : count}
         </span>
       )}
