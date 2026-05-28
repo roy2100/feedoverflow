@@ -15,6 +15,7 @@ function formatDate(dateStr) {
 export default function ArticleList({
   articles, selectedArticle, onSelectArticle,
   loading, viewTitle, onRefresh,
+  onPlay, currentEpisode, isPlaying,
 }) {
   return (
     <div style={{
@@ -55,6 +56,8 @@ export default function ArticleList({
               article={article}
               selected={selectedArticle?.id === article.id}
               onClick={() => onSelectArticle(article)}
+              onPlay={onPlay}
+              episodePlaying={currentEpisode?.id === article.id && isPlaying}
               style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
             />
           ))
@@ -64,7 +67,7 @@ export default function ArticleList({
   );
 }
 
-function ArticleItem({ article, selected, onClick, style }) {
+function ArticleItem({ article, selected, onClick, onPlay, episodePlaying, style }) {
   const [hovered, setHovered] = useState(false);
   const summary = (article.summary || '').replace(/<[^>]+>/g, '').slice(0, 80);
 
@@ -103,10 +106,18 @@ function ArticleItem({ article, selected, onClick, style }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {article.audioUrl ? (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--accent-light)', fontWeight: 500 }}>
-                <Mic size={10} strokeWidth={2} />
-                {article.audioDuration || '播客'}
-              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onPlay?.(article); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 3,
+                  fontSize: 11, fontWeight: 500,
+                  color: episodePlaying ? 'var(--accent)' : 'var(--accent-light)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                }}
+              >
+                <Mic size={10} strokeWidth={episodePlaying ? 2.5 : 2} />
+                {episodePlaying ? '播放中' : (article.audioDuration || '播客')}
+              </button>
             ) : (
               <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {summary}

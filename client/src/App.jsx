@@ -5,6 +5,7 @@ import ArticleReader from './components/ArticleReader';
 import AddFeedModal from './components/AddFeedModal';
 import ManageFeedsModal from './components/ManageFeedsModal';
 import SettingsModal from './components/SettingsModal';
+import PodcastPlayer from './components/PodcastPlayer';
 
 const API = '/api';
 
@@ -18,10 +19,30 @@ export default function App() {
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [loadingArticles, setLoadingArticles] = useState(false);
   const [starredCount, setStarredCount] = useState(0);
+  const [currentEpisode, setCurrentEpisode] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef(null);
+  if (audioRef.current === null) audioRef.current = new Audio();
 
   useEffect(() => {
     fetch(`${API}/feeds`).then(r => r.json()).then(setFeeds).catch(console.error);
     fetch(`${API}/starred/count`).then(r => r.json()).then(d => setStarredCount(d.count || 0)).catch(console.error);
+  }, []);
+
+  // Sync isPlaying with actual audio events
+  useEffect(() => {
+    const audio = audioRef.current;
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('ended', onEnded);
+    return () => {
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('ended', onEnded);
+    };
   }, []);
 
   const loadAbortRef = useRef(null);
@@ -106,6 +127,31 @@ export default function App() {
     setFeeds(prev => prev.map(f => f.id === feedId ? { ...f, name } : f));
   }, []);
 
+  const handlePlay = useCallback((article) => {
+    const audio = audioRef.current;
+    if (currentEpisode?.id === article.id) {
+      if (audio.paused) audio.play().catch(console.error);
+      else audio.pause();
+    } else {
+      audio.src = article.audioUrl;
+      audio.play().catch(console.error);
+      setCurrentEpisode(article);
+    }
+  }, [currentEpisode]);
+
+  const handleTogglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio.paused) audio.play().catch(console.error);
+    else audio.pause();
+  }, []);
+
+  const handleClosePlayer = useCallback(() => {
+    audioRef.current.pause();
+    audioRef.current.src = '';
+    setCurrentEpisode(null);
+    setIsPlaying(false);
+  }, []);
+
   const unreadCount = articles.filter(a => !a.isRead).length;
 
   return (
@@ -133,8 +179,18 @@ export default function App() {
           selectedView.feed?.name
         }
         onRefresh={() => loadArticles(selectedView)}
+        onPlay={handlePlay}
+        currentEpisode={currentEpisode}
+        isPlaying={isPlaying}
       />
-      <ArticleReader article={selectedArticle} onToggleStar={handleToggleStar} />
+      <ArticleReader
+        article={selectedArticle}
+        onToggleStar={handleToggleStar}
+        onPlay={handlePlay}
+        currentEpisode={currentEpisode}
+        isPlaying={isPlaying}
+        playerVisible={!!currentEpisode}
+      />
       {showAddModal && (
         <AddFeedModal
           onClose={() => setShowAddModal(false)}
@@ -152,6 +208,15 @@ export default function App() {
       )}
       {showSettingsModal && (
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
+      )}
+      {currentEpisode && (
+        <PodcastPlayer
+          episode={currentEpisode}
+          audioRef={audioRef}
+          isPlaying={isPlaying}
+          onTogglePlay={handleTogglePlay}
+          onClose={handleClosePlayer}
+        />
       )}
     </div>
   );

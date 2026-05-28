@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Star, AlignLeft, Mic } from 'lucide-react';
+import { Star, AlignLeft, Mic, Play, Pause } from 'lucide-react';
 
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
@@ -11,7 +11,7 @@ function formatFullDate(dateStr) {
   });
 }
 
-export default function ArticleReader({ article, onToggleStar }) {
+export default function ArticleReader({ article, onToggleStar, onPlay, currentEpisode, isPlaying, playerVisible }) {
   const [fullContent, setFullContent] = useState(null); // null | 'loading' | { html } | { error }
 
   useEffect(() => { setFullContent(null); }, [article?.id]);
@@ -59,6 +59,7 @@ export default function ArticleReader({ article, onToggleStar }) {
         background: 'var(--bg-reader)',
         overflowY: 'auto',
         animation: 'fadeIn 0.2s ease',
+        paddingBottom: playerVisible ? 56 : 0,
       }}
     >
       <div style={{
@@ -189,34 +190,42 @@ export default function ArticleReader({ article, onToggleStar }) {
           </div>
         </div>
 
-        {/* Podcast Player */}
+        {/* Podcast play button */}
         {article.audioUrl && (
           <div style={{
             marginBottom: 32,
-            padding: '14px 16px',
+            padding: '12px 16px',
             background: 'var(--bg-panel)',
             borderRadius: 8,
             border: '1px solid var(--border-light)',
+            display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              marginBottom: 10, fontSize: 12,
-              color: 'var(--text-tertiary)', fontWeight: 500,
-            }}>
-              <Mic size={13} strokeWidth={2} style={{ color: 'var(--accent-light)' }} />
-              <span>收听播客</span>
-              {article.audioDuration && (
-                <span style={{ marginLeft: 4 }}>· {article.audioDuration}</span>
-              )}
-            </div>
-            <audio
-              controls
-              src={article.audioUrl}
-              style={{ width: '100%', height: 36, outline: 'none' }}
-              preload="metadata"
+            <Mic size={13} strokeWidth={2} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+              播客{article.audioDuration ? ` · ${article.audioDuration}` : ''}
+            </span>
+            <button
+              onClick={() => onPlay(article)}
+              style={{
+                marginLeft: 'auto',
+                display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: 12, fontWeight: 500, color: 'var(--accent)',
+                padding: '4px 10px', borderRadius: 5,
+                border: '1px solid var(--accent)',
+                background: 'none', cursor: 'pointer',
+                transition: 'background 0.12s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
-              您的浏览器不支持 audio 元素。
-            </audio>
+              {currentEpisode?.id === article.id && isPlaying
+                ? <><Pause size={11} strokeWidth={2} /> 暂停</>
+                : currentEpisode?.id === article.id
+                  ? <><Play size={11} strokeWidth={2} /> 继续</>
+                  : <><Play size={11} strokeWidth={2} /> 播放</>
+              }
+            </button>
           </div>
         )}
 
