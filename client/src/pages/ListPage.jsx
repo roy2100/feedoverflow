@@ -5,7 +5,7 @@ import ArticleList from '../components/ArticleList';
 
 export default function ListPage() {
   const navigate = useNavigate();
-  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } = useStore();
+  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles, listScrollTop, setListScrollTop } = useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
 
   const viewTitle =
@@ -32,6 +32,8 @@ export default function ListPage() {
       onPlay={onPlay}
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
+      scrollTop={listScrollTop}
+      onScroll={setListScrollTop}
     />
   );
 }
