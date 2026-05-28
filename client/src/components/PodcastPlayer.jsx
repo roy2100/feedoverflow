@@ -52,12 +52,11 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
 
   return (
     <div style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0, height: 56,
+      height: 56, flexShrink: 0,
       background: 'var(--bg-panel)',
       borderTop: '1px solid var(--border)',
       display: 'flex', alignItems: 'center',
       padding: '0 16px', gap: 10,
-      zIndex: 200,
     }}>
       {/* Play/Pause */}
       <button

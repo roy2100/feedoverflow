@@ -11,7 +11,7 @@ function formatFullDate(dateStr) {
   });
 }
 
-export default function ArticleReader({ article, onToggleStar, onPlay, currentEpisode, isPlaying, playerVisible }) {
+export default function ArticleReader({ article, onToggleStar, onPlay, currentEpisode, isPlaying }) {
   const [fullContent, setFullContent] = useState(null); // null | 'loading' | { html } | { error }
 
   useEffect(() => { setFullContent(null); }, [article?.id]);
@@ -59,7 +59,6 @@ export default function ArticleReader({ article, onToggleStar, onPlay, currentEp
         background: 'var(--bg-reader)',
         overflowY: 'auto',
         animation: 'fadeIn 0.2s ease',
-        paddingBottom: playerVisible ? 56 : 0,
       }}
     >
       <div style={{

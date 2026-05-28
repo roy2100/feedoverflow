@@ -183,14 +183,24 @@ export default function App() {
         currentEpisode={currentEpisode}
         isPlaying={isPlaying}
       />
-      <ArticleReader
-        article={selectedArticle}
-        onToggleStar={handleToggleStar}
-        onPlay={handlePlay}
-        currentEpisode={currentEpisode}
-        isPlaying={isPlaying}
-        playerVisible={!!currentEpisode}
-      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <ArticleReader
+          article={selectedArticle}
+          onToggleStar={handleToggleStar}
+          onPlay={handlePlay}
+          currentEpisode={currentEpisode}
+          isPlaying={isPlaying}
+        />
+        {currentEpisode && (
+          <PodcastPlayer
+            episode={currentEpisode}
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            onTogglePlay={handleTogglePlay}
+            onClose={handleClosePlayer}
+          />
+        )}
+      </div>
       {showAddModal && (
         <AddFeedModal
           onClose={() => setShowAddModal(false)}
@@ -208,15 +218,6 @@ export default function App() {
       )}
       {showSettingsModal && (
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
-      )}
-      {currentEpisode && (
-        <PodcastPlayer
-          episode={currentEpisode}
-          audioRef={audioRef}
-          isPlaying={isPlaying}
-          onTogglePlay={handleTogglePlay}
-          onClose={handleClosePlayer}
-        />
       )}
     </div>
   );
