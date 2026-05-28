@@ -60,6 +60,7 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
         flex: 1,
         background: 'var(--bg-reader)',
         overflowY: 'auto',
+        overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch',
         animation: 'fadeIn 0.2s ease',
         display: 'flex',
@@ -385,7 +386,9 @@ if (typeof document !== 'undefined') {
       .rss-article h2 { font-size: 1.2em; }
       .rss-article h3 { font-size: 1.05em; }
       .rss-article a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-      .rss-article img { max-width: 100%; height: auto; border-radius: 6px; margin: 1em 0; }
+      .rss-article img, .rss-article video, .rss-article iframe, .rss-article embed { max-width: 100%; height: auto; }
+      .rss-article img { border-radius: 6px; margin: 1em 0; }
+      .rss-article table { max-width: 100%; overflow-x: auto; display: block; }
       .rss-article blockquote {
         border-left: 3px solid var(--accent);
         margin: 1.2em 0;
