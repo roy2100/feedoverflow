@@ -37,6 +37,10 @@ async function parseURL(url, signal) {
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
+// Serve built frontend
+const distDir = path.join(__dirname, '../client/dist');
+app.use(express.static(distDir));
+
 // ── Database ──────────────────────────────────────────────────────────────────
 const db = new Database(path.join(__dirname, 'rss.db'));
 db.pragma('journal_mode = WAL');
@@ -385,6 +389,11 @@ app.post('/api/articles/star', (req, res) => {
   if (!article?.id) return res.status(400).json({ error: 'article required' });
   saveState(article, { is_starred: starred ? 1 : 0 });
   res.json({ ok: true, isStarred: !!starred });
+});
+
+// SPA fallback — must be after all /api routes
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(distDir, 'index.html'));
 });
 
 const PORT = 3002;

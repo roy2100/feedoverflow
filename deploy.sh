@@ -1,26 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")" && pwd)"
+# 日常部署：构建前端，同步到 ~/Deploy/rss-reader/，重启服务。
+# 用法：./deploy.sh        （默认端口 3002）
+#       PORT=8080 ./deploy.sh
 
-log() { echo "==> $*"; }
+DEV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_ROOT="$HOME/Deploy/rss-reader"
+LABEL="com.rss-reader.app"
+PORT="${PORT:-3002}"
 
-cd "$REPO"
+if [ ! -d "$DEPLOY_ROOT" ]; then
+  echo "错误：请先执行 ./migrate-to-deploy.sh"
+  exit 1
+fi
 
-log "Installing server dependencies..."
-npm --prefix server install
+# 1. 构建前端
+echo "==> 构建前端"
+npm --prefix "$DEV_ROOT/client" install
+npm --prefix "$DEV_ROOT/client" run build
 
-log "Installing client dependencies..."
-npm --prefix client install
+# 2. 同步代码 + 构建产物
+echo "==> 同步代码"
+rsync -a --delete --exclude='node_modules/' --exclude='rss.db' --exclude='rss.db-*' \
+  "$DEV_ROOT/server/" "$DEPLOY_ROOT/server/"
+rsync -a --delete \
+  "$DEV_ROOT/client/dist/" "$DEPLOY_ROOT/client/dist/"
 
-log "Building frontend..."
-npm --prefix client run build
+# 3. 安装生产依赖
+echo "==> 安装服务端依赖"
+npm --prefix "$DEPLOY_ROOT/server" install --omit=dev
 
-log "Updating Caddy config..."
-ln -sf /Users/lielienan/Project/networth/Caddyfile /opt/homebrew/etc/caddy/Caddyfile
-caddy reload --config /opt/homebrew/etc/caddy/Caddyfile
+# 4. 重启服务
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+if [ -f "$PLIST" ]; then
+  echo "==> 重启服务"
+  launchctl kickstart -k "gui/$(id -u)/$LABEL"
+else
+  echo "==> 警告：launchd 未注册，请先执行 ./migrate-to-deploy.sh"
+fi
 
-log "Restarting backend..."
-launchctl kickstart -k "gui/$(id -u)/rss-reader.backend"
-
-log "Done. Backend log: tail -f /tmp/rss-reader-backend.log"
+echo "==> 部署完成 → http://localhost:$PORT"
+echo "    日志：$DEPLOY_ROOT/logs/server.log"
