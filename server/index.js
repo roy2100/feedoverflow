@@ -406,6 +406,19 @@ app.post('/api/articles/star', (req, res) => {
   res.json({ ok: true, isStarred: !!starred });
 });
 
+// In-memory current article — tracks what's open in the UI
+let currentArticle = null;
+
+app.get('/api/current-article', (_req, res) => {
+  if (!currentArticle) return res.status(404).json({ error: 'no article open' });
+  res.json(currentArticle);
+});
+
+app.post('/api/current-article', (req, res) => {
+  currentArticle = req.body?.article ?? null;
+  res.json({ ok: true });
+});
+
 // SPA fallback — must be after all /api routes
 app.get('*', (_req, res) => {
   res.sendFile(path.join(distDir, 'index.html'));

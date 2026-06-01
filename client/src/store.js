@@ -46,6 +46,11 @@ export const useStore = create((set, get) => ({
   },
 
   selectArticle: (article) => {
+    fetch(`${API}/current-article`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article }),
+    }).catch(console.error);
     if (article.isRead) {
       set({ selectedArticle: article });
       return;
