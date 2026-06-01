@@ -9,22 +9,6 @@ your-domain.com {
         admin $2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IILyfulXSu
     }
 
-    # 静态文件（前端）
-    root * /opt/rss-reader/client/dist
-    try_files {path} /index.html
-
-    # API 反向代理到 Node 后端
-    handle /api/* {
-        reverse_proxy localhost:3002
-    }
-
-    # 其余路径走静态文件
-    handle {
-        file_server
-    }
-
-    encode gzip
-    log {
-        output file /var/log/caddy/rss-reader.log
-    }
+    # Express 自己托管静态文件和 API，Caddy 只负责 HTTPS + 认证
+    reverse_proxy localhost:3002
 }
