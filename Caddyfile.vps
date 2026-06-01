@@ -1,0 +1,30 @@
+# 把 your-domain.com 替换成你的域名（或直接用 VPS IP: http://1.2.3.4）
+# Caddy 会自动申请 Let's Encrypt 证书（需要域名解析到该 VPS）
+
+your-domain.com {
+    # 基础认证——公网部署必须加，否则任何人都能访问
+    # 生成密码：caddy hash-password --plaintext 'yourpassword'
+    basicauth * {
+        # 用户名 admin，下面是 "changeme" 的 bcrypt hash，请务必替换
+        admin $2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IILyfulXSu
+    }
+
+    # 静态文件（前端）
+    root * /opt/rss-reader/client/dist
+    try_files {path} /index.html
+
+    # API 反向代理到 Node 后端
+    handle /api/* {
+        reverse_proxy localhost:3002
+    }
+
+    # 其余路径走静态文件
+    handle {
+        file_server
+    }
+
+    encode gzip
+    log {
+        output file /var/log/caddy/rss-reader.log
+    }
+}

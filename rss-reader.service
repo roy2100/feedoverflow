@@ -1,0 +1,21 @@
+[Unit]
+Description=RSS Reader Backend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/rss-reader/server
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3002
+
+# Keep stdout/stderr in journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rss-reader
+
+[Install]
+WantedBy=multi-user.target
