@@ -37,6 +37,18 @@ async function parseURL(url, signal) {
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
+// Basic auth — only active when AUTH_USER and AUTH_PASS env vars are set
+if (process.env.AUTH_USER && process.env.AUTH_PASS) {
+  app.use((req, res, next) => {
+    const header = req.headers.authorization ?? '';
+    const b64 = header.startsWith('Basic ') ? header.slice(6) : '';
+    const [user, pass] = Buffer.from(b64, 'base64').toString().split(':');
+    if (user === process.env.AUTH_USER && pass === process.env.AUTH_PASS) return next();
+    res.set('WWW-Authenticate', 'Basic realm="RSS Reader"');
+    res.status(401).send('Unauthorized');
+  });
+}
+
 // Serve built frontend
 const distDir = path.join(__dirname, '../client/dist');
 app.use(express.static(distDir));
