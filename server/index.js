@@ -1,6 +1,7 @@
 process.title = 'rss-reader';
 
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const Parser = require('rss-parser');
 const crypto = require('crypto');
@@ -34,6 +35,7 @@ async function parseURL(url, signal) {
   return makeParser().parseString(xml);
 }
 
+app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
@@ -96,8 +98,6 @@ function makeId(link, title, pubDate) {
     .digest('hex').slice(0, 12);
 }
 
-const getState = db.prepare('SELECT is_read, is_starred FROM article_states WHERE article_id = ?');
-
 function dedupById(articles) {
   const seen = new Set();
   return articles.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
@@ -116,9 +116,19 @@ function normalizeDuration(dur) {
 }
 
 function enrich(items, feedId, feedName) {
+  const ids = items.map((item, i) =>
+    makeId(item.link, item.title, item.pubDate || item.isoDate || String(i))
+  );
+  const stateMap = ids.length
+    ? Object.fromEntries(
+        db.prepare(
+          `SELECT article_id, is_read, is_starred FROM article_states WHERE article_id IN (${ids.map(() => '?').join(',')})`
+        ).all(...ids).map(r => [r.article_id, r])
+      )
+    : {};
   return items.map((item, i) => {
-    const id = makeId(item.link, item.title, item.pubDate || item.isoDate || String(i));
-    const st = getState.get(id) || { is_read: 0, is_starred: 0 };
+    const id = ids[i];
+    const st = stateMap[id] || { is_read: 0, is_starred: 0 };
     const enc = item.enclosure;
     const audioUrl      = (enc?.url && enc?.type?.startsWith('audio')) ? enc.url : '';
     const audioDuration = audioUrl ? normalizeDuration(item.itunes?.duration || '') : '';
@@ -194,11 +204,15 @@ async function getCachedFeed(feed, signal) {
   return cached;
 }
 
-// Warm cache on startup
-db.prepare('SELECT * FROM feeds').all().forEach(f => fetchAndCache(f).catch(() => {}));
+// Warm cache on startup; track readiness so clients know if data is fresh
+let cacheReady = false;
+Promise.allSettled(
+  db.prepare('SELECT * FROM feeds').all().map(f => fetchAndCache(f).catch(() => {}))
+).then(() => { cacheReady = true; });
 
 // ── Feeds API ─────────────────────────────────────────────────────────────────
 app.get('/api/feeds', (_req, res) => {
+  res.set('Cache-Control', 'private, max-age=30');
   res.json(db.prepare('SELECT * FROM feeds ORDER BY rowid').all());
 });
 
@@ -336,7 +350,7 @@ app.get('/api/all-articles', async (req, res) => {
   if (ac.signal.aborted) return;
   const articles = dedupById(results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)));
-  res.json({ articles });
+  res.json({ articles, cacheReady });
 });
 
 app.get('/api/today', async (req, res) => {
@@ -355,7 +369,7 @@ app.get('/api/today', async (req, res) => {
   if (ac.signal.aborted) return;
   const articles = dedupById(results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
     .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)));
-  res.json({ articles });
+  res.json({ articles, cacheReady });
 });
 
 app.get('/api/starred', (_req, res) => {
@@ -373,6 +387,7 @@ app.get('/api/starred', (_req, res) => {
 
 // GET /api/starred/count — lightweight count for sidebar badge
 app.get('/api/starred/count', (_req, res) => {
+  res.set('Cache-Control', 'private, max-age=10');
   const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1').get();
   res.json({ count: n });
 });

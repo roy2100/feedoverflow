@@ -1,17 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useStore } from './store';
 import { AudioContext } from './AudioContext';
 import { useIsMobile } from './hooks/useIsMobile';
 import FeedSidebar from './components/FeedSidebar';
 import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
-import AddFeedModal from './components/AddFeedModal';
-import ManageFeedsModal from './components/ManageFeedsModal';
-import SettingsModal from './components/SettingsModal';
-import PodcastPlayer from './components/PodcastPlayer';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
+
+const AddFeedModal     = lazy(() => import('./components/AddFeedModal'));
+const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
+const SettingsModal    = lazy(() => import('./components/SettingsModal'));
+const PodcastPlayer    = lazy(() => import('./components/PodcastPlayer'));
 
 export default function App() {
   const isMobile = useIsMobile();
@@ -83,7 +84,7 @@ export default function App() {
     onClosePlayer: handleClosePlayer,
   };
 
-  const unreadCount = articles.filter(a => !a.isRead).length;
+  const unreadCount = useMemo(() => articles.filter(a => !a.isRead).length, [articles]);
   const viewTitle =
     selectedView.type === 'all'     ? '全部未读' :
     selectedView.type === 'today'   ? '今日' :
@@ -91,11 +92,13 @@ export default function App() {
     selectedView.feed?.name;
 
   const addModal = showAddModal && (
-    <AddFeedModal
-      onClose={() => setShowAddModal(false)}
-      onAdd={addFeed}
-      onImport={importFeeds}
-    />
+    <Suspense fallback={null}>
+      <AddFeedModal
+        onClose={() => setShowAddModal(false)}
+        onAdd={addFeed}
+        onImport={importFeeds}
+      />
+    </Suspense>
   );
 
   if (isMobile) {
@@ -122,13 +125,15 @@ export default function App() {
             </div>
           </div>
           {currentEpisode && (
-            <PodcastPlayer
-              episode={currentEpisode}
-              audioRef={audioRef}
-              isPlaying={isPlaying}
-              onTogglePlay={handleTogglePlay}
-              onClose={handleClosePlayer}
-            />
+            <Suspense fallback={null}>
+              <PodcastPlayer
+                episode={currentEpisode}
+                audioRef={audioRef}
+                isPlaying={isPlaying}
+                onTogglePlay={handleTogglePlay}
+                onClose={handleClosePlayer}
+              />
+            </Suspense>
           )}
         </div>
         {addModal}
@@ -170,26 +175,32 @@ export default function App() {
             isPlaying={isPlaying}
           />
           {currentEpisode && (
-            <PodcastPlayer
-              episode={currentEpisode}
-              audioRef={audioRef}
-              isPlaying={isPlaying}
-              onTogglePlay={handleTogglePlay}
-              onClose={handleClosePlayer}
-            />
+            <Suspense fallback={null}>
+              <PodcastPlayer
+                episode={currentEpisode}
+                audioRef={audioRef}
+                isPlaying={isPlaying}
+                onTogglePlay={handleTogglePlay}
+                onClose={handleClosePlayer}
+              />
+            </Suspense>
           )}
         </div>
         {addModal}
         {showManageModal && (
-          <ManageFeedsModal
-            feeds={feeds}
-            onClose={() => setShowManageModal(false)}
-            onDelete={deleteFeed}
-            onUpdate={updateFeed}
-          />
+          <Suspense fallback={null}>
+            <ManageFeedsModal
+              feeds={feeds}
+              onClose={() => setShowManageModal(false)}
+              onDelete={deleteFeed}
+              onUpdate={updateFeed}
+            />
+          </Suspense>
         )}
         {showSettingsModal && (
-          <SettingsModal onClose={() => setShowSettingsModal(false)} />
+          <Suspense fallback={null}>
+            <SettingsModal onClose={() => setShowSettingsModal(false)} />
+          </Suspense>
         )}
       </div>
     </AudioContext.Provider>
