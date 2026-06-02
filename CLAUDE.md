@@ -8,21 +8,25 @@ npm run server / client  # individual processes
 
 npm install && cd server && npm install && cd ../client && npm install
 
-./deploy.sh              # build frontend, reload Caddy, restart backend
+# Production deploy
+./deploy.sh              # install deps, build frontend, restart backend service
 
-launchctl start|stop rss-reader.backend
-launchctl kickstart -k "gui/$(id -u)/rss-reader.backend"  # force restart
-tail -f /tmp/rss-reader-backend.log
+# Service management
+launchctl start com.rss-reader.app
+launchctl stop com.rss-reader.app
+launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
+tail -f ~/Deploy/rss-reader/logs/server.log
 ```
 
 ## Deployment
 
-Single-user local macOS app at `http://rss.local` (not internet-facing). Prefer simple solutions — SQLite, in-memory cache, local files. No auth, multi-tenancy, or rate limiting needed.
+Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Basic Auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files.
 
-- Backend: launchd `rss-reader.backend` → `server/index.js` on port 3002
-- Frontend: Vite build → `client/dist/`, static files via Caddy
-- Caddy: `/api/*` → `localhost:3002`, SPA fallback otherwise; Caddyfile at `/Users/lielienan/Project/networth/Caddyfile`
-- Ports: networth.local → 3001, rss.local → 3002, dev client → 3000
+- Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.js` on port 3002
+- Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
+- Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
+- Auth: `AUTH_USER` / `AUTH_PASS` in `~/Library/LaunchAgents/com.rss-reader.app.plist`
+- Ports: networth.local → 3001, rss.royl.uk → 3002, dev client → 3000
 
 ## Architecture
 
