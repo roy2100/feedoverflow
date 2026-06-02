@@ -13,8 +13,24 @@ function formatFullDate(dateStr) {
 
 export default function ArticleReader({ isMobile, onBack, article, onToggleStar, onPlay, currentEpisode, isPlaying }) {
   const [fullContent, setFullContent] = useState(null);
+  // null = loading, string = done (may be empty)
+  // Initialise with article.content so starred articles avoid a spinner flash on mount
+  const [rssContent, setRssContent] = useState(() => article?.content || null);
 
-  useEffect(() => { setFullContent(null); }, [article?.id]);
+  useEffect(() => {
+    setFullContent(null);
+    if (!article) { setRssContent(null); return; }
+    if (article.content) {
+      // starred articles already carry content from article_states
+      setRssContent(article.content);
+    } else {
+      setRssContent(null);
+      fetch(`/api/articles/${article.id}/content?feedId=${article.feedId}`)
+        .then(r => r.json())
+        .then(d => setRssContent(d.content || ''))
+        .catch(() => setRssContent(''));
+    }
+  }, [article?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFetchFull = async () => {
     if (!article?.link) return;
@@ -50,7 +66,8 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
     );
   }
 
-  const rawContent = fullContent?.html || article.content || article.summary || '';
+  const isLoadingContent = rssContent === null;
+  const rawContent = fullContent?.html || rssContent || article.summary || '';
   const hasHtml = /<[a-z][\s\S]*>/i.test(rawContent);
 
   return (
@@ -332,6 +349,11 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
             加载失败：{fullContent.error}。
             <button onClick={() => setFullContent(null)} style={{ marginLeft: 8, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>重置</button>
+          </div>
+        ) : isLoadingContent ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            <span style={{ width: 12, height: 12, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+            加载中…
           </div>
         ) : hasHtml ? (
           <div

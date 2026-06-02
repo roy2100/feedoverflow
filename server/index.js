@@ -56,7 +56,7 @@ const distDir = path.join(__dirname, '../client/dist');
 app.use(express.static(distDir));
 
 // ── Database ──────────────────────────────────────────────────────────────────
-const db = new Database(path.join(__dirname, 'rss.db'));
+const db = new Database(process.env.TEST_DB || path.join(__dirname, 'rss.db'));
 db.pragma('journal_mode = WAL');
 
 db.exec(`
@@ -82,6 +82,12 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS feed_cache (
+    feed_id    TEXT PRIMARY KEY,
+    feed_name  TEXT,
+    items_json TEXT,
+    fetched_at INTEGER
   );
 `);
 
@@ -127,7 +133,7 @@ function normalizeDuration(dur) {
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
-function enrich(items, feedId, feedName) {
+function enrich(items, feedId, feedName, { withContent = true } = {}) {
   const ids = items.map((item, i) =>
     makeId(item.link, item.title, item.pubDate || item.isoDate || String(i))
   );
@@ -150,7 +156,7 @@ function enrich(items, feedId, feedName) {
       feedName,
       title:   item.title || 'Untitled',
       summary: item.contentSnippet || item.summary || '',
-      content: item.contentEncoded || item.content || item.summary || '',
+      content: withContent ? (item.contentEncoded || item.content || item.summary || '') : '',
       link:    item.link || '',
       pubDate: item.pubDate || item.isoDate || '',
       author:  item.creator || item.author || '',
@@ -160,6 +166,20 @@ function enrich(items, feedId, feedName) {
       isStarred: !!st.is_starred,
     };
   });
+}
+
+// Look up full content from article_states cache or feed_cache by article id + feedId
+function lookupContent(articleId, feedId) {
+  const saved = db.prepare('SELECT content FROM article_states WHERE article_id = ?').get(articleId);
+  if (saved?.content) return saved.content;
+  if (!feedId) return '';
+  const feedRow = getCacheRow.get(feedId);
+  if (!feedRow) return '';
+  const items = JSON.parse(feedRow.items_json);
+  const item = items.find((it, i) =>
+    makeId(it.link, it.title, it.pubDate || it.isoDate || String(i)) === articleId
+  );
+  return item ? (item.contentEncoded || item.content || item.summary || '') : '';
 }
 
 const upsertState = db.prepare(`
@@ -194,33 +214,51 @@ function resolveUrl(url) {
   return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
 }
 
-// ── Feed cache (stale-while-revalidate) ───────────────────────────────────────
-const feedCache = new Map(); // feedId → { items, feedName, fetchedAt }
+// ── Feed cache (SQLite-backed, stale-while-revalidate) ────────────────────────
 const CACHE_TTL = 5 * 60 * 1000;
+
+const getCacheRow  = db.prepare('SELECT * FROM feed_cache WHERE feed_id = ?');
+const setCacheRow  = db.prepare(
+  'INSERT OR REPLACE INTO feed_cache (feed_id, feed_name, items_json, fetched_at) VALUES (?, ?, ?, ?)'
+);
+const clearCache   = db.prepare('DELETE FROM feed_cache');
 
 async function fetchAndCache(feed) {
   const parsed = await parseURL(resolveUrl(feed.url));
-  feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
-  return feedCache.get(feed.id);
+  setCacheRow.run(feed.id, parsed.title || feed.name, JSON.stringify(parsed.items), Date.now());
+  return { items: parsed.items, feedName: parsed.title || feed.name };
 }
 
 async function getCachedFeed(feed, signal) {
-  const cached = feedCache.get(feed.id);
-  if (!cached) {
+  const row = getCacheRow.get(feed.id);
+  if (!row) {
     const parsed = await parseURL(resolveUrl(feed.url), signal);
     if (signal?.aborted) return null;
-    feedCache.set(feed.id, { items: parsed.items, feedName: parsed.title || feed.name, fetchedAt: Date.now() });
-    return feedCache.get(feed.id);
+    setCacheRow.run(feed.id, parsed.title || feed.name, JSON.stringify(parsed.items), Date.now());
+    return { items: parsed.items, feedName: parsed.title || feed.name };
   }
-  if (Date.now() - cached.fetchedAt >= CACHE_TTL) fetchAndCache(feed).catch(() => {});
-  return cached;
+  if (Date.now() - row.fetched_at >= CACHE_TTL) fetchAndCache(feed).catch(() => {});
+  return { items: JSON.parse(row.items_json), feedName: row.feed_name };
 }
 
-// Warm cache on startup; track readiness so clients know if data is fresh
+// On startup: feeds with existing cache are ready immediately;
+// only fetch uncached feeds before marking cacheReady.
+// Skipped in TEST_DB mode to avoid real network calls during tests.
 let cacheReady = false;
-Promise.allSettled(
-  db.prepare('SELECT * FROM feeds').all().map(f => fetchAndCache(f).catch(() => {}))
-).then(() => { cacheReady = true; });
+if (!process.env.TEST_DB) {
+  const allFeeds = db.prepare('SELECT * FROM feeds').all();
+  const uncached = allFeeds.filter(f => !getCacheRow.get(f.id));
+  allFeeds.filter(f => {
+    const r = getCacheRow.get(f.id);
+    return r && Date.now() - r.fetched_at >= CACHE_TTL;
+  }).forEach(f => fetchAndCache(f).catch(() => {}));
+  if (uncached.length === 0) {
+    cacheReady = true;
+  } else {
+    Promise.allSettled(uncached.map(f => fetchAndCache(f).catch(() => {})))
+      .then(() => { cacheReady = true; });
+  }
+}
 
 // ── Feeds API ─────────────────────────────────────────────────────────────────
 app.get('/api/feeds', (_req, res) => {
@@ -310,7 +348,7 @@ app.patch('/api/settings', (req, res) => {
     }
   }
   // Invalidate feed cache so all feeds re-fetch with new base URL
-  feedCache.clear();
+  clearCache.run();
   res.json({ ok: true });
 });
 
@@ -342,7 +380,7 @@ app.get('/api/feeds/:id/articles', async (req, res) => {
   try {
     const cached = await getCachedFeed(feed, ac.signal);
     if (ac.signal.aborted) return;
-    res.json({ feedName: cached.feedName, articles: dedupById(enrich(cached.items.slice(0, 50), feed.id, feed.name)) });
+    res.json({ feedName: cached.feedName, articles: dedupById(enrich(cached.items.slice(0, 50), feed.id, feed.name, { withContent: false })) });
   } catch (err) {
     if (ac.signal.aborted) return;
     res.status(500).json({ error: 'Failed to fetch feed', detail: err.message });
@@ -356,7 +394,7 @@ app.get('/api/all-articles', async (req, res) => {
   const results = await Promise.allSettled(
     feeds.map(async f => {
       const cached = await getCachedFeed(f, ac.signal);
-      return cached ? enrich(cached.items.slice(0, 5), f.id, f.name) : [];
+      return cached ? enrich(cached.items.slice(0, 5), f.id, f.name, { withContent: false }) : [];
     })
   );
   if (ac.signal.aborted) return;
@@ -375,7 +413,7 @@ app.get('/api/today', async (req, res) => {
       const cached = await getCachedFeed(f, ac.signal);
       if (!cached) return [];
       const todayItems = cached.items.filter(item => new Date(item.pubDate || item.isoDate || 0) >= todayStart);
-      return enrich(todayItems, f.id, f.name);
+      return enrich(todayItems, f.id, f.name, { withContent: false });
     })
   );
   if (ac.signal.aborted) return;
@@ -407,15 +445,22 @@ app.get('/api/starred/count', (_req, res) => {
 app.post('/api/articles/read', (req, res) => {
   const { article } = req.body;
   if (!article?.id) return res.status(400).json({ error: 'article required' });
-  saveState(article, { is_read: 1 });
+  const content = article.content || lookupContent(article.id, article.feedId);
+  saveState({ ...article, content }, { is_read: 1 });
   res.json({ ok: true });
 });
 
 app.post('/api/articles/star', (req, res) => {
   const { article, starred } = req.body;
   if (!article?.id) return res.status(400).json({ error: 'article required' });
-  saveState(article, { is_starred: starred ? 1 : 0 });
+  const content = article.content || lookupContent(article.id, article.feedId);
+  saveState({ ...article, content }, { is_starred: starred ? 1 : 0 });
   res.json({ ok: true, isStarred: !!starred });
+});
+
+app.get('/api/articles/:id/content', (req, res) => {
+  const content = lookupContent(req.params.id, req.query.feedId);
+  res.json({ content });
 });
 
 // In-memory current article — tracks what's open in the UI
@@ -441,4 +486,4 @@ if (require.main === module) {
   app.listen(PORT, () => console.log(`RSS server on http://localhost:${PORT}`));
 }
 
-module.exports = { parseURL };
+module.exports = { parseURL, app, db, makeId };
