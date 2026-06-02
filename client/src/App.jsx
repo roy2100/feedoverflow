@@ -28,7 +28,7 @@ export default function App() {
   if (audioRef.current === null) audioRef.current = new Audio();
 
   const {
-    feeds, articles, selectedView, selectedArticle, loadingArticles, starredCount,
+    feeds, articles, selectedView, selectedArticle, loadingArticles,
     init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles,
   } = useStore();
 
@@ -157,7 +157,6 @@ export default function App() {
           feeds={feeds}
           selectedView={selectedView}
           onSelectView={selectView}
-          starredCount={starredCount}
           onRefresh={() => loadArticles(selectedView)}
           onOpenAddModal={() => setShowAddModal(true)}
           onOpenManageModal={() => setShowManageModal(true)}

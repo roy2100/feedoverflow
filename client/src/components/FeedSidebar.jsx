@@ -27,7 +27,7 @@ function FeedIcon({ url }) {
 export default function FeedSidebar({
   isMobile,
   feeds, selectedView, onSelectView,
-  starredCount, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
+  onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
 }) {
   return (
     <aside style={{
@@ -90,7 +90,6 @@ export default function FeedSidebar({
           label="Starred"
           icon={<Star size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5C518"
-          count={starredCount}
           selected={selectedView.type === 'starred'}
           onClick={() => onSelectView({ type: 'starred' })}
         />

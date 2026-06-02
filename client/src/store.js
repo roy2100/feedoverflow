@@ -15,15 +15,11 @@ export const useStore = create((set, get) => ({
   selectedView: { type: 'today' },
   selectedArticle: null,
   loadingArticles: false,
-  starredCount: 0,
 
   init: async () => {
     try {
-      const [feedsData, countData] = await Promise.all([
-        apiFetch(`${API}/feeds`).then(r => r.json()),
-        apiFetch(`${API}/starred/count`).then(r => r.json()),
-      ]);
-      set({ feeds: feedsData, starredCount: countData.count || 0 });
+      const feedsData = await apiFetch(`${API}/feeds`).then(r => r.json());
+      set({ feeds: feedsData });
     } catch (e) {
       console.error(e);
     }
@@ -67,7 +63,6 @@ export const useStore = create((set, get) => ({
       selectedArticle: state.selectedArticle?.id === article.id
         ? { ...state.selectedArticle, isStarred: newStarred }
         : state.selectedArticle,
-      starredCount: Math.max(0, state.starredCount + (newStarred ? 1 : -1)),
     }));
     apiFetch(`${API}/articles/star`, {
       method: 'POST',
