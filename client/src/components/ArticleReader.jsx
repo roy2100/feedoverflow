@@ -11,7 +11,7 @@ function formatFullDate(dateStr) {
   });
 }
 
-export default function ArticleReader({ isMobile, onBack, article, onToggleStar, onPlay, currentEpisode, isPlaying }) {
+export default function ArticleReader({ isMobile, onBack, article, onToggleStar, onPlay, currentEpisode, isPlaying, scrollRef }) {
   const [fullContent, setFullContent] = useState(null);
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
@@ -72,6 +72,7 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
 
   return (
     <div
+      ref={scrollRef}
       key={article.id}
       style={{
         flex: 1,

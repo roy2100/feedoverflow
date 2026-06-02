@@ -26,6 +26,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
   if (audioRef.current === null) audioRef.current = new Audio();
+  const readerRef = useRef(null);
 
   const {
     feeds, articles, selectedView, selectedArticle, loadingArticles,
@@ -48,6 +49,12 @@ export default function App() {
         e.preventDefault();
         const idx = articles.findIndex(a => a.id === selectedArticle?.id);
         if (idx > 0) selectArticle(articles[idx - 1]);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        readerRef.current?.scrollBy({ top: 200, behavior: 'smooth' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        readerRef.current?.scrollBy({ top: -200, behavior: 'smooth' });
       }
     };
     document.addEventListener('keydown', handler);
@@ -202,6 +209,7 @@ export default function App() {
             onPlay={handlePlay}
             currentEpisode={currentEpisode}
             isPlaying={isPlaying}
+            scrollRef={readerRef}
           />
           {currentEpisode && (
             <Suspense fallback={null}>
