@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, Mic } from 'lucide-react';
 
 function formatDate(dateStr) {
@@ -18,6 +18,14 @@ export default function ArticleList({
   loading, viewTitle, onRefresh,
   onPlay, currentEpisode, isPlaying,
 }) {
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedArticle || !listRef.current) return;
+    const el = listRef.current.querySelector(`[data-id="${selectedArticle.id}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [selectedArticle?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{
       width: isMobile ? '100%' : 300,
@@ -57,7 +65,7 @@ export default function ArticleList({
         </h2>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {loading ? (
           Array.from({ length: 7 }, (_, i) => <SkeletonItem key={i} isMobile={isMobile} />)
         ) : articles.length === 0 ? (
@@ -78,6 +86,7 @@ export default function ArticleList({
               episodePlaying={currentEpisode?.id === article.id && isPlaying}
               isMobile={isMobile}
               style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
+              data-id={article.id}
             />
           ))
         )}
@@ -103,13 +112,14 @@ function SkeletonItem({ isMobile }) {
   );
 }
 
-function ArticleItem({ article, selected, onClick, onPlay, episodePlaying, isMobile, style }) {
+function ArticleItem({ article, selected, onClick, onPlay, episodePlaying, isMobile, style, 'data-id': dataId }) {
   const [hovered, setHovered] = useState(false);
   const summary = (article.summary || '').replace(/<[^>]+>/g, '').slice(0, 80);
 
   return (
     <div
       role="button"
+      data-id={dataId}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
