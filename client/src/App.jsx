@@ -27,6 +27,8 @@ export default function App() {
   const audioRef = useRef(null);
   if (audioRef.current === null) audioRef.current = new Audio();
   const readerRef = useRef(null);
+  const scrollKeysRef = useRef(new Set());
+  const scrollRafRef = useRef(null);
 
   const {
     feeds, articles, selectedView, selectedArticle, loadingArticles,
@@ -34,7 +36,18 @@ export default function App() {
   } = useStore();
 
   useEffect(() => {
-    const handler = (e) => {
+    const startLoop = () => {
+      if (scrollRafRef.current) return;
+      const loop = () => {
+        const keys = scrollKeysRef.current;
+        if (!keys.size) { scrollRafRef.current = null; return; }
+        readerRef.current?.scrollBy({ top: keys.has('ArrowDown') ? 12 : -12 });
+        scrollRafRef.current = requestAnimationFrame(loop);
+      };
+      scrollRafRef.current = requestAnimationFrame(loop);
+    };
+
+    const onKeyDown = (e) => {
       if (isMobile) return;
       if (showAddModal || showManageModal || showSettingsModal) return;
       const tag = e.target.tagName;
@@ -49,16 +62,27 @@ export default function App() {
         e.preventDefault();
         const idx = articles.findIndex(a => a.id === selectedArticle?.id);
         if (idx > 0) selectArticle(articles[idx - 1]);
-      } else if (e.key === 'ArrowDown') {
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        readerRef.current?.scrollBy({ top: 200, behavior: 'smooth' });
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        readerRef.current?.scrollBy({ top: -200, behavior: 'smooth' });
+        scrollKeysRef.current.add(e.key);
+        startLoop();
       }
     };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+
+    const onKeyUp = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        scrollKeysRef.current.delete(e.key);
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollKeysRef.current.clear();
+    };
   }, [articles, selectedArticle, showAddModal, showManageModal, showSettingsModal, isMobile, selectArticle]);
 
   useEffect(() => {
