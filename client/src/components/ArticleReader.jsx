@@ -74,10 +74,12 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
     <div
       ref={scrollRef}
       key={article.id}
+      tabIndex={-1}
       style={{
         flex: 1,
         background: 'var(--bg-reader)',
         overflowY: 'auto',
+        outline: 'none',
         overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch',
         animation: 'fadeIn 0.2s ease',

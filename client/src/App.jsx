@@ -62,6 +62,10 @@ export default function App() {
   }, [articles, selectedArticle, showAddModal, showManageModal, showSettingsModal, isMobile, selectArticle]);
 
   useEffect(() => {
+    readerRef.current?.focus({ preventScroll: true });
+  }, [selectedArticle?.id]);
+
+  useEffect(() => {
     fetch('/api/auth-check')
       .then(r => r.json())
       .then(data => {
