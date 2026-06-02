@@ -42,7 +42,22 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            // API 请求：网络优先，失败时尝试缓存
+            // Article feeds: show cached content immediately, refresh in background
+            urlPattern: /^\/api\/(today|all-articles|starred)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'api-articles',
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 5,
+              },
+              cacheableResponse: {
+                statuses: [200],
+              },
+            },
+          },
+          {
+            // Other API requests: network first, fall back to cache
             urlPattern: /^\/api\/.*/,
             handler: 'NetworkFirst',
             options: {

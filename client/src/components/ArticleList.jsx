@@ -62,10 +62,7 @@ export default function ArticleList({
 
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--text-tertiary)', fontSize: 13 }}>
-            <span style={{ width: 14, height: 14, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-            加载中
-          </div>
+          Array.from({ length: 7 }, (_, i) => <SkeletonItem key={i} isMobile={isMobile} />)
         ) : articles.length === 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)', fontSize: 13, flexDirection: 'column', gap: 12 }}>
             <span>暂无文章</span>
@@ -87,6 +84,24 @@ export default function ArticleList({
             />
           ))
         )}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonItem({ isMobile }) {
+  const p = isMobile ? '14px 16px' : '12px 16px';
+  return (
+    <div style={{ padding: p, borderBottom: '1px solid var(--border-light)', display: 'flex', gap: 8 }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--border-light)', flexShrink: 0, marginTop: isMobile ? 7 : 5 }} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div className="skeleton-bar" style={{ height: 9, width: '38%' }} />
+        <div className="skeleton-bar" style={{ height: 12, width: '92%' }} />
+        <div className="skeleton-bar" style={{ height: 12, width: '68%' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+          <div className="skeleton-bar" style={{ height: 9, width: '55%' }} />
+          <div className="skeleton-bar" style={{ height: 9, width: '15%' }} />
+        </div>
       </div>
     </div>
   );

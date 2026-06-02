@@ -8,9 +8,10 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "better-sqlite3": "^12.10.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-"jsdom": "^29.1.1",
+    "jsdom": "^29.1.1",
     "rss-parser": "^3.13.0",
     "xml2js": "^0.6.2"
   }

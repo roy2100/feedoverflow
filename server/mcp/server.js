@@ -172,6 +172,17 @@ server.registerTool(
   }
 );
 
+// --- Current article ---
+
+server.registerTool(
+  "get_current_article",
+  {
+    description:
+      "Get the article currently open in the RSS reader UI. Returns the full article object including title, link, summary, content, author, feed name, and read/starred state. Use this when the user says 'this article', 'the current article', or 'what I'm reading'.",
+  },
+  async () => text(await get("/api/current-article"))
+);
+
 // --- Content ---
 
 server.registerTool(
