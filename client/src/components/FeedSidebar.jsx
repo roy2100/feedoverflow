@@ -27,7 +27,7 @@ function FeedIcon({ url }) {
 export default function FeedSidebar({
   isMobile,
   feeds, selectedView, onSelectView,
-  unreadCount, starredCount, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
+  unreadCount, starredCount, feedUnreadCounts = {}, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
 }) {
   return (
     <aside style={{
@@ -100,12 +100,14 @@ export default function FeedSidebar({
         {feeds.length > 0 && <SectionLabel style={{ marginTop: 8 }}>订阅源</SectionLabel>}
         {feeds.map(feed => {
           const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
+          const feedUnread = feedUnreadCounts[feed.id] || 0;
           return (
             <NavItem
               key={feed.id}
               isMobile={isMobile}
               label={feed.name}
               icon={<FeedIcon url={feed.url} />}
+              count={feedUnread || null}
               selected={isSelected}
               onClick={() => onSelectView({ type: 'feed', feed })}
             />

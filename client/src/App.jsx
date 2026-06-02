@@ -26,14 +26,19 @@ export default function App() {
   if (audioRef.current === null) audioRef.current = new Audio();
 
   const {
-    feeds, articles, selectedView, selectedArticle, loadingArticles, starredCount,
-    init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles,
+    feeds, articles, selectedView, selectedArticle, loadingArticles, starredCount, feedUnreadCounts,
+    init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles, loadUnreadCounts,
   } = useStore();
 
   useEffect(() => {
     init();
     loadArticles({ type: 'today' });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const id = setInterval(loadUnreadCounts, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [loadUnreadCounts]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -84,7 +89,10 @@ export default function App() {
     onClosePlayer: handleClosePlayer,
   };
 
-  const unreadCount = useMemo(() => articles.filter(a => !a.isRead).length, [articles]);
+  const unreadCount = useMemo(
+    () => Object.values(feedUnreadCounts).reduce((s, n) => s + n, 0),
+    [feedUnreadCounts]
+  );
   const viewTitle =
     selectedView.type === 'all'     ? '全部未读' :
     selectedView.type === 'today'   ? '今日' :
@@ -150,6 +158,7 @@ export default function App() {
           onSelectView={selectView}
           unreadCount={unreadCount}
           starredCount={starredCount}
+          feedUnreadCounts={feedUnreadCounts}
           onRefresh={() => loadArticles(selectedView)}
           onOpenAddModal={() => setShowAddModal(true)}
           onOpenManageModal={() => setShowManageModal(true)}

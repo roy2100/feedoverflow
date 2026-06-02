@@ -10,6 +10,7 @@ export const useStore = create((set, get) => ({
   selectedArticle: null,
   loadingArticles: false,
   starredCount: 0,
+  feedUnreadCounts: {},
 
   init: async () => {
     try {
@@ -18,6 +19,16 @@ export const useStore = create((set, get) => ({
         fetch(`${API}/starred/count`).then(r => r.json()),
       ]);
       set({ feeds: feedsData, starredCount: countData.count || 0 });
+      get().loadUnreadCounts();
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
+  loadUnreadCounts: async () => {
+    try {
+      const data = await fetch(`${API}/unread-counts`).then(r => r.json());
+      set({ feedUnreadCounts: data });
     } catch (e) {
       console.error(e);
     }
@@ -58,6 +69,10 @@ export const useStore = create((set, get) => ({
     set(state => ({
       selectedArticle: { ...article, isRead: true },
       articles: state.articles.map(a => a.id === article.id ? { ...a, isRead: true } : a),
+      feedUnreadCounts: article.feedId ? {
+        ...state.feedUnreadCounts,
+        [article.feedId]: Math.max(0, (state.feedUnreadCounts[article.feedId] || 0) - 1),
+      } : state.feedUnreadCounts,
     }));
     fetch(`${API}/articles/read`, {
       method: 'POST',

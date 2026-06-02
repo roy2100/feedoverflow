@@ -267,6 +267,59 @@ if (!process.env.TEST_DB) {
   }
 }
 
+// ── Background poller ─────────────────────────────────────────────────────────
+const POLL_INTERVAL = 15 * 60 * 1000;
+
+const insertPolledArticle = db.prepare(`
+  INSERT OR IGNORE INTO article_states
+    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_read,is_starred)
+  VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@summary,@content,@author,@audioUrl,@audioDuration,@isRead,0)
+`);
+
+function persistPolled(feed, items, feedName, { markRead = false } = {}) {
+  const enriched = enrich(items.slice(0, 50), feed.id, feedName, { withContent: true });
+  db.transaction(() => {
+    for (const a of enriched) {
+      insertPolledArticle.run({
+        id: a.id, feedId: a.feedId, feedName: a.feedName,
+        title: a.title, link: a.link, pubDate: a.pubDate,
+        summary: a.summary, content: a.content, author: a.author,
+        audioUrl: a.audioUrl || null, audioDuration: a.audioDuration || null,
+        isRead: markRead ? 1 : 0,
+      });
+    }
+  })();
+}
+
+async function pollFeed(feed, { markRead = false } = {}) {
+  try {
+    const { items, feedName } = await fetchAndCache(feed);
+    persistPolled(feed, items, feedName, { markRead });
+  } catch (err) {
+    console.error(`[poller] ${feed.url}: ${err.message}`);
+  }
+}
+
+async function pollAllFeeds() {
+  const feeds = db.prepare('SELECT * FROM feeds').all();
+  for (let i = 0; i < feeds.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+    await pollFeed(feeds[i]);
+  }
+}
+
+if (!process.env.TEST_DB) {
+  // Delay slightly so startup cache fetches can complete first
+  setTimeout(async () => {
+    const feeds = db.prepare('SELECT * FROM feeds').all();
+    for (const feed of feeds) {
+      const hasStates = !!db.prepare('SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1').get(feed.id);
+      await pollFeed(feed, { markRead: !hasStates });
+    }
+    setInterval(pollAllFeeds, POLL_INTERVAL);
+  }, 5000);
+}
+
 // ── Feeds API ─────────────────────────────────────────────────────────────────
 app.get('/api/feeds', (_req, res) => {
   res.set('Cache-Control', 'private, max-age=30');
@@ -442,6 +495,14 @@ app.get('/api/starred', (_req, res) => {
   });
 });
 
+// GET /api/unread-counts — per-feed unread count for sidebar badges
+app.get('/api/unread-counts', (_req, res) => {
+  const rows = db.prepare(
+    'SELECT feed_id, COUNT(*) AS count FROM article_states WHERE is_read = 0 GROUP BY feed_id'
+  ).all();
+  res.json(Object.fromEntries(rows.map(r => [r.feed_id, r.count])));
+});
+
 // GET /api/starred/count — lightweight count for sidebar badge
 app.get('/api/starred/count', (_req, res) => {
   res.set('Cache-Control', 'private, max-age=10');
@@ -493,4 +554,4 @@ if (require.main === module) {
   app.listen(PORT, () => console.log(`RSS server on http://localhost:${PORT}`));
 }
 
-module.exports = { parseURL, app, db, makeId };
+module.exports = { parseURL, app, db, makeId, persistPolled };
