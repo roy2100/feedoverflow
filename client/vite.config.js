@@ -49,11 +49,6 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            // Auth routes must bypass SW so Set-Cookie headers work in iOS WKWebView
-            urlPattern: /^\/api\/(login|logout|auth-check)$/,
-            handler: 'NetworkOnly',
-          },
-          {
             // Article feeds: show cached content immediately, refresh in background
             urlPattern: /^\/api\/(today|all-articles|starred)$/,
             handler: 'StaleWhileRevalidate',
