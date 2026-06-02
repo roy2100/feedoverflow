@@ -14,31 +14,30 @@ npm run client           # client only (port 3000)
 npm install && cd server && npm install && cd ../client && npm install
 
 # Production deploy
-./deploy.sh              # install deps, build frontend, reload Caddy, restart backend service
+./deploy.sh              # install deps, build frontend, restart backend service
 
 # Service management
-launchctl start rss-reader.backend
-launchctl stop rss-reader.backend
-launchctl kickstart -k "gui/$(id -u)/rss-reader.backend"   # force restart
-tail -f /tmp/rss-reader-backend.log
+launchctl start com.rss-reader.app
+launchctl stop com.rss-reader.app
+launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
+tail -f ~/Deploy/rss-reader/logs/server.log
 ```
 
 There are no test or lint scripts configured.
 
 ## Deployment context
 
-Single-user app running locally on macOS, served at `http://rss.local` via Caddy. Not exposed to the public internet. No need for authentication, multi-tenancy, rate limiting, or cloud infrastructure. Prefer simple, lightweight solutions (in-memory cache, SQLite, local files) over over-engineered ones.
+Single-user app running locally on macOS, exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Basic Auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple, lightweight solutions (in-memory cache, SQLite, local files) over over-engineered ones.
 
 **Production stack:**
-- Backend: launchd service (`rss-reader.backend`) running `server/index.js` on port 3002, auto-starts on boot
-- Frontend: Vite build → `client/dist/`, served as static files by Caddy
-- Caddy: reverse-proxies `/api/*` → `localhost:3002`, SPA fallback for all other paths
-- `/etc/hosts`: `127.0.0.1 rss.local`
-- Caddyfile lives in the networth repo: `/Users/lielienan/Project/networth/Caddyfile`
+- Backend: launchd service (`com.rss-reader.app`) running `~/Deploy/rss-reader/server/index.js` on port 3002, auto-starts on boot
+- Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, served as static files by Express
+- Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
+- Auth: set `AUTH_USER` and `AUTH_PASS` in `~/Library/LaunchAgents/com.rss-reader.app.plist`
 
 **Port allocation (no conflicts with networth.local):**
 - `networth.local` backend → 3001
-- `rss.local` backend → 3002
+- `rss.royl.uk` backend → 3002
 - Dev client → 3000
 
 ## Architecture
