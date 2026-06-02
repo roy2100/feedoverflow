@@ -164,7 +164,10 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
     res.json({ ok: true });
   });
 
+  const isLocalhost = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip);
+
   app.get('/api/auth-check', (req, res) => {
+    if (isLocalhost(req)) return res.json({ authed: true });
     const token = parseCookies(req).session;
     if (token) {
       const row = stmtFindSession.get(token);
@@ -175,6 +178,7 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
 
   app.use((req, res, next) => {
     if (!req.path.startsWith('/api/')) return next();
+    if (isLocalhost(req)) return next();
     const token = parseCookies(req).session;
     if (token) {
       const row = stmtFindSession.get(token);
