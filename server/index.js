@@ -3,6 +3,7 @@ process.title = 'rss-reader';
 const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const Parser = require('rss-parser');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
@@ -35,9 +36,19 @@ async function parseURL(url, signal) {
   return makeParser().parseString(xml);
 }
 
+const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://rss.royl.uk'];
+
 app.use(compression());
-app.use(cors());
+app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later' },
+});
 
 // Prevent API responses from being served from browser cache
 app.use('/api', (req, res, next) => {
@@ -126,7 +137,7 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
   const stmtFindSession   = db.prepare('SELECT created_at FROM sessions WHERE token = ?');
   const stmtCleanSessions = db.prepare('DELETE FROM sessions WHERE created_at < ?');
 
-  app.post('/api/login', (req, res) => {
+  app.post('/api/login', loginLimiter, (req, res) => {
     const { user, pass } = req.body ?? {};
     if (typeof user !== 'string' || typeof pass !== 'string') {
       return res.status(400).json({ error: 'Missing credentials' });
