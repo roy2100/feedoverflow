@@ -3,6 +3,12 @@ import { create } from 'zustand';
 const API = '/api';
 let loadAbortController = null;
 
+async function apiFetch(url, opts) {
+  const r = await fetch(url, opts);
+  if (r.status === 401) { window.location.reload(); return r; }
+  return r;
+}
+
 export const useStore = create((set, get) => ({
   feeds: [],
   articles: [],
@@ -15,8 +21,8 @@ export const useStore = create((set, get) => ({
   init: async () => {
     try {
       const [feedsData, countData] = await Promise.all([
-        fetch(`${API}/feeds`).then(r => r.json()),
-        fetch(`${API}/starred/count`).then(r => r.json()),
+        apiFetch(`${API}/feeds`).then(r => r.json()),
+        apiFetch(`${API}/starred/count`).then(r => r.json()),
       ]);
       set({ feeds: feedsData, starredCount: countData.count || 0 });
       get().loadUnreadCounts();
@@ -27,7 +33,7 @@ export const useStore = create((set, get) => ({
 
   loadUnreadCounts: async () => {
     try {
-      const data = await fetch(`${API}/unread-counts`).then(r => r.json());
+      const data = await apiFetch(`${API}/unread-counts`).then(r => r.json());
       set({ feedUnreadCounts: data });
     } catch (e) {
       console.error(e);
@@ -42,7 +48,7 @@ export const useStore = create((set, get) => ({
     try {
       const urlMap = { all: `${API}/all-articles`, today: `${API}/today`, starred: `${API}/starred` };
       const url = urlMap[view.type] ?? `${API}/feeds/${view.feed.id}/articles`;
-      const data = await fetch(url, { signal: controller.signal }).then(r => r.json());
+      const data = await apiFetch(url, { signal: controller.signal }).then(r => r.json());
       set({ articles: data.articles || [] });
     } catch (e) {
       if (e.name !== 'AbortError') console.error(e);
@@ -57,7 +63,7 @@ export const useStore = create((set, get) => ({
   },
 
   selectArticle: (article) => {
-    fetch(`${API}/current-article`, {
+    apiFetch(`${API}/current-article`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ article }),
@@ -74,7 +80,7 @@ export const useStore = create((set, get) => ({
         [article.feedId]: Math.max(0, (state.feedUnreadCounts[article.feedId] || 0) - 1),
       } : state.feedUnreadCounts,
     }));
-    fetch(`${API}/articles/read`, {
+    apiFetch(`${API}/articles/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ article }),
@@ -90,7 +96,7 @@ export const useStore = create((set, get) => ({
         : state.selectedArticle,
       starredCount: Math.max(0, state.starredCount + (newStarred ? 1 : -1)),
     }));
-    fetch(`${API}/articles/star`, {
+    apiFetch(`${API}/articles/star`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ article, starred: newStarred }),
@@ -101,7 +107,7 @@ export const useStore = create((set, get) => ({
   },
 
   addFeed: async ({ url }) => {
-    const r = await fetch(`${API}/feeds`, {
+    const r = await apiFetch(`${API}/feeds`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
@@ -116,7 +122,7 @@ export const useStore = create((set, get) => ({
   },
 
   deleteFeed: async (feedId) => {
-    await fetch(`${API}/feeds/${feedId}`, { method: 'DELETE' });
+    await apiFetch(`${API}/feeds/${feedId}`, { method: 'DELETE' });
     const wasViewingDeleted = get().selectedView.type === 'feed' && get().selectedView.feed?.id === feedId;
     set(state => ({ feeds: state.feeds.filter(f => f.id !== feedId) }));
     if (wasViewingDeleted) {
@@ -125,7 +131,7 @@ export const useStore = create((set, get) => ({
   },
 
   updateFeed: async (feedId, { name }) => {
-    await fetch(`${API}/feeds/${feedId}`, {
+    await apiFetch(`${API}/feeds/${feedId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),

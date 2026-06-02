@@ -8,6 +8,7 @@ import ArticleReader from './components/ArticleReader';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
+import LoginForm from './components/LoginForm';
 
 const AddFeedModal     = lazy(() => import('./components/AddFeedModal'));
 const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
@@ -15,6 +16,7 @@ const SettingsModal    = lazy(() => import('./components/SettingsModal'));
 const PodcastPlayer    = lazy(() => import('./components/PodcastPlayer'));
 
 export default function App() {
+  const [authed, setAuthed] = useState(null); // null=checking, false=unauthed, true=authed
   const isMobile = useIsMobile();
   const [mobilePage, setMobilePage] = useState('feeds');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -31,8 +33,13 @@ export default function App() {
   } = useStore();
 
   useEffect(() => {
-    init();
-    loadArticles({ type: 'today' });
+    fetch('/api/auth-check')
+      .then(r => r.json())
+      .then(data => {
+        setAuthed(data.authed);
+        if (data.authed) { init(); loadArticles({ type: 'today' }); }
+      })
+      .catch(() => { setAuthed(true); init(); loadArticles({ type: 'today' }); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -108,6 +115,9 @@ export default function App() {
       />
     </Suspense>
   );
+
+  if (authed === null) return <div style={{ height: '100dvh', background: 'var(--bg)' }} />;
+  if (authed === false) return <LoginForm onLogin={() => { setAuthed(true); init(); loadArticles({ type: 'today' }); }} />;
 
   if (isMobile) {
     const positions = {
