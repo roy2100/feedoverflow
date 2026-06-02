@@ -22,6 +22,7 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [currentEpisode, setCurrentEpisode] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
@@ -31,6 +32,42 @@ export default function App() {
     feeds, articles, selectedView, selectedArticle, loadingArticles,
     init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles,
   } = useStore();
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (isMobile) return;
+      if (e.key === 'Escape') {
+        if (showHelpModal) { setShowHelpModal(false); return; }
+        return;
+      }
+      if (showAddModal || showManageModal || showSettingsModal || showHelpModal) return;
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const idx = articles.findIndex(a => a.id === selectedArticle?.id);
+        const next = idx === -1 ? articles[0] : articles[idx + 1];
+        if (next) selectArticle(next);
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const idx = articles.findIndex(a => a.id === selectedArticle?.id);
+        if (idx > 0) selectArticle(articles[idx - 1]);
+      } else if (e.key === 's') {
+        if (selectedArticle) toggleStar(selectedArticle);
+      } else if (e.key === 'o') {
+        if (selectedArticle?.link) window.open(selectedArticle.link, '_blank', 'noopener,noreferrer');
+      } else if (e.key === 'r') {
+        loadArticles(selectedView);
+      } else if (e.key === 'a') {
+        setShowAddModal(true);
+      } else if (e.key === '?') {
+        setShowHelpModal(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [articles, selectedArticle, selectedView, showAddModal, showManageModal, showSettingsModal, showHelpModal, isMobile, selectArticle, toggleStar, loadArticles]);
 
   useEffect(() => {
     fetch('/api/auth-check')
@@ -209,7 +246,71 @@ export default function App() {
             <SettingsModal onClose={() => setShowSettingsModal(false)} />
           </Suspense>
         )}
+        {showHelpModal && <KeyboardHelpModal onClose={() => setShowHelpModal(false)} />}
       </div>
     </AudioContext.Provider>
+  );
+}
+
+function KeyboardHelpModal({ onClose }) {
+  const shortcuts = [
+    ['j / ↓', '下一篇文章'],
+    ['k / ↑', '上一篇文章'],
+    ['s', '收藏 / 取消收藏'],
+    ['o', '在浏览器中打开原文'],
+    ['r', '刷新当前视图'],
+    ['a', '添加订阅源'],
+    ['?', '显示快捷键帮助'],
+    ['Esc', '关闭此面板'],
+  ];
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+        zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'var(--bg-panel)', borderRadius: 12,
+          padding: '28px 32px', width: 360,
+          boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
+          border: '1px solid var(--border)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 18, color: 'var(--text-primary)' }}>
+          键盘快捷键
+        </div>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <tbody>
+            {shortcuts.map(([key, desc]) => (
+              <tr key={key}>
+                <td style={{ padding: '5px 16px 5px 0', whiteSpace: 'nowrap' }}>
+                  {key.split(' / ').map((k, i) => (
+                    <span key={k}>
+                      {i > 0 && <span style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 4px' }}>/</span>}
+                      <kbd style={{
+                        display: 'inline-block',
+                        background: 'var(--bg)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        padding: '1px 7px',
+                        fontSize: 12,
+                        fontFamily: 'inherit',
+                        color: 'var(--text-secondary)',
+                        lineHeight: '20px',
+                      }}>{k}</kbd>
+                    </span>
+                  ))}
+                </td>
+                <td style={{ padding: '5px 0', fontSize: 13, color: 'var(--text-secondary)' }}>{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
