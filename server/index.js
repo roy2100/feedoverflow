@@ -39,6 +39,12 @@ app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
+// Prevent API responses from being served from browser cache
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // Basic auth — only active when AUTH_USER and AUTH_PASS env vars are set
 if (process.env.AUTH_USER && process.env.AUTH_PASS) {
   app.use((req, res, next) => {
@@ -150,12 +156,13 @@ function enrich(items, feedId, feedName, { withContent = true } = {}) {
     const enc = item.enclosure;
     const audioUrl      = (enc?.url && enc?.type?.startsWith('audio')) ? enc.url : '';
     const audioDuration = audioUrl ? normalizeDuration(item.itunes?.duration || '') : '';
+    const rawSummary = item.contentSnippet || item.summary || '';
     return {
       id,
       feedId,
       feedName,
       title:   item.title || 'Untitled',
-      summary: item.contentSnippet || item.summary || '',
+      summary: withContent ? rawSummary : rawSummary.slice(0, 300),
       content: withContent ? (item.contentEncoded || item.content || item.summary || '') : '',
       link:    item.link || '',
       pubDate: item.pubDate || item.isoDate || '',

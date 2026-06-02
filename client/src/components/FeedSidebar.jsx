@@ -114,15 +114,20 @@ export default function FeedSidebar({
       </nav>
 
       {/* Footer — desktop only */}
-      {!isMobile && onOpenSettings && (
+      {!isMobile && (
         <div style={{
           borderTop: '1px solid var(--border-light)',
           padding: '8px 12px',
-          display: 'flex', justifyContent: 'flex-end',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <IconBtn onClick={onOpenSettings} title="设置">
-            <SlidersHorizontal size={13} />
-          </IconBtn>
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
+            {__BUILD_DATE__}
+          </span>
+          {onOpenSettings && (
+            <IconBtn onClick={onOpenSettings} title="设置">
+              <SlidersHorizontal size={13} />
+            </IconBtn>
+          )}
         </div>
       )}
     </aside>
