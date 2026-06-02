@@ -36,7 +36,7 @@ async function parseURL(url, signal) {
   return makeParser().parseString(xml);
 }
 
-const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://rss.royl.uk'];
+const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://rss.royl.uk', 'https://rss.lan'];
 
 app.use(compression());
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
