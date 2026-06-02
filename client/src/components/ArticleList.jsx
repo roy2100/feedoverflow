@@ -55,9 +55,6 @@ export default function ArticleList({
         }}>
           {viewTitle}
         </h2>
-        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0, marginLeft: 8 }}>
-          {!loading && `${articles.length} 篇`}
-        </span>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -92,8 +89,7 @@ export default function ArticleList({
 function SkeletonItem({ isMobile }) {
   const p = isMobile ? '14px 16px' : '12px 16px';
   return (
-    <div style={{ padding: p, borderBottom: '1px solid var(--border-light)', display: 'flex', gap: 8 }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--border-light)', flexShrink: 0, marginTop: isMobile ? 7 : 5 }} />
+    <div style={{ padding: p, borderBottom: '1px solid var(--border-light)' }}>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <div className="skeleton-bar" style={{ height: 9, width: '38%' }} />
         <div className="skeleton-bar" style={{ height: 12, width: '92%' }} />
@@ -128,20 +124,14 @@ function ArticleItem({ article, selected, onClick, onPlay, episodePlaying, isMob
         ...style,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-        {/* Unread dot */}
-        <span style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: article.isRead ? 'transparent' : 'var(--dot-unread)',
-          flexShrink: 0, marginTop: isMobile ? 7 : 5, transition: 'background 0.2s',
-        }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {article.feedName && (
             <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-light)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {article.feedName}
             </div>
           )}
-          <div style={{ fontSize: isMobile ? 14 : 13, fontWeight: article.isRead ? 400 : 500, color: article.isRead ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.45, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <div style={{ fontSize: isMobile ? 14 : 13, fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1.45, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {article.title}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

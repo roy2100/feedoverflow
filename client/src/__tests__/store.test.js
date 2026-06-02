@@ -8,7 +8,6 @@ const INITIAL_STATE = {
   selectedArticle: null,
   loadingArticles: false,
   starredCount: 0,
-  feedUnreadCounts: {},
 };
 
 function mockFetch(json = { articles: [] }) {
@@ -27,7 +26,7 @@ afterEach(() => {
 // ─── toggleStar ─────────────────────────────────────────────────────────────
 
 describe('toggleStar', () => {
-  const article = { id: 'a1', isStarred: false, isRead: true };
+  const article = { id: 'a1', isStarred: false };
 
   it('标记星标：isStarred 变 true，starredCount +1', () => {
     useStore.setState({ articles: [article], starredCount: 0 });
@@ -77,39 +76,18 @@ describe('toggleStar', () => {
 // ─── selectArticle ───────────────────────────────────────────────────────────
 
 describe('selectArticle', () => {
-  it('已读文章：直接设置 selectedArticle，不调用 /api/articles/read', () => {
-    const article = { id: 'a1', isRead: true };
+  it('选中文章后 selectedArticle 被设置', () => {
+    const article = { id: 'a1' };
     useStore.setState({ articles: [article] });
     useStore.getState().selectArticle(article);
     expect(useStore.getState().selectedArticle).toEqual(article);
+  });
+
+  it('不调用 /api/articles/read', () => {
+    const article = { id: 'a1' };
+    useStore.setState({ articles: [article] });
+    useStore.getState().selectArticle(article);
     expect(fetch).not.toHaveBeenCalledWith('/api/articles/read', expect.any(Object));
-  });
-
-  it('未读文章：selectedArticle 和 articles 列表都标记为已读', () => {
-    const article = { id: 'a1', isRead: false };
-    useStore.setState({ articles: [article] });
-    useStore.getState().selectArticle(article);
-    const { selectedArticle, articles } = useStore.getState();
-    expect(selectedArticle.isRead).toBe(true);
-    expect(articles[0].isRead).toBe(true);
-  });
-
-  it('未读文章：调用 POST /api/articles/read', () => {
-    const article = { id: 'a1', isRead: false };
-    useStore.setState({ articles: [article] });
-    useStore.getState().selectArticle(article);
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/articles/read',
-      expect.objectContaining({ method: 'POST' })
-    );
-  });
-
-  it('选中文章不影响列表中其他文章的 isRead 状态', () => {
-    const a1 = { id: 'a1', isRead: false };
-    const a2 = { id: 'a2', isRead: false };
-    useStore.setState({ articles: [a1, a2] });
-    useStore.getState().selectArticle(a1);
-    expect(useStore.getState().articles[1].isRead).toBe(false);
   });
 });
 
@@ -161,54 +139,5 @@ describe('loadArticles URL 映射', () => {
     vi.stubGlobal('fetch', mockFetch({ articles: [{ id: 'x1' }] }));
     await useStore.getState().loadArticles({ type: 'all' });
     expect(useStore.getState().articles).toHaveLength(1);
-  });
-});
-
-// ─── loadUnreadCounts ────────────────────────────────────────────────────────
-
-describe('loadUnreadCounts', () => {
-  it('拉取 /api/unread-counts 并写入 feedUnreadCounts', async () => {
-    vi.stubGlobal('fetch', mockFetch({ f1: 3, f2: 1 }));
-    await useStore.getState().loadUnreadCounts();
-    expect(useStore.getState().feedUnreadCounts).toEqual({ f1: 3, f2: 1 });
-  });
-
-  it('请求 URL 为 /api/unread-counts', async () => {
-    const spy = mockFetch({});
-    vi.stubGlobal('fetch', spy);
-    await useStore.getState().loadUnreadCounts();
-    expect(spy).toHaveBeenCalledWith('/api/unread-counts');
-  });
-});
-
-// ─── selectArticle + feedUnreadCounts ────────────────────────────────────────
-
-describe('selectArticle — feedUnreadCounts 联动', () => {
-  it('读未读文章 → 对应 feed 未读数 -1', () => {
-    const article = { id: 'a1', isRead: false, feedId: 'f1' };
-    useStore.setState({ articles: [article], feedUnreadCounts: { f1: 5 } });
-    useStore.getState().selectArticle(article);
-    expect(useStore.getState().feedUnreadCounts.f1).toBe(4);
-  });
-
-  it('读已读文章 → feedUnreadCounts 不变', () => {
-    const article = { id: 'a1', isRead: true, feedId: 'f1' };
-    useStore.setState({ articles: [article], feedUnreadCounts: { f1: 3 } });
-    useStore.getState().selectArticle(article);
-    expect(useStore.getState().feedUnreadCounts.f1).toBe(3);
-  });
-
-  it('feedUnreadCounts 不低于 0', () => {
-    const article = { id: 'a1', isRead: false, feedId: 'f1' };
-    useStore.setState({ articles: [article], feedUnreadCounts: { f1: 0 } });
-    useStore.getState().selectArticle(article);
-    expect(useStore.getState().feedUnreadCounts.f1).toBe(0);
-  });
-
-  it('无 feedId 的文章 → feedUnreadCounts 不变', () => {
-    const article = { id: 'a1', isRead: false };
-    useStore.setState({ articles: [article], feedUnreadCounts: { f1: 2 } });
-    useStore.getState().selectArticle(article);
-    expect(useStore.getState().feedUnreadCounts).toEqual({ f1: 2 });
   });
 });

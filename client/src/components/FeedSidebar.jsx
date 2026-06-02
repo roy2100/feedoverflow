@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, Sun, Star, Circle, Rss, Settings, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, Plus, Sun, Star, List, Rss, Settings, SlidersHorizontal } from 'lucide-react';
 
 function FeedIcon({ url }) {
   const [failed, setFailed] = useState(false);
@@ -27,7 +27,7 @@ function FeedIcon({ url }) {
 export default function FeedSidebar({
   isMobile,
   feeds, selectedView, onSelectView,
-  unreadCount, starredCount, feedUnreadCounts = {}, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
+  starredCount, onRefresh, onOpenAddModal, onOpenManageModal, onOpenSettings,
 }) {
   return (
     <aside style={{
@@ -79,10 +79,9 @@ export default function FeedSidebar({
         />
         <NavItem
           isMobile={isMobile}
-          label="全部未读"
-          icon={<Circle size={isMobile ? 11 : 9} fill="var(--dot-unread)" strokeWidth={0} />}
-          iconColor="var(--dot-unread)"
-          count={unreadCount}
+          label="全部"
+          icon={<List size={isMobile ? 16 : 13} strokeWidth={2} />}
+          iconColor="var(--text-secondary)"
           selected={selectedView.type === 'all'}
           onClick={() => onSelectView({ type: 'all' })}
         />
@@ -100,14 +99,12 @@ export default function FeedSidebar({
         {feeds.length > 0 && <SectionLabel style={{ marginTop: 8 }}>订阅源</SectionLabel>}
         {feeds.map(feed => {
           const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
-          const feedUnread = feedUnreadCounts[feed.id] || 0;
           return (
             <NavItem
               key={feed.id}
               isMobile={isMobile}
               label={feed.name}
               icon={<FeedIcon url={feed.url} />}
-              count={feedUnread || null}
               selected={isSelected}
               onClick={() => onSelectView({ type: 'feed', feed })}
             />

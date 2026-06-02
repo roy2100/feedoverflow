@@ -2,8 +2,7 @@ import { useStore } from '../store';
 import FeedSidebar from '../components/FeedSidebar';
 
 export default function FeedsPage({ onOpenAddModal, onNavigate }) {
-  const { feeds, selectedView, articles, starredCount, selectView, loadArticles } = useStore();
-  const unreadCount = articles.filter(a => !a.isRead).length;
+  const { feeds, selectedView, starredCount, selectView, loadArticles } = useStore();
 
   const handleSelectView = (view) => {
     selectView(view);
@@ -16,7 +15,6 @@ export default function FeedsPage({ onOpenAddModal, onNavigate }) {
       feeds={feeds}
       selectedView={selectedView}
       onSelectView={handleSelectView}
-      unreadCount={unreadCount}
       starredCount={starredCount}
       onRefresh={() => loadArticles(selectedView)}
       onOpenAddModal={onOpenAddModal}

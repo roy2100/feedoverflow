@@ -16,7 +16,6 @@ export const useStore = create((set, get) => ({
   selectedArticle: null,
   loadingArticles: false,
   starredCount: 0,
-  feedUnreadCounts: {},
 
   init: async () => {
     try {
@@ -25,16 +24,6 @@ export const useStore = create((set, get) => ({
         apiFetch(`${API}/starred/count`).then(r => r.json()),
       ]);
       set({ feeds: feedsData, starredCount: countData.count || 0 });
-      get().loadUnreadCounts();
-    } catch (e) {
-      console.error(e);
-    }
-  },
-
-  loadUnreadCounts: async () => {
-    try {
-      const data = await apiFetch(`${API}/unread-counts`).then(r => r.json());
-      set({ feedUnreadCounts: data });
     } catch (e) {
       console.error(e);
     }
@@ -68,23 +57,7 @@ export const useStore = create((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ article }),
     }).catch(console.error);
-    if (article.isRead) {
-      set({ selectedArticle: article });
-      return;
-    }
-    set(state => ({
-      selectedArticle: { ...article, isRead: true },
-      articles: state.articles.map(a => a.id === article.id ? { ...a, isRead: true } : a),
-      feedUnreadCounts: article.feedId ? {
-        ...state.feedUnreadCounts,
-        [article.feedId]: Math.max(0, (state.feedUnreadCounts[article.feedId] || 0) - 1),
-      } : state.feedUnreadCounts,
-    }));
-    apiFetch(`${API}/articles/read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ article }),
-    }).catch(console.error);
+    set({ selectedArticle: article });
   },
 
   toggleStar: (article) => {

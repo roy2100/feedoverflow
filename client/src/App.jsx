@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useStore } from './store';
 import { AudioContext } from './AudioContext';
 import { useIsMobile } from './hooks/useIsMobile';
@@ -28,8 +28,8 @@ export default function App() {
   if (audioRef.current === null) audioRef.current = new Audio();
 
   const {
-    feeds, articles, selectedView, selectedArticle, loadingArticles, starredCount, feedUnreadCounts,
-    init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles, loadUnreadCounts,
+    feeds, articles, selectedView, selectedArticle, loadingArticles, starredCount,
+    init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles,
   } = useStore();
 
   useEffect(() => {
@@ -41,11 +41,6 @@ export default function App() {
       })
       .catch(() => { setAuthed(true); init(); loadArticles({ type: 'today' }); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const id = setInterval(loadUnreadCounts, 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [loadUnreadCounts]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -96,12 +91,8 @@ export default function App() {
     onClosePlayer: handleClosePlayer,
   };
 
-  const unreadCount = useMemo(
-    () => Object.values(feedUnreadCounts).reduce((s, n) => s + n, 0),
-    [feedUnreadCounts]
-  );
   const viewTitle =
-    selectedView.type === 'all'     ? '全部未读' :
+    selectedView.type === 'all'     ? '全部' :
     selectedView.type === 'today'   ? '今日' :
     selectedView.type === 'starred' ? '已收藏' :
     selectedView.feed?.name;
@@ -166,9 +157,7 @@ export default function App() {
           feeds={feeds}
           selectedView={selectedView}
           onSelectView={selectView}
-          unreadCount={unreadCount}
           starredCount={starredCount}
-          feedUnreadCounts={feedUnreadCounts}
           onRefresh={() => loadArticles(selectedView)}
           onOpenAddModal={() => setShowAddModal(true)}
           onOpenManageModal={() => setShowManageModal(true)}
