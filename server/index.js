@@ -516,7 +516,31 @@ app.get('/api/feeds/:id/articles', async (req, res) => {
   try {
     const cached = await getCachedFeed(feed, ac.signal);
     if (ac.signal.aborted) return;
-    res.json({ feedName: cached.feedName, articles: dedupById(enrich(cached.items.slice(0, 50), feed.id, feed.name, { withContent: false })) });
+    const liveArticles = enrich(cached.items.slice(0, 50), feed.id, feed.name, { withContent: false });
+    const liveIds = new Set(liveArticles.map(a => a.id));
+    const persisted = db.prepare(
+      'SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_date DESC'
+    ).all(feed.id);
+    const historicArticles = persisted
+      .filter(r => !liveIds.has(r.article_id))
+      .map(r => ({
+        id: r.article_id,
+        feedId: r.feed_id,
+        feedName: r.feed_name,
+        title: r.title,
+        summary: (r.summary || '').slice(0, 300),
+        content: '',
+        link: r.link,
+        pubDate: r.pub_date,
+        author: r.author || '',
+        audioUrl: r.audio_url || '',
+        audioDuration: r.audio_duration || '',
+        isRead: !!r.is_read,
+        isStarred: !!r.is_starred,
+      }));
+    const articles = dedupById([...liveArticles, ...historicArticles]);
+    articles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+    res.json({ feedName: cached.feedName, articles });
   } catch (err) {
     if (ac.signal.aborted) return;
     res.status(500).json({ error: 'Failed to fetch feed', detail: err.message });
