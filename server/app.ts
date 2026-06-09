@@ -43,12 +43,12 @@ app.get('/api/feeds', (_req, res) => {
 });
 
 app.post('/api/feeds', async (req, res) => {
-  const { url } = req.body;
+  const { url, name } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
   let feedTitle: string;
   try {
     const parsed = await parseURL(resolveUrl(url));
-    feedTitle = parsed.title?.trim() || url;
+    feedTitle = (typeof name === 'string' && name.trim()) || parsed.title?.trim() || url;
   } catch (err) {
     return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确', detail: (err as Error)?.message || String(err) });
   }
