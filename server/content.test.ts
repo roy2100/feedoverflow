@@ -1,18 +1,15 @@
-'use strict';
+import { test, describe, before } from 'node:test';
+import assert from 'node:assert/strict';
+import request from 'supertest';
 
-// Must be set before requiring server module so it uses an isolated in-memory DB
+// Must be set before importing server module so it uses an isolated in-memory DB
 process.env.TEST_DB = ':memory:';
 
-const { test, describe, before } = require('node:test');
-const assert = require('node:assert/strict');
-const request = require('supertest');
-
-const { app, db, makeId } = require('./index.ts');
+const { app, db, makeId } = await import('./index.ts');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const FEED_ID = 'test-feed-1';
-
 const todayISO = new Date().toISOString();
 
 const TEST_ITEMS = [
@@ -63,7 +60,7 @@ describe('GET /api/all-articles — content stripped', () => {
 
   test('summary field is still present', async () => {
     const res = await request(app).get('/api/all-articles');
-    assert.ok(res.body.articles.some(a => a.summary.length > 0), 'at least one article should have summary');
+    assert.ok(res.body.articles.some((a: { summary: string }) => a.summary.length > 0), 'at least one article should have summary');
   });
 });
 
@@ -138,44 +135,28 @@ describe('GET /api/articles/:id/content', () => {
 describe('POST /api/articles/read', () => {
   test('saves content from feed_cache when article.content is empty', async () => {
     const article = {
-      id: ARTICLE_1_ID,
-      feedId: FEED_ID,
-      feedName: 'Test Feed',
-      title: TEST_ITEMS[0].title,
-      link: TEST_ITEMS[0].link,
-      pubDate: TEST_ITEMS[0].pubDate,
-      summary: TEST_ITEMS[0].contentSnippet,
-      content: '',
-      author: '',
-      audioUrl: '',
-      audioDuration: '',
+      id: ARTICLE_1_ID, feedId: FEED_ID, feedName: 'Test Feed',
+      title: TEST_ITEMS[0].title, link: TEST_ITEMS[0].link, pubDate: TEST_ITEMS[0].pubDate,
+      summary: TEST_ITEMS[0].contentSnippet, content: '', author: '', audioUrl: '', audioDuration: '',
     };
 
     const res = await request(app).post('/api/articles/read').send({ article });
     assert.equal(res.status, 200);
     assert.ok(res.body.ok);
 
-    const saved = db.prepare('SELECT content FROM article_states WHERE article_id = ?').get(ARTICLE_1_ID);
+    const saved = db.prepare('SELECT content FROM article_states WHERE article_id = ?').get(ARTICLE_1_ID) as { content: string } | undefined;
     assert.equal(saved?.content, '<p>Full HTML content here</p>', 'content should be persisted from feed_cache');
   });
 
   test('marks article as read in article_states', async () => {
     const article = {
-      id: ARTICLE_2_ID,
-      feedId: FEED_ID,
-      feedName: 'Test Feed',
-      title: TEST_ITEMS[1].title,
-      link: TEST_ITEMS[1].link,
-      pubDate: TEST_ITEMS[1].pubDate,
-      summary: TEST_ITEMS[1].contentSnippet,
-      content: '',
-      author: '',
-      audioUrl: '',
-      audioDuration: '',
+      id: ARTICLE_2_ID, feedId: FEED_ID, feedName: 'Test Feed',
+      title: TEST_ITEMS[1].title, link: TEST_ITEMS[1].link, pubDate: TEST_ITEMS[1].pubDate,
+      summary: TEST_ITEMS[1].contentSnippet, content: '', author: '', audioUrl: '', audioDuration: '',
     };
 
     await request(app).post('/api/articles/read').send({ article });
-    const saved = db.prepare('SELECT is_read FROM article_states WHERE article_id = ?').get(ARTICLE_2_ID);
+    const saved = db.prepare('SELECT is_read FROM article_states WHERE article_id = ?').get(ARTICLE_2_ID) as { is_read: number } | undefined;
     assert.equal(saved?.is_read, 1);
   });
 });
@@ -185,48 +166,32 @@ describe('POST /api/articles/read', () => {
 describe('POST /api/articles/star', () => {
   test('saves content from feed_cache when starring with empty content', async () => {
     const article = {
-      id: ARTICLE_1_ID,
-      feedId: FEED_ID,
-      feedName: 'Test Feed',
-      title: TEST_ITEMS[0].title,
-      link: TEST_ITEMS[0].link,
-      pubDate: TEST_ITEMS[0].pubDate,
-      summary: TEST_ITEMS[0].contentSnippet,
-      content: '',
-      author: '',
-      audioUrl: '',
-      audioDuration: '',
+      id: ARTICLE_1_ID, feedId: FEED_ID, feedName: 'Test Feed',
+      title: TEST_ITEMS[0].title, link: TEST_ITEMS[0].link, pubDate: TEST_ITEMS[0].pubDate,
+      summary: TEST_ITEMS[0].contentSnippet, content: '', author: '', audioUrl: '', audioDuration: '',
     };
 
     const res = await request(app).post('/api/articles/star').send({ article, starred: true });
     assert.equal(res.status, 200);
     assert.ok(res.body.isStarred);
 
-    const saved = db.prepare('SELECT content, is_starred FROM article_states WHERE article_id = ?').get(ARTICLE_1_ID);
+    const saved = db.prepare('SELECT content, is_starred FROM article_states WHERE article_id = ?').get(ARTICLE_1_ID) as { content: string; is_starred: number } | undefined;
     assert.equal(saved?.is_starred, 1);
     assert.equal(saved?.content, '<p>Full HTML content here</p>', 'content should be persisted from feed_cache');
   });
 
   test('unstar sets is_starred to 0', async () => {
     const article = {
-      id: ARTICLE_1_ID,
-      feedId: FEED_ID,
-      feedName: 'Test Feed',
-      title: TEST_ITEMS[0].title,
-      link: TEST_ITEMS[0].link,
-      pubDate: TEST_ITEMS[0].pubDate,
-      summary: TEST_ITEMS[0].contentSnippet,
-      content: '',
-      author: '',
-      audioUrl: '',
-      audioDuration: '',
+      id: ARTICLE_1_ID, feedId: FEED_ID, feedName: 'Test Feed',
+      title: TEST_ITEMS[0].title, link: TEST_ITEMS[0].link, pubDate: TEST_ITEMS[0].pubDate,
+      summary: TEST_ITEMS[0].contentSnippet, content: '', author: '', audioUrl: '', audioDuration: '',
     };
 
     const res = await request(app).post('/api/articles/star').send({ article, starred: false });
     assert.equal(res.status, 200);
     assert.equal(res.body.isStarred, false);
 
-    const saved = db.prepare('SELECT is_starred FROM article_states WHERE article_id = ?').get(ARTICLE_1_ID);
+    const saved = db.prepare('SELECT is_starred FROM article_states WHERE article_id = ?').get(ARTICLE_1_ID) as { is_starred: number } | undefined;
     assert.equal(saved?.is_starred, 0);
   });
 });

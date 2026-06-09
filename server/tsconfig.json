@@ -7,9 +7,10 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["index.ts"]
+  "include": ["*.ts"]
 }

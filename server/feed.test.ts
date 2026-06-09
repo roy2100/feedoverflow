@@ -1,21 +1,15 @@
-/**
- * Integration tests for feed parsing (direct connection, no proxy).
- * Run: cd server && npm test
- */
-'use strict';
-
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { parseURL } = require('./index.ts');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseURL } from './index.ts';
 
 test('Reddit /r/rss feed — direct connection', async (t) => {
   const REDDIT_RSS = 'https://www.reddit.com/r/rss.rss';
 
-  let feed;
+  let feed: Awaited<ReturnType<typeof parseURL>>;
   try {
     feed = await parseURL(REDDIT_RSS);
   } catch (err) {
-    assert.fail(`parseURL threw: ${err.message}`);
+    assert.fail(`parseURL threw: ${(err as Error).message}`);
   }
 
   await t.test('feed has a title', () => {

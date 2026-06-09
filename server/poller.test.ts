@@ -1,54 +1,54 @@
-'use strict';
-
-const { test, before, after } = require('node:test');
-const assert = require('node:assert/strict');
-const http = require('node:http');
-const os = require('node:os');
-const path = require('node:path');
-const fs = require('node:fs');
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import type { Server } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { unlinkSync } from 'node:fs';
 
 // Isolate every test run in its own temp DB so tests are repeatable.
-const TEST_DB_PATH = path.join(os.tmpdir(), `rss-poller-test-${process.pid}.db`);
+const TEST_DB_PATH = join(tmpdir(), `rss-poller-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { app, db, persistPolled, makeId } = require('./index.ts');
+const { app, db, persistPolled, makeId } = await import('./index.ts');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-let server;
-let baseUrl;
+let server: Server;
+let baseUrl: string;
 
 before(async () => {
-  await new Promise(resolve => {
-    server = http.createServer(app);
+  await new Promise<void>(resolve => {
+    server = createServer(app);
     server.listen(0, '127.0.0.1', () => {
-      baseUrl = `http://127.0.0.1:${server.address().port}`;
+      const addr = server.address() as { port: number };
+      baseUrl = `http://127.0.0.1:${addr.port}`;
       resolve();
     });
   });
 });
 
 after(async () => {
-  await new Promise(resolve => server.close(resolve));
+  await new Promise<void>(resolve => server.close(() => resolve()));
   db.close();
-  try { fs.unlinkSync(TEST_DB_PATH); } catch {}
+  try { unlinkSync(TEST_DB_PATH); } catch {}
 });
 
-async function get(path) {
+async function get(path: string) {
   const res = await fetch(`${baseUrl}${path}`);
-  return { status: res.status, body: await res.json() };
+  return { status: res.status, body: await res.json() as Record<string, unknown> };
 }
 
-async function post(path, body) {
+async function post(path: string, body: unknown) {
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return { status: res.status, body: await res.json() };
+  return { status: res.status, body: await res.json() as Record<string, unknown> };
 }
 
-function makeFakeItems(n, feedId = 'f1') {
+function makeFakeItems(n: number, feedId = 'f1') {
   return Array.from({ length: n }, (_, i) => ({
     title: `Article ${i}`,
     link: `https://example.com/${feedId}/${i}`,
@@ -74,11 +74,10 @@ test('/api/unread-counts — 返回各 feed 的未读数', async () => {
   persistPolled(FAKE_FEED, items, 'Test Feed', { markRead: false });
 
   const { body } = await get('/api/unread-counts');
-  assert.equal(body['f1'], 3);
+  assert.equal((body as Record<string, number>)['f1'], 3);
 });
 
 test('/api/unread-counts — 标记已读后数量减少', async () => {
-  // Pick one article and mark it read via the API
   const items = makeFakeItems(1, 'f2');
   const feed2 = { id: 'f2', name: 'Feed 2', url: 'https://example.com/feed2' };
   persistPolled(feed2, items, 'Feed 2', { markRead: false });
@@ -89,7 +88,7 @@ test('/api/unread-counts — 标记已读后数量减少', async () => {
   });
 
   const { body } = await get('/api/unread-counts');
-  assert.equal(body['f2'] ?? 0, 0);
+  assert.equal(((body as Record<string, number>)['f2'] ?? 0), 0);
 });
 
 // ── persistPolled ─────────────────────────────────────────────────────────────
@@ -99,7 +98,7 @@ test('persistPolled markRead:false — 新文章写入 is_read=0', () => {
   const items = makeFakeItems(2, 'f3');
   persistPolled(feed, items, 'Feed 3', { markRead: false });
 
-  const rows = db.prepare('SELECT is_read FROM article_states WHERE feed_id = ?').all('f3');
+  const rows = db.prepare('SELECT is_read FROM article_states WHERE feed_id = ?').all('f3') as Array<{ is_read: number }>;
   assert.equal(rows.length, 2);
   assert.ok(rows.every(r => r.is_read === 0), 'all articles should be unread');
 });
@@ -109,7 +108,7 @@ test('persistPolled markRead:true — baseline 首次写入 is_read=1', () => {
   const items = makeFakeItems(2, 'f4');
   persistPolled(feed, items, 'Feed 4', { markRead: true });
 
-  const rows = db.prepare('SELECT is_read FROM article_states WHERE feed_id = ?').all('f4');
+  const rows = db.prepare('SELECT is_read FROM article_states WHERE feed_id = ?').all('f4') as Array<{ is_read: number }>;
   assert.equal(rows.length, 2);
   assert.ok(rows.every(r => r.is_read === 1), 'baseline articles should all be marked read');
 });
@@ -119,15 +118,11 @@ test('persistPolled INSERT OR IGNORE — 重复 poll 不覆盖已有状态', () 
   const items = makeFakeItems(1, 'f5');
   const articleId = makeId(items[0].link, items[0].title, items[0].pubDate);
 
-  // First poll: insert as unread
   persistPolled(feed, items, 'Feed 5', { markRead: false });
-  // Manually mark read (simulating user action)
   db.prepare('UPDATE article_states SET is_read = 1 WHERE article_id = ?').run(articleId);
-
-  // Second poll: re-insert should not reset is_read back to 0
   persistPolled(feed, items, 'Feed 5', { markRead: false });
 
-  const row = db.prepare('SELECT is_read FROM article_states WHERE article_id = ?').get(articleId);
+  const row = db.prepare('SELECT is_read FROM article_states WHERE article_id = ?').get(articleId) as { is_read: number };
   assert.equal(row.is_read, 1, 'user read state must not be overwritten by poller');
 });
 
@@ -136,6 +131,6 @@ test('persistPolled — 超过 50 条只保留前 50 条', () => {
   const items = makeFakeItems(60, 'f6');
   persistPolled(feed, items, 'Feed 6', { markRead: false });
 
-  const count = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE feed_id = ?').get('f6').n;
-  assert.equal(count, 50);
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE feed_id = ?').get('f6') as { n: number };
+  assert.equal(n, 50);
 });
