@@ -5,7 +5,7 @@ import request from 'supertest';
 // Must be set before importing server module so it uses an isolated in-memory DB
 process.env.TEST_DB = ':memory:';
 
-const { app, db, makeId } = await import('./index.ts');
+const { app, db, makeId } = await import('./app.ts');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

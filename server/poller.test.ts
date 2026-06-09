@@ -10,7 +10,7 @@ import { unlinkSync } from 'node:fs';
 const TEST_DB_PATH = join(tmpdir(), `rss-poller-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { app, db, persistPolled, makeId } = await import('./index.ts');
+const { app, db, persistPolled, makeId } = await import('./app.ts');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
