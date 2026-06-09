@@ -10,13 +10,11 @@ import { JSDOM } from 'jsdom';
 import { db } from './db.ts';
 import { parseURL } from './parse-url.ts';
 import { registerAuth } from './auth.ts';
-import { makeId, dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
+import { dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
 import { getCachedFeed, clearCache, cacheReady, startCacheWarming } from './cache.ts';
-import { persistPolled, startPoller } from './poller.ts';
+import { startPoller } from './poller.ts';
 import { registerMcp } from './mcp.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
-
-export { db, makeId, persistPolled };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, '../client/dist');
