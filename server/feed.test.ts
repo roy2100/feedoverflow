@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseURL } from './index.ts';
+import { parseURL } from './parse-url.ts';
 
 test('Reddit /r/rss feed — direct connection', async (t) => {
   const REDDIT_RSS = 'https://www.reddit.com/r/rss.rss';

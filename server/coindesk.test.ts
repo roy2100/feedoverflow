@@ -6,7 +6,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseURL } from './index.ts';
+import { parseURL } from './parse-url.ts';
 
 test('coindesk: trailing-slash URL returns articles', async () => {
   const feed = await parseURL('https://www.coindesk.com/arc/outboundfeeds/rss/');
