@@ -1,18 +1,21 @@
 process.title = 'rss-reader';
 
 import type { Request } from 'express';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const express = require('express') as typeof import('express');
-const compression = require('compression') as typeof import('compression');
-const cors = require('cors') as typeof import('cors');
-const rateLimit = require('express-rate-limit').rateLimit as typeof import('express-rate-limit').rateLimit;
-const Parser = require('rss-parser') as typeof import('rss-parser');
-const crypto = require('crypto') as typeof import('crypto');
-const Database = require('better-sqlite3') as typeof import('better-sqlite3');
-const path = require('path') as typeof import('path');
-const { parseStringPromise } = require('xml2js') as typeof import('xml2js');
-const { Readability } = require('@mozilla/readability') as typeof import('@mozilla/readability');
-const { JSDOM } = require('jsdom') as typeof import('jsdom');
+import express from 'express';
+import compression from 'compression';
+import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
+import Parser from 'rss-parser';
+import crypto from 'node:crypto';
+import Database from 'better-sqlite3';
+import path from 'node:path';
+import { parseStringPromise } from 'xml2js';
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Types ───────────────────────────────────────────────────────────────────
 interface Feed {
@@ -714,8 +717,9 @@ app.get('*', (_req, res) => {
 });
 
 const PORT = 3002;
-if (require.main === module) {
+const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
   app.listen(PORT, () => console.log(`RSS server on http://localhost:${PORT}`));
 }
 
-module.exports = { parseURL, app, db, makeId, persistPolled };
+export { parseURL, app, db, makeId, persistPolled };

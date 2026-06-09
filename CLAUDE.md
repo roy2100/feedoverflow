@@ -35,7 +35,7 @@ Three-panel RSS reader: **sidebar → article list → reader pane**.
 ```
 root/               concurrently orchestrator
 server/
-  index.ts          all API routes + SQLite setup (CommonJS + TS, run natively, port 3002)
+  index.ts          all API routes + SQLite setup (ESM + TS, run natively, port 3002)
   tsconfig.json     typecheck config (tsc --noEmit; node strips types, does not check)
   rss.db            SQLite database (gitignored)
 client/             Vite + React (port 3000)
@@ -56,7 +56,7 @@ client/             Vite + React (port 3000)
 
 ### Server (`server/index.ts`)
 
-- TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. Stays CommonJS (`require`/`module.exports`); only `import type` is used for types. `npm run typecheck` validates types (Node does not).
+- TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
 - Live RSS fetch on every request via `rss-parser` — no content cache
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`

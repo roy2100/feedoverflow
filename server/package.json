@@ -1,10 +1,11 @@
 {
   "name": "rss-reader-server",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.ts",
   "scripts": {
     "start": "node index.ts",
-    "test": "node --test *.test.js",
+    "test": "node --test *.test.cjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
