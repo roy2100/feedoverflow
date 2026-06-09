@@ -13,6 +13,7 @@ import { registerAuth } from './auth.ts';
 import { makeId, dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
 import { getCachedFeed, clearCache, cacheReady, startCacheWarming } from './cache.ts';
 import { persistPolled, startPoller } from './poller.ts';
+import { registerMcp } from './mcp.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
 
 export { db, makeId, persistPolled };
@@ -275,6 +276,9 @@ app.post('/api/current-article', (req, res) => {
   currentArticle = req.body?.article ?? null;
   res.json({ ok: true });
 });
+
+// MCP server over Streamable HTTP — must be before the SPA fallback
+registerMcp(app);
 
 // SPA fallback — must be after all /api routes
 app.get('*', (_req, res) => {
