@@ -8,6 +8,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
