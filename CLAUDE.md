@@ -22,7 +22,7 @@ tail -f ~/Deploy/rss-reader/logs/server.log
 
 Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Basic Auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files.
 
-- Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.js` on port 3002
+- Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 22.18)
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
 - Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
 - Auth: `AUTH_USER` / `AUTH_PASS` in `~/Library/LaunchAgents/com.rss-reader.app.plist`
@@ -35,7 +35,8 @@ Three-panel RSS reader: **sidebar → article list → reader pane**.
 ```
 root/               concurrently orchestrator
 server/
-  index.js          all API routes + SQLite setup (CommonJS, port 3002)
+  index.ts          all API routes + SQLite setup (CommonJS + TS, run natively, port 3002)
+  tsconfig.json     typecheck config (tsc --noEmit; node strips types, does not check)
   rss.db            SQLite database (gitignored)
 client/             Vite + React (port 3000)
   src/App.jsx       central state owner — all fetch logic lives here
@@ -53,8 +54,9 @@ client/             Vite + React (port 3000)
 
 **Styling:** CSS variables in `index.css`, inline `style={{}}` in components, icons from `lucide-react`.
 
-### Server (`server/index.js`)
+### Server (`server/index.ts`)
 
+- TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. Stays CommonJS (`require`/`module.exports`); only `import type` is used for types. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
 - Live RSS fetch on every request via `rss-parser` — no content cache
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`

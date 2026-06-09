@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseURL } = require('./index.js');
+const { parseURL } = require('./index.ts');
 
 test('coindesk: trailing-slash URL returns articles', async () => {
   const feed = await parseURL('https://www.coindesk.com/arc/outboundfeeds/rss/');

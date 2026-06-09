@@ -7,7 +7,7 @@ const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 
-const { app, db, makeId } = require('./index.js');
+const { app, db, makeId } = require('./index.ts');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

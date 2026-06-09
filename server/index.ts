@@ -1,21 +1,85 @@
 process.title = 'rss-reader';
 
-const express = require('express');
-const compression = require('compression');
-const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-const Parser = require('rss-parser');
-const crypto = require('crypto');
-const Database = require('better-sqlite3');
-const path = require('path');
-const { parseStringPromise } = require('xml2js');
-const { Readability } = require('@mozilla/readability');
-const { JSDOM } = require('jsdom');
+import type { Request } from 'express';
+
+const express = require('express') as typeof import('express');
+const compression = require('compression') as typeof import('compression');
+const cors = require('cors') as typeof import('cors');
+const rateLimit = require('express-rate-limit').rateLimit as typeof import('express-rate-limit').rateLimit;
+const Parser = require('rss-parser') as typeof import('rss-parser');
+const crypto = require('crypto') as typeof import('crypto');
+const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+const path = require('path') as typeof import('path');
+const { parseStringPromise } = require('xml2js') as typeof import('xml2js');
+const { Readability } = require('@mozilla/readability') as typeof import('@mozilla/readability');
+const { JSDOM } = require('jsdom') as typeof import('jsdom');
+
+// ── Types ───────────────────────────────────────────────────────────────────
+interface Feed {
+  id: string;
+  name: string;
+  url: string;
+}
+
+interface ItemExtra {
+  contentEncoded?: string;
+  content?: string;
+  author?: string;
+  itunes?: { duration?: string; [key: string]: unknown };
+}
+
+type RssItem = import('rss-parser').Item & ItemExtra;
+type ParsedFeed = import('rss-parser').Output<ItemExtra>;
+
+interface Article {
+  id: string;
+  feedId: string;
+  feedName: string;
+  title: string;
+  summary: string;
+  content: string;
+  link: string;
+  pubDate: string;
+  author: string;
+  audioUrl: string;
+  audioDuration: string;
+  isRead: boolean;
+  isStarred: boolean;
+}
+
+interface ArticleStateRow {
+  article_id: string;
+  feed_id: string;
+  feed_name: string;
+  title: string;
+  link: string;
+  pub_date: string;
+  summary: string;
+  content: string;
+  author: string;
+  audio_url: string;
+  audio_duration: string;
+  is_read: number;
+  is_starred: number;
+  updated_at: string;
+}
+
+interface FeedCacheRow {
+  feed_id: string;
+  feed_name: string;
+  items_json: string;
+  fetched_at: number;
+}
+
+interface StatePatch {
+  is_read?: number | null;
+  is_starred?: number | null;
+}
 
 const app = express();
 
 function makeParser() {
-  return new Parser({
+  return new Parser<{}, ItemExtra>({
     timeout: 10000,
     headers: { 'User-Agent': 'RSS-Reader/1.0' },
     customFields: { item: [['content:encoded', 'contentEncoded']] },
@@ -23,14 +87,14 @@ function makeParser() {
 }
 
 // Fetch feed XML via direct connection.
-async function fetchFeedXml(url, signal) {
+async function fetchFeedXml(url: string, signal?: AbortSignal): Promise<string> {
   const headers = { 'User-Agent': 'RSS-Reader/1.0', 'Accept': '*/*' };
   const res = await fetch(url, { headers, signal: signal ?? AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Status code ${res.status}`);
   return await res.text();
 }
 
-async function parseURL(url, signal) {
+async function parseURL(url: string, signal?: AbortSignal): Promise<ParsedFeed> {
   const targetUrl = url.endsWith('/') ? url.slice(0, -1) : url;
   const xml = await fetchFeedXml(targetUrl, signal);
   return makeParser().parseString(xml);
@@ -51,15 +115,15 @@ const loginLimiter = rateLimit({
 });
 
 // Prevent API responses from being served from browser cache
-app.use('/api', (req, res, next) => {
+app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store');
   next();
 });
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
 
-function parseCookies(req) {
-  const list = {};
+function parseCookies(req: Request): Record<string, string> {
+  const list: Record<string, string> = {};
   const rc = req.headers.cookie;
   if (rc) rc.split(';').forEach(cookie => {
     const [k, ...v] = cookie.split('=');
@@ -120,14 +184,14 @@ try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_duration TEXT DEFAULT
 db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`).run();
 
 // Seed default feeds once
-if (db.prepare('SELECT COUNT(*) AS n FROM feeds').get().n === 0) {
+if ((db.prepare('SELECT COUNT(*) AS n FROM feeds').get() as { n: number }).n === 0) {
   const ins = db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)');
-  [
+  ([
     ['1', '少数派',       'https://sspai.com/feed'],
     ['2', '虎嗅',         'https://feeds.feedburner.com/huxiu'],
     ['3', '36氪',         'https://36kr.com/feed'],
     ['4', '阮一峰的网络日志', 'https://feeds.feedburner.com/ruanyifeng'],
-  ].forEach(r => ins.run(...r));
+  ] as const).forEach(r => ins.run(...r));
 }
 
 // ── Auth setup ────────────────────────────────────────────────────────────────
@@ -142,8 +206,8 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
     if (typeof user !== 'string' || typeof pass !== 'string') {
       return res.status(400).json({ error: 'Missing credentials' });
     }
-    const expUser = process.env.AUTH_USER;
-    const expPass = process.env.AUTH_PASS;
+    const expUser = process.env.AUTH_USER as string;
+    const expPass = process.env.AUTH_PASS as string;
     const uBuf = Buffer.from(user), eBuf = Buffer.from(expUser);
     const pBuf = Buffer.from(pass), fBuf = Buffer.from(expPass);
     const userOk = uBuf.length === eBuf.length && crypto.timingSafeEqual(uBuf, eBuf);
@@ -164,13 +228,13 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
     res.json({ ok: true });
   });
 
-  const isLocalhost = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip);
+  const isLocalhost = (req: Request) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip ?? '');
 
   app.get('/api/auth-check', (req, res) => {
     if (isLocalhost(req)) return res.json({ authed: true });
     const token = parseCookies(req).session;
     if (token) {
-      const row = stmtFindSession.get(token);
+      const row = stmtFindSession.get(token) as { created_at: number } | undefined;
       if (row && Date.now() - row.created_at < SESSION_TTL) return res.json({ authed: true });
     }
     res.json({ authed: false });
@@ -181,7 +245,7 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
     if (isLocalhost(req)) return next();
     const token = parseCookies(req).session;
     if (token) {
-      const row = stmtFindSession.get(token);
+      const row = stmtFindSession.get(token) as { created_at: number } | undefined;
       if (row && Date.now() - row.created_at < SESSION_TTL) return next();
     }
     res.status(401).json({ error: 'Unauthorized' });
@@ -189,21 +253,21 @@ if (process.env.AUTH_USER && process.env.AUTH_PASS) {
 }
 
 // Fallback when auth is disabled: always authed
-app.get('/api/auth-check', (req, res) => res.json({ authed: true }));
+app.get('/api/auth-check', (_req, res) => res.json({ authed: true }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function makeId(link, title, pubDate) {
+function makeId(link?: string, title?: string, pubDate?: string): string {
   return crypto.createHash('md5')
     .update(link || `${title}${pubDate}`)
     .digest('hex').slice(0, 12);
 }
 
-function dedupById(articles) {
-  const seen = new Set();
+function dedupById(articles: Article[]): Article[] {
+  const seen = new Set<string>();
   return articles.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
 }
 
-function normalizeDuration(dur) {
+function normalizeDuration(dur?: string): string {
   if (!dur) return '';
   if (/^\d+:\d{2}(:\d{2})?$/.test(dur)) return dur; // already MM:SS or HH:MM:SS
   const secs = parseInt(dur, 10);
@@ -215,15 +279,15 @@ function normalizeDuration(dur) {
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
-function enrich(items, feedId, feedName, { withContent = true } = {}) {
+function enrich(items: RssItem[], feedId: string, feedName: string, { withContent = true }: { withContent?: boolean } = {}): Article[] {
   const ids = items.map((item, i) =>
     makeId(item.link, item.title, item.pubDate || item.isoDate || String(i))
   );
-  const stateMap = ids.length
+  const stateMap: Record<string, { is_read: number; is_starred: number }> = ids.length
     ? Object.fromEntries(
-        db.prepare(
+        (db.prepare(
           `SELECT article_id, is_read, is_starred FROM article_states WHERE article_id IN (${ids.map(() => '?').join(',')})`
-        ).all(...ids).map(r => [r.article_id, r])
+        ).all(...ids) as Array<{ article_id: string; is_read: number; is_starred: number }>).map(r => [r.article_id, r])
       )
     : {};
   return items.map((item, i) => {
@@ -252,13 +316,13 @@ function enrich(items, feedId, feedName, { withContent = true } = {}) {
 }
 
 // Look up full content from article_states cache or feed_cache by article id + feedId
-function lookupContent(articleId, feedId) {
-  const saved = db.prepare('SELECT content FROM article_states WHERE article_id = ?').get(articleId);
+function lookupContent(articleId: string, feedId?: string): string {
+  const saved = db.prepare('SELECT content FROM article_states WHERE article_id = ?').get(articleId) as { content?: string } | undefined;
   if (saved?.content) return saved.content;
   if (!feedId) return '';
-  const feedRow = getCacheRow.get(feedId);
+  const feedRow = getCacheRow.get(feedId) as FeedCacheRow | undefined;
   if (!feedRow) return '';
-  const items = JSON.parse(feedRow.items_json);
+  const items = JSON.parse(feedRow.items_json) as RssItem[];
   const item = items.find((it, i) =>
     makeId(it.link, it.title, it.pubDate || it.isoDate || String(i)) === articleId
   );
@@ -277,7 +341,7 @@ const upsertState = db.prepare(`
     updated_at = datetime('now')
 `);
 
-function saveState(article, patch) {
+function saveState(article: Article, patch: StatePatch): void {
   upsertState.run(
     article.id, article.feedId, article.feedName,
     article.title, article.link, article.pubDate,
@@ -290,9 +354,9 @@ function saveState(article, patch) {
 }
 
 // ── RSSHub URL resolver ───────────────────────────────────────────────────────
-function resolveUrl(url) {
+function resolveUrl(url: string): string {
   if (!url || !url.startsWith('rsshub://')) return url;
-  const base = db.prepare("SELECT value FROM settings WHERE key = 'rsshub_base_url'").get()?.value
+  const base = (db.prepare("SELECT value FROM settings WHERE key = 'rsshub_base_url'").get() as { value?: string } | undefined)?.value
     || 'http://localhost:1200';
   return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
 }
@@ -306,14 +370,14 @@ const setCacheRow  = db.prepare(
 );
 const clearCache   = db.prepare('DELETE FROM feed_cache');
 
-async function fetchAndCache(feed) {
+async function fetchAndCache(feed: Feed): Promise<{ items: RssItem[]; feedName: string }> {
   const parsed = await parseURL(resolveUrl(feed.url));
   setCacheRow.run(feed.id, parsed.title || feed.name, JSON.stringify(parsed.items), Date.now());
   return { items: parsed.items, feedName: parsed.title || feed.name };
 }
 
-async function getCachedFeed(feed, signal) {
-  const row = getCacheRow.get(feed.id);
+async function getCachedFeed(feed: Feed, signal?: AbortSignal): Promise<{ items: RssItem[]; feedName: string } | null> {
+  const row = getCacheRow.get(feed.id) as FeedCacheRow | undefined;
   if (!row) {
     const parsed = await parseURL(resolveUrl(feed.url), signal);
     if (signal?.aborted) return null;
@@ -321,7 +385,7 @@ async function getCachedFeed(feed, signal) {
     return { items: parsed.items, feedName: parsed.title || feed.name };
   }
   if (Date.now() - row.fetched_at >= CACHE_TTL) fetchAndCache(feed).catch(() => {});
-  return { items: JSON.parse(row.items_json), feedName: row.feed_name };
+  return { items: JSON.parse(row.items_json) as RssItem[], feedName: row.feed_name };
 }
 
 // On startup: feeds with existing cache are ready immediately;
@@ -329,10 +393,10 @@ async function getCachedFeed(feed, signal) {
 // Skipped in TEST_DB mode to avoid real network calls during tests.
 let cacheReady = false;
 if (!process.env.TEST_DB) {
-  const allFeeds = db.prepare('SELECT * FROM feeds').all();
+  const allFeeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const uncached = allFeeds.filter(f => !getCacheRow.get(f.id));
   allFeeds.filter(f => {
-    const r = getCacheRow.get(f.id);
+    const r = getCacheRow.get(f.id) as FeedCacheRow | undefined;
     return r && Date.now() - r.fetched_at >= CACHE_TTL;
   }).forEach(f => fetchAndCache(f).catch(() => {}));
   if (uncached.length === 0) {
@@ -352,7 +416,7 @@ const insertPolledArticle = db.prepare(`
   VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@summary,@content,@author,@audioUrl,@audioDuration,@isRead,0)
 `);
 
-function persistPolled(feed, items, feedName, { markRead = false } = {}) {
+function persistPolled(feed: Feed, items: RssItem[], feedName: string, { markRead = false }: { markRead?: boolean } = {}): void {
   const enriched = enrich(items.slice(0, 50), feed.id, feedName, { withContent: true });
   db.transaction(() => {
     for (const a of enriched) {
@@ -367,17 +431,17 @@ function persistPolled(feed, items, feedName, { markRead = false } = {}) {
   })();
 }
 
-async function pollFeed(feed, { markRead = false } = {}) {
+async function pollFeed(feed: Feed, { markRead = false }: { markRead?: boolean } = {}): Promise<void> {
   try {
     const { items, feedName } = await fetchAndCache(feed);
     persistPolled(feed, items, feedName, { markRead });
   } catch (err) {
-    console.error(`[poller] ${feed.url}: ${err.message}`);
+    console.error(`[poller] ${feed.url}: ${(err as Error).message}`);
   }
 }
 
-async function pollAllFeeds() {
-  const feeds = db.prepare('SELECT * FROM feeds').all();
+async function pollAllFeeds(): Promise<void> {
+  const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   for (let i = 0; i < feeds.length; i++) {
     if (i > 0) await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
     await pollFeed(feeds[i]);
@@ -387,7 +451,7 @@ async function pollAllFeeds() {
 if (!process.env.TEST_DB) {
   // Delay slightly so startup cache fetches can complete first
   setTimeout(async () => {
-    const feeds = db.prepare('SELECT * FROM feeds').all();
+    const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
     for (const feed of feeds) {
       const hasStates = !!db.prepare('SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1').get(feed.id);
       await pollFeed(feed, { markRead: !hasStates });
@@ -405,12 +469,12 @@ app.get('/api/feeds', (_req, res) => {
 app.post('/api/feeds', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
-  let feedTitle;
+  let feedTitle: string;
   try {
     const parsed = await parseURL(resolveUrl(url));
     feedTitle = parsed.title?.trim() || url;
   } catch (err) {
-    return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确', detail: err?.message || String(err) });
+    return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确', detail: (err as Error)?.message || String(err) });
   }
   const id = Date.now().toString();
   db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
@@ -424,8 +488,8 @@ app.post('/api/feeds/import-opml', async (req, res) => {
     const parsed = await parseStringPromise(opml, { explicitArray: true });
     const bodyOutlines = parsed?.opml?.body?.[0]?.outline || [];
 
-    const candidates = [];
-    function extract(nodes) {
+    const candidates: Array<{ name: string; url: string }> = [];
+    function extract(nodes: any[]) {
       for (const node of nodes) {
         const attrs = node.$ || {};
         if (attrs.xmlUrl) {
@@ -436,9 +500,9 @@ app.post('/api/feeds/import-opml', async (req, res) => {
     }
     extract(bodyOutlines);
 
-    const existingUrls = new Set(db.prepare('SELECT url FROM feeds').all().map(f => f.url));
+    const existingUrls = new Set((db.prepare('SELECT url FROM feeds').all() as Array<{ url: string }>).map(f => f.url));
     const ins = db.prepare('INSERT OR IGNORE INTO feeds (id,name,url) VALUES (?,?,?)');
-    const importedFeeds = [];
+    const importedFeeds: Array<{ id: string; name: string; url: string }> = [];
     let skipped = 0;
 
     for (const feed of candidates) {
@@ -451,7 +515,7 @@ app.post('/api/feeds/import-opml', async (req, res) => {
 
     res.json({ imported: importedFeeds.length, skipped, feeds: importedFeeds });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to parse OPML', detail: err.message });
+    res.status(400).json({ error: 'Failed to parse OPML', detail: (err as Error).message });
   }
 });
 
@@ -470,7 +534,7 @@ app.delete('/api/feeds/:id', (req, res) => {
 
 // ── Settings API ─────────────────────────────────────────────────────────────
 app.get('/api/settings', (_req, res) => {
-  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const rows = db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>;
   const settings = Object.fromEntries(rows.map(r => [r.key, r.value]));
   res.json(settings);
 });
@@ -490,7 +554,7 @@ app.patch('/api/settings', (req, res) => {
 
 // ── Full content fetch ────────────────────────────────────────────────────────
 app.get('/api/fetch-content', async (req, res) => {
-  const { url } = req.query;
+  const url = req.query.url as string | undefined;
   if (!url) return res.status(400).json({ error: 'url required' });
   const fetchHeaders = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
   try {
@@ -503,25 +567,25 @@ app.get('/api/fetch-content', async (req, res) => {
     if (!article) return res.status(422).json({ error: 'Could not extract content' });
     res.json({ content: article.content, title: article.title, byline: article.byline });
   } catch (err) {
-    res.status(500).json({ error: 'Fetch failed', detail: err.message });
+    res.status(500).json({ error: 'Fetch failed', detail: (err as Error).message });
   }
 });
 
 // ── Articles API ──────────────────────────────────────────────────────────────
 app.get('/api/feeds/:id/articles', async (req, res) => {
-  const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(req.params.id);
+  const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(req.params.id) as Feed | undefined;
   if (!feed) return res.status(404).json({ error: 'Not found' });
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   try {
     const cached = await getCachedFeed(feed, ac.signal);
-    if (ac.signal.aborted) return;
+    if (ac.signal.aborted || !cached) return;
     const liveArticles = enrich(cached.items.slice(0, 50), feed.id, feed.name, { withContent: false });
     const liveIds = new Set(liveArticles.map(a => a.id));
     const persisted = db.prepare(
       'SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_date DESC'
-    ).all(feed.id);
-    const historicArticles = persisted
+    ).all(feed.id) as ArticleStateRow[];
+    const historicArticles: Article[] = persisted
       .filter(r => !liveIds.has(r.article_id))
       .map(r => ({
         id: r.article_id,
@@ -539,16 +603,16 @@ app.get('/api/feeds/:id/articles', async (req, res) => {
         isStarred: !!r.is_starred,
       }));
     const articles = dedupById([...liveArticles, ...historicArticles]);
-    articles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+    articles.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
     res.json({ feedName: cached.feedName, articles });
   } catch (err) {
     if (ac.signal.aborted) return;
-    res.status(500).json({ error: 'Failed to fetch feed', detail: err.message });
+    res.status(500).json({ error: 'Failed to fetch feed', detail: (err as Error).message });
   }
 });
 
 app.get('/api/all-articles', async (req, res) => {
-  const feeds = db.prepare('SELECT * FROM feeds').all();
+  const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
@@ -558,13 +622,13 @@ app.get('/api/all-articles', async (req, res) => {
     })
   );
   if (ac.signal.aborted) return;
-  const articles = dedupById(results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
-    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)));
+  const articles = dedupById(results.filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled').flatMap(r => r.value)
+    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()));
   res.json({ articles, cacheReady });
 });
 
 app.get('/api/today', async (req, res) => {
-  const feeds = db.prepare('SELECT * FROM feeds').all();
+  const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const ac = new AbortController();
   req.on('close', () => ac.abort());
@@ -572,18 +636,18 @@ app.get('/api/today', async (req, res) => {
     feeds.map(async f => {
       const cached = await getCachedFeed(f, ac.signal);
       if (!cached) return [];
-      const todayItems = cached.items.filter(item => new Date(item.pubDate || item.isoDate || 0) >= todayStart);
+      const todayItems = cached.items.filter(item => new Date(item.pubDate || item.isoDate || 0).getTime() >= todayStart.getTime());
       return enrich(todayItems, f.id, f.name, { withContent: false });
     })
   );
   if (ac.signal.aborted) return;
-  const articles = dedupById(results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
-    .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)));
+  const articles = dedupById(results.filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled').flatMap(r => r.value)
+    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()));
   res.json({ articles, cacheReady });
 });
 
 app.get('/api/starred', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC').all();
+  const rows = db.prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC').all() as ArticleStateRow[];
   res.json({
     articles: rows.map(r => ({
       id: r.article_id, feedId: r.feed_id, feedName: r.feed_name,
@@ -599,14 +663,14 @@ app.get('/api/starred', (_req, res) => {
 app.get('/api/unread-counts', (_req, res) => {
   const rows = db.prepare(
     'SELECT feed_id, COUNT(*) AS count FROM article_states WHERE is_read = 0 GROUP BY feed_id'
-  ).all();
+  ).all() as Array<{ feed_id: string; count: number }>;
   res.json(Object.fromEntries(rows.map(r => [r.feed_id, r.count])));
 });
 
 // GET /api/starred/count — lightweight count for sidebar badge
 app.get('/api/starred/count', (_req, res) => {
   res.set('Cache-Control', 'private, max-age=10');
-  const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1').get();
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1').get() as { n: number };
   res.json({ count: n });
 });
 
@@ -627,12 +691,12 @@ app.post('/api/articles/star', (req, res) => {
 });
 
 app.get('/api/articles/:id/content', (req, res) => {
-  const content = lookupContent(req.params.id, req.query.feedId);
+  const content = lookupContent(req.params.id, req.query.feedId as string | undefined);
   res.json({ content });
 });
 
 // In-memory current article — tracks what's open in the UI
-let currentArticle = null;
+let currentArticle: unknown = null;
 
 app.get('/api/current-article', (_req, res) => {
   if (!currentArticle) return res.status(404).json({ error: 'no article open' });

@@ -1,9 +1,11 @@
 {
   "name": "rss-reader-server",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "test": "node --test *.test.js"
+    "start": "node index.ts",
+    "test": "node --test *.test.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
@@ -15,5 +17,17 @@
     "jsdom": "^29.1.1",
     "rss-parser": "^3.13.0",
     "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsdom": "^28.0.3",
+    "@types/node": "^25.9.2",
+    "@types/supertest": "^7.2.0",
+    "@types/xml2js": "^0.4.14",
+    "supertest": "^7.2.2",
+    "typescript": "^6.0.3"
   }
 }

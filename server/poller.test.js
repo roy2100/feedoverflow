@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const TEST_DB_PATH = path.join(os.tmpdir(), `rss-poller-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { app, db, persistPolled, makeId } = require('./index.js');
+const { app, db, persistPolled, makeId } = require('./index.ts');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

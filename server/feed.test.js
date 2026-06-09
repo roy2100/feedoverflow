@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseURL } = require('./index.js');
+const { parseURL } = require('./index.ts');
 
 test('Reddit /r/rss feed — direct connection', async (t) => {
   const REDDIT_RSS = 'https://www.reddit.com/r/rss.rss';

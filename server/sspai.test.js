@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseURL } = require('./index.js');
+const { parseURL } = require('./index.ts');
 
 const SSPAI_URL = 'https://sspai.com/feed';
 
