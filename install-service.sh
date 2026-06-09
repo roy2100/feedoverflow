@@ -30,7 +30,7 @@ cat > "$PLIST" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>$NODE_BIN</string>
-    <string>$ROOT/server/index.js</string>
+    <string>$ROOT/server/index.ts</string>
   </array>
   <key>WorkingDirectory</key>  <string>$ROOT</string>
   <key>EnvironmentVariables</key>
