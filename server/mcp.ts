@@ -3,8 +3,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { isLocalhost } from './auth.ts';
+import { PORT } from './config.ts';
 
-const BASE_URL = 'http://localhost:3002';
+// MCP tools reuse the HTTP API by calling it over loopback in this same process.
+const BASE_URL = `http://localhost:${PORT}`;
 
 async function request(method: string, path: string, body?: unknown) {
   const res = await fetch(`${BASE_URL}${path}`, {
