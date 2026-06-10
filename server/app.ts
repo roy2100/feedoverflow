@@ -1,6 +1,7 @@
 import express from 'express';
 import compression from 'compression';
 import cors from 'cors';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseStringPromise } from 'xml2js';
@@ -54,7 +55,7 @@ app.post('/api/feeds', async (req, res) => {
   } catch (err) {
     return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确', detail: (err as Error)?.message || String(err) });
   }
-  const id = Date.now().toString();
+  const id = crypto.randomUUID();
   db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
   res.json({ id, name: feedTitle, url });
 });
@@ -80,7 +81,7 @@ app.post('/api/feeds/import-opml', async (req, res) => {
     let skipped = 0;
     for (const feed of candidates) {
       if (existingUrls.has(feed.url)) { skipped++; continue; }
-      const id = `${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
+      const id = crypto.randomUUID();
       ins.run(id, feed.name, feed.url);
       importedFeeds.push({ id, ...feed });
       existingUrls.add(feed.url);
