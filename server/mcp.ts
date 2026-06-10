@@ -6,37 +6,25 @@ import { isLocalhost } from './auth.ts';
 
 const BASE_URL = 'http://localhost:3002';
 
-async function get(path: string) {
-  const res = await fetch(`${BASE_URL}${path}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-  return res.json();
-}
-
-async function post(path: string, body: unknown = {}) {
+async function request(method: string, path: string, body?: unknown) {
   const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    method,
+    ...(body !== undefined && {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status} ${method} ${path}${detail ? `: ${detail}` : ''}`);
+  }
   return res.json();
 }
 
-async function patch(path: string, body: unknown = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-  return res.json();
-}
-
-async function del(path: string) {
-  const res = await fetch(`${BASE_URL}${path}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${path}`);
-  return res.json();
-}
+const get = (path: string) => request('GET', path);
+const post = (path: string, body: unknown = {}) => request('POST', path, body);
+const patch = (path: string, body: unknown = {}) => request('PATCH', path, body);
+const del = (path: string) => request('DELETE', path);
 
 function text(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
@@ -152,11 +140,7 @@ function buildServer(): McpServer {
       description: 'Mark an article as read. Pass the full article object returned by any get_*_articles tool.',
       inputSchema: articleFields,
     },
-    async (args) => {
-      const { id, feedId, feedName, title, link, pubDate, summary, content, author, isRead, isStarred } = args;
-      const article = { id, feedId, feedName, title, link, pubDate, summary, content, author, isRead, isStarred };
-      return text(await post('/api/articles/read', { article }));
-    }
+    async (article) => text(await post('/api/articles/read', { article }))
   );
 
   server.registerTool(
@@ -168,11 +152,7 @@ function buildServer(): McpServer {
         starred: z.boolean().describe('true to star, false to unstar'),
       },
     },
-    async (args) => {
-      const { starred, id, feedId, feedName, title, link, pubDate, summary, content, author, isRead, isStarred } = args;
-      const article = { id, feedId, feedName, title, link, pubDate, summary, content, author, isRead, isStarred };
-      return text(await post('/api/articles/star', { article, starred }));
-    }
+    async ({ starred, ...article }) => text(await post('/api/articles/star', { article, starred }))
   );
 
   // --- Current article ---
@@ -207,10 +187,17 @@ function buildServer(): McpServer {
  * before the SPA `*` fallback in app.ts, or the fallback would swallow `/mcp`.
  */
 export function registerMcp(app: Express): void {
+  // MCP clients connect over loopback (http://localhost:3002/mcp). Block public
+  // (tunnel) requests outright so the endpoint isn't an unauthenticated backdoor.
+  // Returns true when the request may proceed; otherwise responds 404 and returns false.
+  const allowLocal = (req: Request, res: Response): boolean => {
+    if (isLocalhost(req)) return true;
+    res.status(404).end();
+    return false;
+  };
+
   app.post('/mcp', async (req: Request, res: Response) => {
-    // MCP clients connect over loopback (http://localhost:3002/mcp). Block public
-    // (tunnel) requests outright so the endpoint isn't an unauthenticated backdoor.
-    if (!isLocalhost(req)) return res.status(404).end();
+    if (!allowLocal(req, res)) return;
     const server = buildServer();
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
@@ -232,12 +219,14 @@ export function registerMcp(app: Express): void {
   });
 
   // Stateless mode has no server-to-client stream and no session to delete.
-  const methodNotAllowed = (req: Request, res: Response) =>
-    !isLocalhost(req) ? res.status(404).end() : res.status(405).json({
+  const methodNotAllowed = (req: Request, res: Response) => {
+    if (!allowLocal(req, res)) return;
+    res.status(405).json({
       jsonrpc: '2.0',
       error: { code: -32000, message: 'Method not allowed.' },
       id: null,
     });
+  };
   app.get('/mcp', methodNotAllowed);
   app.delete('/mcp', methodNotAllowed);
 }
