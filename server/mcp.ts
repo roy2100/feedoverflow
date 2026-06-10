@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
+import { isLocalhost } from './auth.ts';
 
 const BASE_URL = 'http://localhost:3002';
 
@@ -207,6 +208,9 @@ function buildServer(): McpServer {
  */
 export function registerMcp(app: Express): void {
   app.post('/mcp', async (req: Request, res: Response) => {
+    // MCP clients connect over loopback (http://localhost:3002/mcp). Block public
+    // (tunnel) requests outright so the endpoint isn't an unauthenticated backdoor.
+    if (!isLocalhost(req)) return res.status(404).end();
     const server = buildServer();
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
@@ -228,8 +232,8 @@ export function registerMcp(app: Express): void {
   });
 
   // Stateless mode has no server-to-client stream and no session to delete.
-  const methodNotAllowed = (_req: Request, res: Response) =>
-    res.status(405).json({
+  const methodNotAllowed = (req: Request, res: Response) =>
+    !isLocalhost(req) ? res.status(404).end() : res.status(405).json({
       jsonrpc: '2.0',
       error: { code: -32000, message: 'Method not allowed.' },
       id: null,

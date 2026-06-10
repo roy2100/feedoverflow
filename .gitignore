@@ -3,4 +3,5 @@ server/feeds.json
 dist/
 .DS_Store
 server/rss.db*
+server/.env
 .playwright-mcp

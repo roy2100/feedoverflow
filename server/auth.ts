@@ -23,7 +23,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts, please try again later' },
 });
 
-const isLocalhost = (req: Request) =>
+export const isLocalhost = (req: Request) =>
   ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip ?? '');
 
 export function registerAuth(app: Express): void {

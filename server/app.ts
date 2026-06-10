@@ -22,6 +22,10 @@ const distDir = path.join(__dirname, '../client/dist');
 const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://rss.royl.uk', 'https://rss.lan'];
 
 export const app = express();
+// Behind the Cloudflare Tunnel, cloudflared connects from 127.0.0.1, so without
+// this the real client IP is masked and every public request looks like localhost.
+// Trust the loopback hop to read the real IP from cloudflared's X-Forwarded-For.
+app.set('trust proxy', 'loopback');
 app.use(compression());
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
