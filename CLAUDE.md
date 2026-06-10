@@ -20,12 +20,12 @@ tail -f ~/Deploy/rss-reader/logs/server.log
 
 ## Deployment
 
-Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Basic Auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files.
+Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Session-cookie auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files.
 
 - Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 22.18)
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
 - Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
-- Auth: `AUTH_USER` / `AUTH_PASS` in `~/Library/LaunchAgents/com.rss-reader.app.plist`
+- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `deploy.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip` reflects the real client via cloudflared's `X-Forwarded-For` — without it every tunnel request looks like localhost and bypasses auth
 - Ports: networth.local → 3001, rss.royl.uk → 3002, dev client → 3000
 
 ## Architecture
@@ -35,7 +35,8 @@ Three-panel RSS reader: **sidebar → article list → reader pane**.
 ```
 root/               concurrently orchestrator
 server/             (ESM + TS, run natively by Node, port 3002)
-  index.ts          entrypoint — sets process.title, imports app, listens
+  index.ts          entrypoint — loads .env, sets process.title, imports app, listens
+  load-env.ts       loads server/.env (if present) — imported before app.ts
   app.ts            Express app + all API routes
   db.ts             SQLite setup, schema, migrations, seed data
   auth.ts           session login/logout + per-request gate
@@ -72,7 +73,7 @@ client/             Vite + React (port 3000)
 - RSS fetched via `rss-parser` through a read-through `feed_cache` (5 min TTL, `cache.ts`); a background poller (`poller.ts`) refreshes feeds and persists new items into `article_states`
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`
 - `enrich()` joins live RSS items with persisted `article_states` rows
-- Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, non-localhost `/api/*` requests require a valid `session` cookie; disabled otherwise
+- Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, non-localhost `/api/*` requests require a valid `session` cookie; disabled otherwise. `isLocalhost()` (exported) keys off `req.ip`, which is only trustworthy because of `trust proxy = loopback` (see Deployment). The login route is rate-limited (`express-rate-limit`)
 
 **SQLite tables:**
 - `feeds(id, name, url)`
@@ -106,4 +107,4 @@ client/             Vite + React (port 3000)
 
 ### MCP server (`server/mcp.ts`)
 
-Mounted into the same Express app via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405). Registered in `app.ts` before the SPA `*` fallback. Exposes 14 tools (feed CRUD, OPML import, article lists, read/star, current article, full-content fetch) that call the API above over loopback (`http://localhost:3002`). Configure clients with `{ "type": "http", "url": "http://localhost:3002/mcp" }`.
+Mounted into the same Express app via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405). Registered in `app.ts` before the SPA `*` fallback. **Localhost-only**: non-local requests (i.e. via the tunnel) get `404` — MCP clients connect over loopback, so there is no public MCP surface. Exposes 14 tools (feed CRUD, OPML import, article lists, read/star, current article, full-content fetch) that call the API above over loopback (`http://localhost:3002`). Configure clients with `{ "type": "http", "url": "http://localhost:3002/mcp" }`.
