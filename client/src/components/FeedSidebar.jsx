@@ -1,14 +1,10 @@
 import { useState } from 'react';
 import { RefreshCw, Plus, Sun, Star, List, Rss, Settings, SlidersHorizontal } from 'lucide-react';
+import { faviconDomain } from '../faviconDomain.js';
 
 function FeedIcon({ url }) {
   const [failed, setFailed] = useState(false);
-  let domain = '';
-  try {
-    domain = new URL(url).hostname;
-  } catch {
-    // ignore
-  }
+  const domain = faviconDomain(url);
   if (failed || !domain) {
     return <Rss size={13} style={{ color: 'var(--text-tertiary)' }} />;
   }

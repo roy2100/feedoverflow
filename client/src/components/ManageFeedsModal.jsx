@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck } from 'lucide-react';
+import { faviconDomain } from '../faviconDomain.js';
 
 function fallbackCopy(text, onDone) {
   const ta = document.createElement('textarea');
@@ -14,8 +15,7 @@ function fallbackCopy(text, onDone) {
 
 function FeedIcon({ url }) {
   const [failed, setFailed] = useState(false);
-  let domain = '';
-  try { domain = new URL(url).hostname; } catch {}
+  const domain = faviconDomain(url);
   if (failed || !domain) return <Rss size={13} style={{ color: 'var(--text-tertiary)' }} />;
   return (
     <img src={`/api/favicon?domain=${domain}`}
