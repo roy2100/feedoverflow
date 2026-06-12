@@ -1,12 +1,14 @@
 import { db } from './db.ts';
 import { enrich } from './articles.ts';
 import { fetchAndCache } from './cache.ts';
+import { runMaintenance } from './maintenance.ts';
 import { logger } from './logger.ts';
 import type { Feed } from './types.ts';
 import type { RssItem } from './parse-url.ts';
 
 const log = logger.child({ mod: 'poller' });
 const POLL_INTERVAL = 15 * 60 * 1000;
+const MAINTENANCE_INTERVAL = 24 * 60 * 60 * 1000;
 
 const insertPolledArticle = db.prepare(`
   INSERT OR IGNORE INTO article_states
@@ -53,6 +55,8 @@ async function pollAllFeeds(): Promise<void> {
 
 export function startPoller(): void {
   if (process.env.TEST_DB) return;
+  runMaintenance();
+  setInterval(runMaintenance, MAINTENANCE_INTERVAL);
   setTimeout(async () => {
     const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
     for (const feed of feeds) {

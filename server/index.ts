@@ -1,5 +1,7 @@
 import './load-env.ts'; // must precede ./app.ts so AUTH_* env is set before registerAuth()
 import { app } from './app.ts';
+import { startCacheWarming } from './cache.ts';
+import { startPoller } from './poller.ts';
 import { PORT } from './config.ts';
 import { logger } from './logger.ts';
 
@@ -12,4 +14,17 @@ process.on('uncaughtException', (err) => {
   process.exit(1); // let launchd (KeepAlive) restart a clean process
 });
 
-app.listen(PORT, () => logger.info('server started', { port: PORT, url: `http://localhost:${PORT}` }));
+const server = app.listen(PORT, () => {
+  logger.info('server started', { port: PORT, url: `http://localhost:${PORT}` });
+  // Only start background work (cache warming, polling, the destructive DB maintenance
+  // pass) once the port is actually bound — a failed bind must not mutate the DB.
+  startCacheWarming();
+  startPoller();
+});
+
+// A bind failure (e.g. EADDRINUSE) would otherwise surface as an uncaughtException after
+// background services already ran. Log and exit cleanly so launchd restarts a fresh process.
+server.on('error', (err) => {
+  logger.fatal('server failed to start', { err, port: PORT });
+  process.exit(1);
+});

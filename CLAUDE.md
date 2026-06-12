@@ -35,14 +35,15 @@ Three-panel RSS reader: **sidebar → article list → reader pane**.
 ```
 root/               concurrently orchestrator
 server/             (ESM + TS, run natively by Node, port 3002)
-  index.ts          entrypoint — loads .env, sets process.title, imports app, listens
+  index.ts          entrypoint — loads .env, sets process.title, imports app, listens, then starts background services (cache warming, poller, maintenance) only after a successful bind
   load-env.ts       loads server/.env (if present) — imported before app.ts
   app.ts            Express app + all API routes
   db.ts             SQLite setup, schema, migrations, seed data
   auth.ts           session login/logout + per-request gate
   articles.ts       id/enrich/dedup helpers + article_states upserts
   cache.ts          feed_cache read-through + startup warming
-  poller.ts         background feed polling
+  poller.ts         background feed polling (also kicks off the maintenance pass)
+  maintenance.ts    orphan cleanup + DB size-cap enforcement (oldest non-starred deleted, then VACUUM)
   logger.ts         shared slog logger instance (NDJSON → logs/app.log)
   vendor/slog.ts    vendored zero-dep structured logger (requires node ≥ 24)
   parse-url.ts      rss-parser wrapper + feed types
@@ -73,6 +74,7 @@ client/             Vite + React (port 3000)
 - TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
 - RSS fetched via `rss-parser` through a read-through `feed_cache` (5 min TTL, `cache.ts`); a background poller (`poller.ts`) refreshes feeds and persists new items into `article_states`
+- Maintenance (`maintenance.ts`): runs at poller startup + every 24h. `cleanupOrphans()` deletes non-starred rows whose feed is gone (starred orphans kept). `enforceSizeCap()` caps the logical DB size at `DB_MAX_SIZE_MB` (default 500MB) — when over, deletes the oldest non-starred articles (publish time parsed from RFC-822 `pub_date`, falling back to `updated_at`) down to 90% of the cap, then `VACUUM`s. Starred articles are never deleted
 - Logging: shared `logger` (`logger.ts`, vendored slog in `vendor/slog.ts`) writes NDJSON to `logs/app.log` (size rotation + gzip + retention) and pretty colorized output to a dev TTY. Use `logger.info|warn|error(...)` with a fields object; pass an Error as the `err` field to auto-serialize its stack/cause. Disabled under `TEST_DB`. Tune via `LOG_LEVEL` / `LOG_DIR`
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`
 - `enrich()` joins live RSS items with persisted `article_states` rows

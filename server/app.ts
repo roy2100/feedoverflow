@@ -12,8 +12,7 @@ import { db } from './db.ts';
 import { parseURL } from './parse-url.ts';
 import { registerAuth } from './auth.ts';
 import { dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
-import { getCachedFeed, clearCache, cacheReady, startCacheWarming } from './cache.ts';
-import { startPoller } from './poller.ts';
+import { getCachedFeed, clearCache, cacheReady } from './cache.ts';
 import { registerMcp } from './mcp.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
 
@@ -288,6 +287,5 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(distDir, 'index.html'));
 });
 
-// Start background services (no-op when TEST_DB is set)
-startCacheWarming();
-startPoller();
+// Background services (cache warming, poller, DB maintenance) are started by index.ts
+// only after the server successfully binds its port — not at import time.
