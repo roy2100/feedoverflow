@@ -41,4 +41,4 @@ else
 fi
 
 echo "==> 部署完成 → http://localhost:$PORT"
-echo "    日志：$DEPLOY_ROOT/logs/server.log"
+echo "    日志：$DEPLOY_ROOT/logs/app.log（结构化 NDJSON），$DEPLOY_ROOT/logs/server.log（原始 stderr）"

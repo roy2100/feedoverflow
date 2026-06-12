@@ -1,9 +1,11 @@
 import { db } from './db.ts';
 import { enrich } from './articles.ts';
 import { fetchAndCache } from './cache.ts';
+import { logger } from './logger.ts';
 import type { Feed } from './types.ts';
 import type { RssItem } from './parse-url.ts';
 
+const log = logger.child({ mod: 'poller' });
 const POLL_INTERVAL = 15 * 60 * 1000;
 
 const insertPolledArticle = db.prepare(`
@@ -37,7 +39,7 @@ async function pollFeed(feed: Feed, { markRead = false }: { markRead?: boolean }
     const { items, feedName } = await fetchAndCache(feed);
     persistPolled(feed, items, feedName, { markRead });
   } catch (err) {
-    console.error(`[poller] ${feed.url}: ${(err as Error).message}`);
+    log.warn('feed poll failed', { feedId: feed.id, feedUrl: feed.url, err });
   }
 }
 

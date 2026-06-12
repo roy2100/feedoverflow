@@ -15,14 +15,14 @@ npm install && cd server && npm install && cd ../client && npm install
 launchctl start com.rss-reader.app
 launchctl stop com.rss-reader.app
 launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
-tail -f ~/Deploy/rss-reader/logs/server.log
+tail -f ~/Deploy/rss-reader/logs/app.log      # structured NDJSON (slog); server.log holds raw stderr
 ```
 
 ## Deployment
 
 Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Session-cookie auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files.
 
-- Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 22.18)
+- Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 24 — `util.styleText` used by the vendored slog logger)
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
 - Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
 - Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `deploy.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip` reflects the real client via cloudflared's `X-Forwarded-For` — without it every tunnel request looks like localhost and bypasses auth
@@ -43,6 +43,8 @@ server/             (ESM + TS, run natively by Node, port 3002)
   articles.ts       id/enrich/dedup helpers + article_states upserts
   cache.ts          feed_cache read-through + startup warming
   poller.ts         background feed polling
+  logger.ts         shared slog logger instance (NDJSON → logs/app.log)
+  vendor/slog.ts    vendored zero-dep structured logger (requires node ≥ 24)
   parse-url.ts      rss-parser wrapper + feed types
   mcp.ts            MCP server (Streamable HTTP) mounted at POST /mcp
   types.ts          shared interfaces
@@ -71,6 +73,7 @@ client/             Vite + React (port 3000)
 - TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
 - RSS fetched via `rss-parser` through a read-through `feed_cache` (5 min TTL, `cache.ts`); a background poller (`poller.ts`) refreshes feeds and persists new items into `article_states`
+- Logging: shared `logger` (`logger.ts`, vendored slog in `vendor/slog.ts`) writes NDJSON to `logs/app.log` (size rotation + gzip + retention) and pretty colorized output to a dev TTY. Use `logger.info|warn|error(...)` with a fields object; pass an Error as the `err` field to auto-serialize its stack/cause. Disabled under `TEST_DB`. Tune via `LOG_LEVEL` / `LOG_DIR`
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`
 - `enrich()` joins live RSS items with persisted `article_states` rows
 - Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, non-localhost `/api/*` requests require a valid `session` cookie; disabled otherwise. `isLocalhost()` (exported) keys off `req.ip`, which is only trustworthy because of `trust proxy = loopback` (see Deployment). The login route is rate-limited (`express-rate-limit`)
