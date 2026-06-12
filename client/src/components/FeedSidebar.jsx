@@ -14,7 +14,7 @@ function FeedIcon({ url }) {
   }
   return (
     <img
-      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+      src={`/api/favicon?domain=${domain}`}
       alt=""
       width={14}
       height={14}

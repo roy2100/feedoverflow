@@ -41,6 +41,12 @@ db.exec(`
     token      TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS favicon_cache (
+    domain       TEXT PRIMARY KEY,
+    image        BLOB,
+    content_type TEXT,
+    fetched_at   INTEGER
+  );
 `);
 
 // Migrate: add podcast columns if not yet present (safe to re-run)

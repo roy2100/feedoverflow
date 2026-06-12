@@ -13,6 +13,7 @@ import { parseURL } from './parse-url.ts';
 import { registerAuth } from './auth.ts';
 import { dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
 import { getCachedFeed, clearCache, cacheReady } from './cache.ts';
+import { getFavicon } from './favicon.ts';
 import { registerMcp } from './mcp.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
 
@@ -138,6 +139,19 @@ app.get('/api/fetch-content', async (req, res) => {
     res.json({ content: article.content, title: article.title, byline: article.byline });
   } catch (err) {
     res.status(500).json({ error: 'Fetch failed', detail: (err as Error).message });
+  }
+});
+
+app.get('/api/favicon', async (req, res) => {
+  const domain = req.query.domain as string | undefined;
+  if (!domain) return res.status(400).json({ error: 'domain required' });
+  try {
+    const result = await getFavicon(domain);
+    if (!result) return res.status(404).end(); // client falls back to its placeholder icon
+    res.set('Cache-Control', 'public, max-age=604800'); // overrides the global /api no-store
+    res.type(result.contentType).send(result.image);
+  } catch {
+    res.status(400).json({ error: 'invalid domain' });
   }
 });
 

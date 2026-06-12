@@ -18,7 +18,7 @@ function FeedIcon({ url }) {
   try { domain = new URL(url).hostname; } catch {}
   if (failed || !domain) return <Rss size={13} style={{ color: 'var(--text-tertiary)' }} />;
   return (
-    <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+    <img src={`/api/favicon?domain=${domain}`}
       alt="" width={14} height={14}
       style={{ borderRadius: 3, objectFit: 'contain', flexShrink: 0 }}
       onError={() => setFailed(true)} />

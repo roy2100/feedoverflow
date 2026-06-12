@@ -42,6 +42,7 @@ server/             (ESM + TS, run natively by Node, port 3002)
   auth.ts           session login/logout + per-request gate
   articles.ts       id/enrich/dedup helpers + article_states upserts
   cache.ts          feed_cache read-through + startup warming
+  favicon.ts        favicon_cache read-through (fetches from Google s2, stores BLOB)
   poller.ts         background feed polling (also kicks off the maintenance pass)
   maintenance.ts    orphan cleanup + DB size-cap enforcement (oldest non-starred deleted, then VACUUM)
   logger.ts         shared slog logger instance (NDJSON → logs/app.log)
@@ -86,6 +87,7 @@ client/             Vite + React (port 3000)
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `feed_cache(feed_id, feed_name, items_json, fetched_at)` — read-through RSS cache (5 min TTL)
 - `sessions(token, created_at)` — auth session tokens (30-day TTL)
+- `favicon_cache(domain, image, content_type, fetched_at)` — feed favicon BLOBs (positive 30-day TTL, negative 1-day; NULL `image` = upstream fetch failed)
 
 **API:**
 | Method | Path | Description |
@@ -105,6 +107,7 @@ client/             Vite + React (port 3000)
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id/content` | cached full content for an article |
 | GET | `/api/fetch-content?url=` | extract readable content via Readability |
+| GET | `/api/favicon?domain=` | cached feed favicon (BLOB); `404` → client placeholder |
 | GET\|POST | `/api/current-article` | in-memory "currently open" article (for MCP) |
 | GET\|PATCH | `/api/settings` | read/update settings (e.g. `rsshub_base_url`) |
 | POST | `/api/login` `/api/logout` | session auth (when enabled) |
