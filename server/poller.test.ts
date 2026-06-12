@@ -66,13 +66,13 @@ const FAKE_FEED = { id: 'f1', name: 'Test Feed', url: 'https://example.com/feed'
 
 // ── /api/unread-counts ────────────────────────────────────────────────────────
 
-test('/api/unread-counts — 空库返回空对象', async () => {
+test('/api/unread-counts — empty DB returns an empty object', async () => {
   const { status, body } = await get('/api/unread-counts');
   assert.equal(status, 200);
   assert.deepEqual(body, {});
 });
 
-test('/api/unread-counts — 返回各 feed 的未读数', async () => {
+test('/api/unread-counts — returns the unread count per feed', async () => {
   const items = makeFakeItems(3);
   persistPolled(FAKE_FEED, items, 'Test Feed', { markRead: false });
 
@@ -80,7 +80,7 @@ test('/api/unread-counts — 返回各 feed 的未读数', async () => {
   assert.equal((body as Record<string, number>)['f1'], 3);
 });
 
-test('/api/unread-counts — 标记已读后数量减少', async () => {
+test('/api/unread-counts — count drops after marking an article read', async () => {
   const items = makeFakeItems(1, 'f2');
   const feed2 = { id: 'f2', name: 'Feed 2', url: 'https://example.com/feed2' };
   persistPolled(feed2, items, 'Feed 2', { markRead: false });
@@ -96,7 +96,7 @@ test('/api/unread-counts — 标记已读后数量减少', async () => {
 
 // ── persistPolled ─────────────────────────────────────────────────────────────
 
-test('persistPolled markRead:false — 新文章写入 is_read=0', () => {
+test('persistPolled markRead:false — new articles are written with is_read=0', () => {
   const feed = { id: 'f3', name: 'Feed 3', url: 'https://example.com/f3' };
   const items = makeFakeItems(2, 'f3');
   persistPolled(feed, items, 'Feed 3', { markRead: false });
@@ -106,7 +106,7 @@ test('persistPolled markRead:false — 新文章写入 is_read=0', () => {
   assert.ok(rows.every(r => r.is_read === 0), 'all articles should be unread');
 });
 
-test('persistPolled markRead:true — baseline 首次写入 is_read=1', () => {
+test('persistPolled markRead:true — baseline first write sets is_read=1', () => {
   const feed = { id: 'f4', name: 'Feed 4', url: 'https://example.com/f4' };
   const items = makeFakeItems(2, 'f4');
   persistPolled(feed, items, 'Feed 4', { markRead: true });
@@ -116,7 +116,7 @@ test('persistPolled markRead:true — baseline 首次写入 is_read=1', () => {
   assert.ok(rows.every(r => r.is_read === 1), 'baseline articles should all be marked read');
 });
 
-test('persistPolled INSERT OR IGNORE — 重复 poll 不覆盖已有状态', () => {
+test('persistPolled INSERT OR IGNORE — repeat polls do not overwrite existing state', () => {
   const feed = { id: 'f5', name: 'Feed 5', url: 'https://example.com/f5' };
   const items = makeFakeItems(1, 'f5');
   const articleId = makeId(items[0].link, items[0].title, items[0].pubDate);
@@ -129,7 +129,7 @@ test('persistPolled INSERT OR IGNORE — 重复 poll 不覆盖已有状态', () 
   assert.equal(row.is_read, 1, 'user read state must not be overwritten by poller');
 });
 
-test('persistPolled — 超过 50 条只保留前 50 条', () => {
+test('persistPolled — keeps only the first 50 when given more than 50', () => {
   const feed = { id: 'f6', name: 'Feed 6', url: 'https://example.com/f6' };
   const items = makeFakeItems(60, 'f6');
   persistPolled(feed, items, 'Feed 6', { markRead: false });
