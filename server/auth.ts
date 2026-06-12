@@ -26,6 +26,13 @@ const loginLimiter = rateLimit({
 export const isLocalhost = (req: Request) =>
   ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip ?? '');
 
+// `Secure` only when the request actually arrived over HTTPS. Over LAN HTTP
+// (direct to :3002) iOS Safari drops Secure cookies, so login would never stick.
+// `req.secure` is trustworthy because of `trust proxy = loopback` (cloudflared
+// sets X-Forwarded-Proto: https for the public tunnel).
+const sessionCookie = (req: Request, token: string, maxAge: number) =>
+  `session=${token}; HttpOnly; ${req.secure ? 'Secure; ' : ''}SameSite=Lax; Max-Age=${maxAge}; Path=/`;
+
 export function registerAuth(app: Express): void {
   if (process.env.AUTH_USER && process.env.AUTH_PASS) {
     const stmtInsertSession = db.prepare('INSERT OR REPLACE INTO sessions (token, created_at) VALUES (?, ?)');
@@ -49,14 +56,14 @@ export function registerAuth(app: Express): void {
       const now = Date.now();
       stmtInsertSession.run(token, now);
       stmtCleanSessions.run(now - SESSION_TTL);
-      res.setHeader('Set-Cookie', `session=${token}; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/`);
+      res.setHeader('Set-Cookie', sessionCookie(req, token, 2592000));
       res.json({ ok: true });
     });
 
     app.post('/api/logout', (req, res) => {
       const token = parseCookies(req).session;
       if (token) stmtDeleteSession.run(token);
-      res.setHeader('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/');
+      res.setHeader('Set-Cookie', sessionCookie(req, '', 0));
       res.json({ ok: true });
     });
 
