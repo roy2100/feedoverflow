@@ -63,3 +63,13 @@ Implemented as planned.
 
 Deviation: none. Note `feed.test.ts` fails with a live-feed `429` in this environment —
 pre-existing and unrelated (it hits a real network feed).
+
+### Follow-up: treat a missing favicon as normal (no console errors)
+The first cut returned `404`/`400`, which the browser logged as red console errors for
+every iconless feed (and for single-label hostnames like `anthropic`, `163` that fail
+hostname validation). Changed the endpoint to **always return `200`**: a real icon when
+available, otherwise a default gray RSS-glyph SVG (`DEFAULT_FAVICON`, color matches the
+client's `--text-tertiary` `<Rss>` fallback). `getFavicon` now returns `null` instead of
+throwing on an invalid domain. Default responses use `max-age=86400` (vs 7 days for real
+icons) so a real icon is picked up once the 1-day negative cache expires. Added 4
+route-level tests. Console is now clean.

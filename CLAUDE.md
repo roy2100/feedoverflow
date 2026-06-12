@@ -107,7 +107,7 @@ client/             Vite + React (port 3000)
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id/content` | cached full content for an article |
 | GET | `/api/fetch-content?url=` | extract readable content via Readability |
-| GET | `/api/favicon?domain=` | cached feed favicon (BLOB); `404` → client placeholder |
+| GET | `/api/favicon?domain=` | cached feed favicon (BLOB); always `200` — falls back to a default placeholder SVG when unavailable |
 | GET\|POST | `/api/current-article` | in-memory "currently open" article (for MCP) |
 | GET\|PATCH | `/api/settings` | read/update settings (e.g. `rsshub_base_url`) |
 | POST | `/api/login` `/api/logout` | session auth (when enabled) |

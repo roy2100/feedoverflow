@@ -13,7 +13,7 @@ import { parseURL } from './parse-url.ts';
 import { registerAuth } from './auth.ts';
 import { dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
 import { getCachedFeed, clearCache, cacheReady } from './cache.ts';
-import { getFavicon } from './favicon.ts';
+import { getFavicon, DEFAULT_FAVICON, DEFAULT_CONTENT_TYPE } from './favicon.ts';
 import { registerMcp } from './mcp.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
 
@@ -143,15 +143,17 @@ app.get('/api/fetch-content', async (req, res) => {
 });
 
 app.get('/api/favicon', async (req, res) => {
-  const domain = req.query.domain as string | undefined;
-  if (!domain) return res.status(400).json({ error: 'domain required' });
-  try {
-    const result = await getFavicon(domain);
-    if (!result) return res.status(404).end(); // client falls back to its placeholder icon
+  const domain = (req.query.domain as string | undefined) ?? '';
+  let result = null;
+  try { result = await getFavicon(domain); } catch { /* fall through to default */ }
+  if (result) {
     res.set('Cache-Control', 'public, max-age=604800'); // overrides the global /api no-store
     res.type(result.contentType).send(result.image);
-  } catch {
-    res.status(400).json({ error: 'invalid domain' });
+  } else {
+    // A missing favicon is normal — serve a placeholder (200) so the browser logs no
+    // error. Short TTL so a real icon is picked up once the negative cache expires.
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type(DEFAULT_CONTENT_TYPE).send(DEFAULT_FAVICON);
   }
 });
 
