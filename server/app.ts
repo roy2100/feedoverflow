@@ -5,8 +5,6 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseStringPromise } from 'xml2js';
-import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
 
 import { db } from './db.ts';
 import { parseURL } from './parse-url.ts';
@@ -132,6 +130,11 @@ app.get('/api/fetch-content', async (req, res) => {
     const response = await fetch(url, { headers: fetchHeaders, signal: AbortSignal.timeout(15000) });
     if (!response.ok) return res.status(502).json({ error: `Upstream ${response.status}` });
     const html = await response.text();
+    // jsdom + Readability are ~100MB resident and only needed for this on-demand
+    // extraction, so load them lazily on first use instead of at boot. Node caches the
+    // modules after the first import, so subsequent requests pay nothing.
+    const { JSDOM } = await import('jsdom');
+    const { Readability } = await import('@mozilla/readability');
     const dom = new JSDOM(html, { url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
