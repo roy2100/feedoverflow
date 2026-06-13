@@ -7,3 +7,4 @@ server/.env
 logs/
 .playwright-mcp
 *.tsbuildinfo
+client/bun.lock
