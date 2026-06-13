@@ -2,6 +2,7 @@ import './load-env.ts'; // must precede ./app.ts so AUTH_* env is set before reg
 import { app } from './app.ts';
 import { startCacheWarming } from './cache.ts';
 import { startPoller } from './poller.ts';
+import { startResourceMonitor } from './resource.ts';
 import { PORT } from './config.ts';
 import { logger } from './logger.ts';
 
@@ -20,6 +21,7 @@ const server = app.listen(PORT, () => {
   // pass) once the port is actually bound — a failed bind must not mutate the DB.
   startCacheWarming();
   startPoller();
+  startResourceMonitor();
 });
 
 // A bind failure (e.g. EADDRINUSE) would otherwise surface as an uncaughtException after
