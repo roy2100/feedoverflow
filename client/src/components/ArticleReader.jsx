@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft } from 'lucide-react';
+import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react';
 
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
@@ -11,7 +11,7 @@ function formatFullDate(dateStr) {
   });
 }
 
-export default function ArticleReader({ isMobile, onBack, article, onToggleStar, onPlay, currentEpisode, isPlaying, scrollRef }) {
+export default function ArticleReader({ isMobile, onBack, article, onToggleStar, onPlay, currentEpisode, isPlaying, scrollRef, readingMode, onToggleReadingMode }) {
   const [fullContent, setFullContent] = useState(null);
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
@@ -142,7 +142,7 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
       )}
 
       <div style={{
-        maxWidth: 680,
+        maxWidth: readingMode ? 820 : 680,
         width: '100%',
         margin: '0 auto',
         padding: isMobile ? '24px 20px 80px' : '48px 48px 80px',
@@ -195,6 +195,22 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
           {/* Desktop-only actions */}
           {!isMobile && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              {onToggleReadingMode && (
+                <button
+                  onClick={onToggleReadingMode}
+                  title={readingMode ? '退出专注阅读 (Esc)' : '专注阅读'}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: readingMode ? 'var(--accent)' : 'var(--text-tertiary)',
+                    display: 'flex', alignItems: 'center', padding: 4, borderRadius: 5,
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!readingMode) e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={e => { if (!readingMode) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                >
+                  {readingMode ? <Minimize2 size={15} strokeWidth={1.5} /> : <Maximize2 size={15} strokeWidth={1.5} />}
+                </button>
+              )}
               <button
                 onClick={() => onToggleStar(article)}
                 title={article.isStarred ? '取消收藏' : '收藏'}

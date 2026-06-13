@@ -22,6 +22,7 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [readingMode, setReadingMode] = useState(false);
   const [currentEpisode, setCurrentEpisode] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
@@ -40,6 +41,10 @@ export default function App() {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape') {
+        if (readingMode) { e.preventDefault(); setReadingMode(false); }
+        return;
+      }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         const idx = articles.findIndex(a => a.id === selectedArticle?.id);
@@ -53,7 +58,12 @@ export default function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [articles, selectedArticle, showAddModal, showManageModal, showSettingsModal, isMobile, selectArticle]);
+  }, [articles, selectedArticle, showAddModal, showManageModal, showSettingsModal, isMobile, selectArticle, readingMode]);
+
+  // Never leave the reader stuck fullscreen with nothing to show
+  useEffect(() => {
+    if (!selectedArticle) setReadingMode(false);
+  }, [selectedArticle]);
 
   useEffect(() => {
     readerRef.current?.focus({ preventScroll: true });
@@ -180,26 +190,30 @@ export default function App() {
   return (
     <AudioContext.Provider value={audioCtx}>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
-        <FeedSidebar
-          feeds={feeds}
-          selectedView={selectedView}
-          onSelectView={selectView}
-          onRefresh={() => loadArticles(selectedView)}
-          onOpenAddModal={() => setShowAddModal(true)}
-          onOpenManageModal={() => setShowManageModal(true)}
-          onOpenSettings={() => setShowSettingsModal(true)}
-        />
-        <ArticleList
-          articles={articles}
-          selectedArticle={selectedArticle}
-          onSelectArticle={selectArticle}
-          loading={loadingArticles}
-          viewTitle={viewTitle}
-          onRefresh={() => loadArticles(selectedView)}
-          onPlay={handlePlay}
-          currentEpisode={currentEpisode}
-          isPlaying={isPlaying}
-        />
+        {!readingMode && (
+          <FeedSidebar
+            feeds={feeds}
+            selectedView={selectedView}
+            onSelectView={selectView}
+            onRefresh={() => loadArticles(selectedView)}
+            onOpenAddModal={() => setShowAddModal(true)}
+            onOpenManageModal={() => setShowManageModal(true)}
+            onOpenSettings={() => setShowSettingsModal(true)}
+          />
+        )}
+        {!readingMode && (
+          <ArticleList
+            articles={articles}
+            selectedArticle={selectedArticle}
+            onSelectArticle={selectArticle}
+            loading={loadingArticles}
+            viewTitle={viewTitle}
+            onRefresh={() => loadArticles(selectedView)}
+            onPlay={handlePlay}
+            currentEpisode={currentEpisode}
+            isPlaying={isPlaying}
+          />
+        )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
           <ArticleReader
             article={selectedArticle}
@@ -208,6 +222,8 @@ export default function App() {
             currentEpisode={currentEpisode}
             isPlaying={isPlaying}
             scrollRef={readerRef}
+            readingMode={readingMode}
+            onToggleReadingMode={() => setReadingMode(v => !v)}
           />
           {currentEpisode && (
             <Suspense fallback={null}>
