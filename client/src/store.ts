@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 
-const API = '/api';
-let loadAbortController = null;
+import type { Article, Feed, View } from './types';
 
-async function apiFetch(url, opts) {
+const API = '/api';
+let loadAbortController: AbortController | null = null;
+
+async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
   const r = await fetch(url, opts);
   if (r.status === 401) {
     window.location.reload();
@@ -12,17 +14,40 @@ async function apiFetch(url, opts) {
   return r;
 }
 
-export const useStore = create((set, get) => ({
+interface StoreState {
+  feeds: Feed[];
+  articles: Article[];
+  selectedView: View;
+  selectedArticle: Article | null;
+  loadingArticles: boolean;
+  starredCount: number;
+
+  init: () => Promise<void>;
+  loadArticles: (view: View) => Promise<void>;
+  selectView: (view: View) => void;
+  selectArticle: (article: Article) => void;
+  toggleStar: (article: Article) => void;
+  addFeed: (input: { url: string }) => Promise<void>;
+  importFeeds: (newFeeds: Feed[]) => void;
+  deleteFeed: (feedId: string) => Promise<void>;
+  updateFeed: (feedId: string, input: { name: string }) => Promise<void>;
+}
+
+export const useStore = create<StoreState>((set, get) => ({
   feeds: [],
   articles: [],
   selectedView: { type: 'today' },
   selectedArticle: null,
   loadingArticles: false,
+  starredCount: 0,
 
   init: async () => {
     try {
-      const feedsData = await apiFetch(`${API}/feeds`).then((r) => r.json());
-      set({ feeds: feedsData });
+      const [feedsData, starred] = await Promise.all([
+        apiFetch(`${API}/feeds`).then((r) => r.json()),
+        apiFetch(`${API}/starred/count`).then((r) => r.json()),
+      ]);
+      set({ feeds: feedsData, starredCount: starred.count ?? 0 });
     } catch (e) {
       console.error(e);
     }
@@ -34,16 +59,16 @@ export const useStore = create((set, get) => ({
     loadAbortController = controller;
     set({ loadingArticles: true, articles: [], selectedArticle: null });
     try {
-      const urlMap = {
+      const urlMap: Record<string, string> = {
         all: `${API}/all-articles`,
         today: `${API}/today`,
         starred: `${API}/starred`,
       };
-      const url = urlMap[view.type] ?? `${API}/feeds/${view.feed.id}/articles`;
+      const url = urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`;
       const data = await apiFetch(url, { signal: controller.signal }).then((r) => r.json());
       set({ articles: data.articles || [] });
     } catch (e) {
-      if (e.name !== 'AbortError') console.error(e);
+      if ((e as Error).name !== 'AbortError') console.error(e);
     } finally {
       if (!controller.signal.aborted) set({ loadingArticles: false });
     }
@@ -73,6 +98,7 @@ export const useStore = create((set, get) => ({
         state.selectedArticle?.id === article.id
           ? { ...state.selectedArticle, isStarred: newStarred }
           : state.selectedArticle,
+      starredCount: newStarred ? state.starredCount + 1 : Math.max(0, state.starredCount - 1),
     }));
     apiFetch(`${API}/articles/star`, {
       method: 'POST',

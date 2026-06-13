@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export function useIsMobile() {
+export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768);

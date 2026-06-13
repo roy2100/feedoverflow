@@ -1,10 +1,16 @@
 import FeedSidebar from '../components/FeedSidebar';
 import { useStore } from '../store';
+import type { MobilePage, View } from '../types';
 
-export default function FeedsPage({ onOpenAddModal, onNavigate }) {
-  const { feeds, selectedView, starredCount, selectView, loadArticles } = useStore();
+interface FeedsPageProps {
+  onOpenAddModal: () => void;
+  onNavigate: (page: MobilePage) => void;
+}
 
-  const handleSelectView = (view) => {
+export default function FeedsPage({ onOpenAddModal, onNavigate }: FeedsPageProps) {
+  const { feeds, selectedView, selectView, loadArticles } = useStore();
+
+  const handleSelectView = (view: View) => {
     selectView(view);
     onNavigate('list');
   };
@@ -15,7 +21,6 @@ export default function FeedsPage({ onOpenAddModal, onNavigate }) {
       feeds={feeds}
       selectedView={selectedView}
       onSelectView={handleSelectView}
-      starredCount={starredCount}
       onRefresh={() => loadArticles(selectedView)}
       onOpenAddModal={onOpenAddModal}
       onOpenManageModal={null}

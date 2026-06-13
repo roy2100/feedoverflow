@@ -1,8 +1,13 @@
 import { useAudio } from '../AudioContext';
 import ArticleList from '../components/ArticleList';
 import { useStore } from '../store';
+import type { Article, MobilePage } from '../types';
 
-export default function ListPage({ onNavigate }) {
+interface ListPageProps {
+  onNavigate: (page: MobilePage) => void;
+}
+
+export default function ListPage({ onNavigate }: ListPageProps) {
   const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } =
     useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
@@ -16,7 +21,7 @@ export default function ListPage({ onNavigate }) {
           ? '已收藏'
           : selectedView.feed?.name;
 
-  const handleSelectArticle = (article) => {
+  const handleSelectArticle = (article: Article) => {
     selectArticle(article);
     onNavigate('article');
   };

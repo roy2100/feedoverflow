@@ -1,12 +1,20 @@
 import { X, Upload, CheckCircle, AlertCircle } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function AddFeedModal({ onClose, onAdd, onImport }) {
-  const [tab, setTab] = useState('manual');
+import type { Feed } from '../types';
+
+interface AddFeedModalProps {
+  onClose: () => void;
+  onAdd: (input: { url: string }) => Promise<void>;
+  onImport: (newFeeds: Feed[]) => void;
+}
+
+export default function AddFeedModal({ onClose, onAdd, onImport }: AddFeedModalProps) {
+  const [tab, setTab] = useState<'manual' | 'opml'>('manual');
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
@@ -61,10 +69,12 @@ export default function AddFeedModal({ onClose, onAdd, onImport }) {
               padding: 3,
             }}
           >
-            {[
-              ['manual', '手动添加'],
-              ['opml', '导入 OPML'],
-            ].map(([key, label]) => (
+            {(
+              [
+                ['manual', '手动添加'],
+                ['opml', '导入 OPML'],
+              ] as const
+            ).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
@@ -124,12 +134,17 @@ export default function AddFeedModal({ onClose, onAdd, onImport }) {
 }
 
 // ── Manual Tab ────────────────────────────────────────────────────────────────
-function ManualTab({ onAdd, onClose }) {
+interface ManualTabProps {
+  onAdd: (input: { url: string }) => Promise<void>;
+  onClose: () => void;
+}
+
+function ManualTab({ onAdd, onClose }: ManualTabProps) {
   const [url, setUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
   const [rsshubBase, setRsshubBase] = useState('http://localhost:1200');
-  const urlRef = useRef(null);
+  const urlRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     urlRef.current?.focus();
@@ -148,7 +163,7 @@ function ManualTab({ onAdd, onClose }) {
     ? rsshubBase.replace(/\/$/, '') + '/' + url.trim().slice('rsshub://'.length)
     : null;
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
     setAdding(true);
@@ -157,7 +172,7 @@ function ManualTab({ onAdd, onClose }) {
       await onAdd({ url: url.trim() });
       onClose();
     } catch (err) {
-      setError(err.message || '添加失败，请检查 URL 是否正确');
+      setError((err as Error).message || '添加失败，请检查 URL 是否正确');
     } finally {
       setAdding(false);
     }
@@ -210,14 +225,25 @@ function ManualTab({ onAdd, onClose }) {
 }
 
 // ── OPML Tab ──────────────────────────────────────────────────────────────────
-function OpmlTab({ onImport, onClose }) {
-  const [phase, setPhase] = useState('idle'); // idle | importing | done | error
-  const [dragOver, setDragOver] = useState(false);
-  const [result, setResult] = useState(null); // { imported, skipped, feeds }
-  const [errMsg, setErrMsg] = useState('');
-  const inputRef = useRef(null);
+interface OpmlTabProps {
+  onImport: (newFeeds: Feed[]) => void;
+  onClose: () => void;
+}
 
-  const processFile = async (file) => {
+interface ImportResult {
+  imported: number;
+  skipped: number;
+  feeds: Feed[];
+}
+
+function OpmlTab({ onImport, onClose }: OpmlTabProps) {
+  const [phase, setPhase] = useState<'idle' | 'importing' | 'done' | 'error'>('idle');
+  const [dragOver, setDragOver] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [errMsg, setErrMsg] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const processFile = async (file: File) => {
     if (!file) return;
     setPhase('importing');
     try {
@@ -233,12 +259,12 @@ function OpmlTab({ onImport, onClose }) {
       setPhase('done');
       onImport(data.feeds);
     } catch (err) {
-      setErrMsg(err.message);
+      setErrMsg((err as Error).message);
       setPhase('error');
     }
   };
 
-  const onDrop = (e) => {
+  const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
@@ -357,9 +383,9 @@ function OpmlTab({ onImport, onClose }) {
             导入完成
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
-            成功导入 <strong>{result.imported}</strong> 个订阅源
+            成功导入 <strong>{result?.imported}</strong> 个订阅源
           </p>
-          {result.skipped > 0 && (
+          {result && result.skipped > 0 && (
             <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 20px' }}>
               跳过 {result.skipped} 个重复项
             </p>
@@ -407,7 +433,18 @@ function OpmlTab({ onImport, onClose }) {
 }
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
-function Field({ label, placeholder, value, onChange, required, ref: fRef }) {
+interface FieldProps {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}
+
+const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
+  { label, placeholder, value, onChange, required },
+  ref,
+) {
   return (
     <div style={{ marginBottom: 14 }}>
       <label
@@ -423,7 +460,7 @@ function Field({ label, placeholder, value, onChange, required, ref: fRef }) {
         {required && <span style={{ color: 'var(--accent)', marginLeft: 2 }}>*</span>}
       </label>
       <input
-        ref={fRef}
+        ref={ref}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -446,9 +483,14 @@ function Field({ label, placeholder, value, onChange, required, ref: fRef }) {
       />
     </div>
   );
+});
+
+interface GhostBtnProps {
+  onClick?: () => void;
+  children: React.ReactNode;
 }
 
-function GhostBtn({ onClick, children }) {
+function GhostBtn({ onClick, children }: GhostBtnProps) {
   return (
     <button
       type="button"
@@ -472,7 +514,14 @@ function GhostBtn({ onClick, children }) {
   );
 }
 
-function PrimaryBtn({ onClick, type = 'button', disabled, children }) {
+interface PrimaryBtnProps {
+  onClick?: () => void;
+  type?: 'button' | 'submit';
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+function PrimaryBtn({ onClick, type = 'button', disabled, children }: PrimaryBtnProps) {
   return (
     <button
       type={type}

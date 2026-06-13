@@ -2,8 +2,23 @@ import { Play, Pause, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 import { useIsMobile } from '../hooks/useIsMobile';
+import type { Article } from '../types';
 
-export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePlay, onClose }) {
+interface PodcastPlayerProps {
+  episode: Article;
+  audioRef: React.RefObject<HTMLAudioElement>;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
+  onClose: () => void;
+}
+
+export default function PodcastPlayer({
+  episode,
+  audioRef,
+  isPlaying,
+  onTogglePlay,
+  onClose,
+}: PodcastPlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
@@ -11,6 +26,7 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
 
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio) return;
     const onTime = () => setCurrentTime(audio.currentTime);
     const onMeta = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
     audio.addEventListener('timeupdate', onTime);
@@ -30,24 +46,25 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
     if (audioRef.current) audioRef.current.playbackRate = 1;
   }, [episode?.id]); // eslint-disable-line
 
-  const skip = (sec) => {
+  const skip = (sec: number) => {
     const a = audioRef.current;
+    if (!a) return;
     a.currentTime = Math.max(0, Math.min(a.currentTime + sec, a.duration || 0));
   };
 
   const cycleSpeed = () => {
     const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
     setSpeed(next);
-    audioRef.current.playbackRate = next;
+    if (audioRef.current) audioRef.current.playbackRate = next;
   };
 
-  const fmt = (s) => {
+  const fmt = (s: number) => {
     if (!s || isNaN(s) || !isFinite(s)) return '0:00';
     const m = Math.floor(s / 60);
     return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   };
 
-  const btnStyle = {
+  const btnStyle: React.CSSProperties = {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
@@ -143,7 +160,7 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
             step={1}
             onChange={(e) => {
               const t = parseFloat(e.target.value);
-              audioRef.current.currentTime = t;
+              if (audioRef.current) audioRef.current.currentTime = t;
               setCurrentTime(t);
             }}
             style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
@@ -265,7 +282,7 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         step={1}
         onChange={(e) => {
           const t = parseFloat(e.target.value);
-          audioRef.current.currentTime = t;
+          if (audioRef.current) audioRef.current.currentTime = t;
           setCurrentTime(t);
         }}
         style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}

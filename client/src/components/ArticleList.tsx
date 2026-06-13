@@ -1,16 +1,32 @@
 import { ChevronLeft, Mic } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
-function formatDate(dateStr) {
+import type { Article } from '../types';
+
+function formatDate(dateStr: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
   const now = new Date();
-  const diff = (now - d) / 1000;
+  const diff = (now.getTime() - d.getTime()) / 1000;
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+interface ArticleListProps {
+  isMobile?: boolean;
+  onBack?: () => void;
+  articles: Article[];
+  selectedArticle: Article | null;
+  onSelectArticle: (article: Article) => void;
+  loading: boolean;
+  viewTitle?: string;
+  onRefresh: () => void;
+  onPlay: (article: Article) => void;
+  currentEpisode: Article | null;
+  isPlaying: boolean;
 }
 
 export default function ArticleList({
@@ -25,8 +41,8 @@ export default function ArticleList({
   onPlay,
   currentEpisode,
   isPlaying,
-}) {
-  const listRef = useRef(null);
+}: ArticleListProps) {
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!selectedArticle || !listRef.current) return;
@@ -144,7 +160,7 @@ export default function ArticleList({
   );
 }
 
-function SkeletonItem({ isMobile }) {
+function SkeletonItem({ isMobile }: { isMobile?: boolean }) {
   const p = isMobile ? '14px 16px' : '12px 16px';
   return (
     <div style={{ padding: p, borderBottom: '1px solid var(--border-light)' }}>
@@ -161,6 +177,17 @@ function SkeletonItem({ isMobile }) {
   );
 }
 
+interface ArticleItemProps {
+  article: Article;
+  selected: boolean;
+  onClick: () => void;
+  onPlay?: (article: Article) => void;
+  episodePlaying: boolean;
+  isMobile?: boolean;
+  style?: React.CSSProperties;
+  'data-id'?: string;
+}
+
 function ArticleItem({
   article,
   selected,
@@ -170,7 +197,7 @@ function ArticleItem({
   isMobile,
   style,
   'data-id': dataId,
-}) {
+}: ArticleItemProps) {
   const [hovered, setHovered] = useState(false);
   const summary = (article.summary || '').replace(/<[^>]+>/g, '').slice(0, 80);
 

@@ -6,3 +6,4 @@ server/rss.db*
 server/.env
 logs/
 .playwright-mcp
+*.tsbuildinfo

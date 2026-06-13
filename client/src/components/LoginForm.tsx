@@ -1,12 +1,16 @@
 import { useState } from 'react';
 
-export default function LoginForm({ onLogin }) {
+interface LoginFormProps {
+  onLogin: () => void;
+}
+
+export default function LoginForm({ onLogin }: LoginFormProps) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');

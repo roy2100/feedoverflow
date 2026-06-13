@@ -82,17 +82,20 @@ server/             (ESM + TS, run natively by Node, port 3002)
   *.test.ts         node:test suites (import app from app.ts)
   tsconfig.json     typecheck config (tsc --noEmit; node strips types, does not check)
   rss.db            SQLite database (gitignored)
-client/             Vite + React (port 3000)
-  src/App.jsx       central state owner — all fetch logic lives here
-  src/components/
-    FeedSidebar     left panel: smart feeds + subscribed feeds
-    ArticleList     middle panel: article rows with star/unread dot
-    ArticleReader   right panel: full article content
-    AddFeedModal    portal modal for adding a new feed
+client/             Vite + React + TypeScript (port 3000)
+  src/App.tsx       top-level layout/auth/audio owner
+  src/store.ts      zustand store — feeds/articles/views + all fetch logic
+  src/types.ts      shared client types (Feed, Article, View, AudioCtxValue) — mirrors server/types.ts
+  src/components/    *.tsx — FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, SettingsModal, PodcastPlayer, LoginForm
+  src/pages/         *.tsx — mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
   src/index.css     CSS variables (--bg, --accent, etc.)
+  tsconfig*.json    tsconfig.json (refs) → tsconfig.app.json (src) + tsconfig.node.json (vite config)
 ```
 
-**Data flow:** `App.jsx` owns all state (`feeds`, `articles`, `selectedView`, `selectedArticle`, `starredCount`); props-only, no context/store. `selectedView` shape: `{ type: 'all' | 'today' | 'starred' | 'feed', feed? }`. Read/star use optimistic updates — mutate local state immediately, fire-and-forget POST to sync.
+TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `npm run typecheck`
+(`tsc -b`, in `client/`) is the type gate — Vite does not type-check. `strict: true`, matching the server.
+
+**Data flow:** the `store.ts` zustand store owns app state (`feeds`, `articles`, `selectedView`, `selectedArticle`, `starredCount`) and exposes the action creators; components subscribe via `useStore`. Audio-player wiring lives in `App.tsx` and is shared through `AudioContext`. `selectedView` shape: `{ type: 'all' | 'today' | 'starred' | 'feed', feed? }`. Read/star use optimistic updates — mutate local state immediately, fire-and-forget POST to sync.
 
 **Vite proxy:** `/api/*` → `http://localhost:3002`, so client code never hardcodes a port.
 

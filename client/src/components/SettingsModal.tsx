@@ -2,14 +2,18 @@ import { X, CheckCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function SettingsModal({ onClose }) {
+interface SettingsModalProps {
+  onClose: () => void;
+}
+
+export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [rsshubBase, setRsshubBase] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
@@ -39,7 +43,7 @@ export default function SettingsModal({ onClose }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
-      setError(err.message || '保存失败');
+      setError((err as Error).message || '保存失败');
     } finally {
       setSaving(false);
     }

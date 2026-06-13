@@ -1,7 +1,12 @@
 import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-function formatFullDate(dateStr) {
+import type { Article } from '../types';
+
+// null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
+type FullContent = null | 'loading' | { html: string } | { error: string };
+
+function formatFullDate(dateStr: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
@@ -12,6 +17,19 @@ function formatFullDate(dateStr) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+interface ArticleReaderProps {
+  isMobile?: boolean;
+  onBack?: () => void;
+  article: Article | null;
+  onToggleStar: (article: Article) => void;
+  onPlay: (article: Article) => void;
+  currentEpisode: Article | null;
+  isPlaying: boolean;
+  scrollRef?: React.RefObject<HTMLDivElement>;
+  readingMode?: boolean;
+  onToggleReadingMode?: () => void;
 }
 
 export default function ArticleReader({
@@ -25,11 +43,11 @@ export default function ArticleReader({
   scrollRef,
   readingMode,
   onToggleReadingMode,
-}) {
-  const [fullContent, setFullContent] = useState(null);
+}: ArticleReaderProps) {
+  const [fullContent, setFullContent] = useState<FullContent>(null);
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
-  const [rssContent, setRssContent] = useState(() => article?.content || null);
+  const [rssContent, setRssContent] = useState<string | null>(() => article?.content || null);
 
   useEffect(() => {
     setFullContent(null);
@@ -58,7 +76,7 @@ export default function ArticleReader({
       if (!r.ok) throw new Error(data.error || 'failed');
       setFullContent({ html: data.content });
     } catch (err) {
-      setFullContent({ error: err.message });
+      setFullContent({ error: (err as Error).message });
     }
   };
 
@@ -90,8 +108,13 @@ export default function ArticleReader({
     );
   }
 
+  const fullHtml =
+    fullContent && fullContent !== 'loading' && 'html' in fullContent ? fullContent.html : null;
+  const fullError =
+    fullContent && fullContent !== 'loading' && 'error' in fullContent ? fullContent.error : null;
+
   const isLoadingContent = rssContent === null;
-  const rawContent = fullContent?.html || rssContent || article.summary || '';
+  const rawContent = fullHtml || rssContent || article.summary || '';
   const hasHtml = /<[a-z][\s\S]*>/i.test(rawContent);
 
   return (
@@ -361,7 +384,7 @@ export default function ArticleReader({
                   加载中…
                 </span>
               )}
-              {fullContent?.html && (
+              {fullHtml && (
                 <button
                   onClick={() => setFullContent(null)}
                   title="恢复 RSS 原文"
@@ -376,8 +399,8 @@ export default function ArticleReader({
                     opacity: 0.7,
                     transition: 'opacity 0.15s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
                 >
                   全文模式
                 </button>
@@ -397,8 +420,8 @@ export default function ArticleReader({
                     opacity: 0.8,
                     transition: 'opacity 0.15s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.8)}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
                 >
                   原文
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -459,7 +482,7 @@ export default function ArticleReader({
               加载中…
             </span>
           )}
-          {isMobile && fullContent?.html && (
+          {isMobile && fullHtml && (
             <button
               onClick={() => setFullContent(null)}
               style={{
@@ -538,9 +561,9 @@ export default function ArticleReader({
         )}
 
         {/* Content */}
-        {fullContent?.error ? (
+        {fullError ? (
           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
-            加载失败：{fullContent.error}。
+            加载失败：{fullError}。
             <button
               onClick={() => setFullContent(null)}
               style={{
@@ -600,7 +623,7 @@ export default function ArticleReader({
   );
 }
 
-function sanitizeHtml(html) {
+function sanitizeHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
@@ -609,7 +632,7 @@ function sanitizeHtml(html) {
     .replace(/on\w+='[^']*'/gi, '');
 }
 
-const articleContentStyle = {
+const articleContentStyle: React.CSSProperties = {
   fontFamily: 'var(--font-serif)',
   fontSize: 16,
   lineHeight: 1.85,

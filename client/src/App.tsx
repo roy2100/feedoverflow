@@ -10,6 +10,7 @@ import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
 import { useStore } from './store';
+import type { AudioCtxValue, Article, MobilePage } from './types';
 
 const AddFeedModal = lazy(() => import('./components/AddFeedModal'));
 const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
@@ -17,18 +18,18 @@ const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const PodcastPlayer = lazy(() => import('./components/PodcastPlayer'));
 
 export default function App() {
-  const [authed, setAuthed] = useState(null); // null=checking, false=unauthed, true=authed
+  const [authed, setAuthed] = useState<boolean | null>(null); // null=checking, false=unauthed, true=authed
   const isMobile = useIsMobile();
-  const [mobilePage, setMobilePage] = useState('feeds');
+  const [mobilePage, setMobilePage] = useState<MobilePage>('feeds');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [readingMode, setReadingMode] = useState(false);
-  const [currentEpisode, setCurrentEpisode] = useState(null);
+  const [currentEpisode, setCurrentEpisode] = useState<Article | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null) audioRef.current = new Audio();
-  const readerRef = useRef(null);
+  const readerRef = useRef<HTMLDivElement>(null);
 
   const {
     feeds,
@@ -48,11 +49,12 @@ export default function App() {
   } = useStore();
 
   useEffect(() => {
-    const handler = (e) => {
+    const handler = (e: KeyboardEvent) => {
       if (isMobile) return;
       if (showAddModal || showManageModal || showSettingsModal) return;
-      const tag = e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable)
+      const target = e.target as HTMLElement;
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable)
         return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'Escape') {
@@ -114,6 +116,7 @@ export default function App() {
 
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio) return;
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => setIsPlaying(false);
@@ -127,8 +130,9 @@ export default function App() {
     };
   }, []);
 
-  const handlePlay = (article) => {
+  const handlePlay = (article: Article) => {
     const audio = audioRef.current;
+    if (!audio) return;
     if (currentEpisode?.id === article.id) {
       if (audio.paused) audio.play().catch(console.error);
       else audio.pause();
@@ -141,18 +145,22 @@ export default function App() {
 
   const handleTogglePlay = () => {
     const audio = audioRef.current;
+    if (!audio) return;
     if (audio.paused) audio.play().catch(console.error);
     else audio.pause();
   };
 
   const handleClosePlayer = () => {
-    audioRef.current.pause();
-    audioRef.current.src = '';
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.src = '';
+    }
     setCurrentEpisode(null);
     setIsPlaying(false);
   };
 
-  const audioCtx = {
+  const audioCtx: AudioCtxValue = {
     audioRef,
     currentEpisode,
     isPlaying,
@@ -189,7 +197,7 @@ export default function App() {
     );
 
   if (isMobile) {
-    const positions = {
+    const positions: Record<MobilePage, { feeds: string; list: string; article: string }> = {
       feeds: { feeds: 'translateX(0)', list: 'translateX(100%)', article: 'translateX(100%)' },
       list: { feeds: 'translateX(-100%)', list: 'translateX(0)', article: 'translateX(100%)' },
       article: { feeds: 'translateX(-100%)', list: 'translateX(0)', article: 'translateX(0)' },

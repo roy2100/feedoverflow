@@ -1,9 +1,10 @@
 import { RefreshCw, Plus, Sun, Star, List, Rss, Settings, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
-import { faviconDomain } from '../faviconDomain.js';
+import { faviconDomain } from '../faviconDomain';
+import type { Feed, View } from '../types';
 
-function FeedIcon({ url }) {
+function FeedIcon({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   const domain = faviconDomain(url);
   if (failed || !domain) {
@@ -21,6 +22,17 @@ function FeedIcon({ url }) {
   );
 }
 
+interface FeedSidebarProps {
+  isMobile?: boolean;
+  feeds: Feed[];
+  selectedView: View;
+  onSelectView: (view: View) => void;
+  onRefresh: () => void;
+  onOpenAddModal: () => void;
+  onOpenManageModal?: (() => void) | null;
+  onOpenSettings?: (() => void) | null;
+}
+
 export default function FeedSidebar({
   isMobile,
   feeds,
@@ -30,7 +42,7 @@ export default function FeedSidebar({
   onOpenAddModal,
   onOpenManageModal,
   onOpenSettings,
-}) {
+}: FeedSidebarProps) {
   return (
     <aside
       style={{
@@ -160,7 +172,14 @@ export default function FeedSidebar({
   );
 }
 
-function IconBtn({ onClick, title, isMobile, children }) {
+interface IconBtnProps {
+  onClick: () => void;
+  title: string;
+  isMobile?: boolean;
+  children: React.ReactNode;
+}
+
+function IconBtn({ onClick, title, isMobile, children }: IconBtnProps) {
   return (
     <button
       onClick={onClick}
@@ -184,7 +203,12 @@ function IconBtn({ onClick, title, isMobile, children }) {
   );
 }
 
-function SectionLabel({ children, style }) {
+interface SectionLabelProps {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}
+
+function SectionLabel({ children, style }: SectionLabelProps) {
   return (
     <div
       style={{
@@ -202,7 +226,17 @@ function SectionLabel({ children, style }) {
   );
 }
 
-function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }) {
+interface NavItemProps {
+  label: string;
+  icon?: React.ReactNode;
+  iconColor?: string;
+  count?: number;
+  selected: boolean;
+  onClick: () => void;
+  isMobile?: boolean;
+}
+
+function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }: NavItemProps) {
   return (
     <button
       onClick={onClick}

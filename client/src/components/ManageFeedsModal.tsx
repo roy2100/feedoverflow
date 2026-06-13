@@ -2,9 +2,10 @@ import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-import { faviconDomain } from '../faviconDomain.js';
+import { faviconDomain } from '../faviconDomain';
+import type { Feed } from '../types';
 
-function fallbackCopy(text, onDone) {
+function fallbackCopy(text: string, onDone: () => void) {
   const ta = document.createElement('textarea');
   ta.value = text;
   ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
@@ -17,7 +18,7 @@ function fallbackCopy(text, onDone) {
   document.body.removeChild(ta);
 }
 
-function FeedIcon({ url }) {
+function FeedIcon({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
   const domain = faviconDomain(url);
   if (failed || !domain) return <Rss size={13} style={{ color: 'var(--text-tertiary)' }} />;
@@ -33,9 +34,21 @@ function FeedIcon({ url }) {
   );
 }
 
-export default function ManageFeedsModal({ feeds, onClose, onDelete, onUpdate }) {
+interface ManageFeedsModalProps {
+  feeds: Feed[];
+  onClose: () => void;
+  onDelete: (feedId: string) => Promise<void>;
+  onUpdate: (feedId: string, input: { name: string }) => Promise<void>;
+}
+
+export default function ManageFeedsModal({
+  feeds,
+  onClose,
+  onDelete,
+  onUpdate,
+}: ManageFeedsModalProps) {
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
@@ -139,13 +152,19 @@ export default function ManageFeedsModal({ feeds, onClose, onDelete, onUpdate })
   );
 }
 
-function FeedRow({ feed, onDelete, onUpdate }) {
+interface FeedRowProps {
+  feed: Feed;
+  onDelete: (feedId: string) => Promise<void>;
+  onUpdate: (feedId: string, input: { name: string }) => Promise<void>;
+}
+
+function FeedRow({ feed, onDelete, onUpdate }: FeedRowProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(feed.name);
   const [hovered, setHovered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const nameRef = useRef(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const handleCopy = () => {
     const done = () => {
@@ -179,12 +198,12 @@ function FeedRow({ feed, onDelete, onUpdate }) {
     setEditing(false);
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSave();
     if (e.key === 'Escape') handleCancel();
   };
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     fontSize: 13,
     padding: '4px 8px',
     background: 'var(--bg)',
@@ -320,7 +339,15 @@ function FeedRow({ feed, onDelete, onUpdate }) {
   );
 }
 
-function ActionBtn({ onClick, title, color, hoverColor, children }) {
+interface ActionBtnProps {
+  onClick: () => void;
+  title: string;
+  color: string;
+  hoverColor: string;
+  children: React.ReactNode;
+}
+
+function ActionBtn({ onClick, title, color, hoverColor, children }: ActionBtnProps) {
   return (
     <button
       onClick={onClick}

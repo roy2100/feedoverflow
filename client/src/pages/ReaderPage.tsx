@@ -1,8 +1,13 @@
 import { useAudio } from '../AudioContext';
 import ArticleReader from '../components/ArticleReader';
 import { useStore } from '../store';
+import type { MobilePage } from '../types';
 
-export default function ReaderPage({ onNavigate }) {
+interface ReaderPageProps {
+  onNavigate: (page: MobilePage) => void;
+}
+
+export default function ReaderPage({ onNavigate }: ReaderPageProps) {
   const { selectedArticle, toggleStar } = useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
 
