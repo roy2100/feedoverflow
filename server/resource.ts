@@ -1,3 +1,6 @@
+import { statSync } from 'node:fs';
+
+import { dbPath } from './db.ts';
 import { logger } from './logger.ts';
 
 const log = logger.child({ mod: 'resource' });
@@ -9,6 +12,19 @@ const SAMPLE_INTERVAL = 5 * 60 * 1000;
 const MB = 1024 * 1024;
 const toMb = (bytes: number): number => Math.round((bytes / MB) * 10) / 10; // 0.1 MB
 
+// Main SQLite file size on disk. A db file is exactly page_count * page_size, so this is
+// the same logical size maintenance.ts enforces the cap against (lagging only by the
+// not-yet-checkpointed WAL frames, which the 5-min cadence smooths over). Excludes the
+// -wal/-shm sidecars. null on stat failure (e.g. file not yet created) so the sample
+// still logs the memory/CPU fields.
+function dbSizeMb(): number | null {
+  try {
+    return toMb(statSync(dbPath).size);
+  } catch {
+    return null;
+  }
+}
+
 // cpuPercent is the user+system CPU time consumed over the elapsed wall time, as a
 // percent of ONE core: ~100 means one core fully busy, >100 means multiple cores.
 // `cpuPercent: null` flags the boot sample, which has no prior window to rate against.
@@ -19,6 +35,7 @@ function logSample(cpuPercent: number | null): void {
     heapUsedMb: toMb(m.heapUsed),
     heapTotalMb: toMb(m.heapTotal),
     externalMb: toMb(m.external),
+    dbMb: dbSizeMb(),
     cpuPercent,
     uptimeSec: Math.round(process.uptime()),
   });

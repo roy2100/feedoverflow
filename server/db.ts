@@ -5,7 +5,8 @@ import Database from 'better-sqlite3';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const db = new Database(process.env.TEST_DB || path.join(__dirname, 'rss.db'));
+export const dbPath = process.env.TEST_DB || path.join(__dirname, 'rss.db');
+export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
 db.exec(`

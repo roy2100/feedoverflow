@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Read the backend's structured resource samples (mod=resource, emitted by
-# server/resource.ts) back into an aligned table: local time, RSS, heap, CPU%, uptime.
+# server/resource.ts) back into an aligned table: local time, RSS, heap, DB size, CPU%,
+# uptime.
 #
 # Usage:
 #   ./service-stats.sh            # active log only
@@ -41,7 +42,8 @@ collect() {
 }
 
 # Parse each NDJSON line with node (robust to field-order changes), pull the nested
-# ctx.* fields, format the UTC `ts` in local time, and print an aligned table.
+# ctx.* fields, format the UTC `ts` in local time, and print an aligned table. The
+# header is repeated at the bottom so it stays visible after a long scroll.
 collect | node -e '
   const data = require("fs").readFileSync(0, "utf8");
   const pad = (n) => String(n).padStart(2, "0");
@@ -62,16 +64,18 @@ collect | node -e '
       time,
       num(c.rssMb),
       num(c.heapUsedMb),
+      num(c.dbMb),
       c.cpuPercent == null ? "-" : String(c.cpuPercent),  // boot baseline -> -
       num(c.uptimeSec),
     ]);
   }
   if (rows.length === 0) { console.error("no resource samples found"); process.exit(0); }
-  const header = ["time", "rssMb", "heapMb", "cpu%", "uptime"];
+  const header = ["time", "rssMb", "heapMb", "dbMb", "cpu%", "uptime"];
   const all = [header, ...rows];
   const w = header.map((_, i) => Math.max(...all.map((row) => row[i].length)));
   const fmt = (row) =>
     row.map((cell, i) => (i === 0 ? cell.padEnd(w[i]) : cell.padStart(w[i]))).join("  ");
   console.log(fmt(header));
   for (const row of rows) console.log(fmt(row));
+  console.log(fmt(header));               // repeat header at bottom for long output
 '
