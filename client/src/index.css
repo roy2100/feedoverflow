@@ -1,36 +1,42 @@
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
 :root {
-  --bg: #F5F2EE;
-  --bg-panel: #EEEAE4;
-  --bg-hover: #E4DFD8;
-  --bg-selected: #D9D3CB;
-  --bg-reader: #FAFAF8;
-  --border: #C8C3BC;
-  --border-light: #D6D1CA;
-  --text-primary: #1C1917;
-  --text-secondary: #44403C;
-  --text-tertiary: #78716C;
-  --accent: #2B5C5C;
-  --accent-light: #3A7A7A;
-  --dot-unread: #2B7A7A;
-  --red: #C0392B;
+  --bg: #f5f2ee;
+  --bg-panel: #eeeae4;
+  --bg-hover: #e4dfd8;
+  --bg-selected: #d9d3cb;
+  --bg-reader: #fafaf8;
+  --border: #c8c3bc;
+  --border-light: #d6d1ca;
+  --text-primary: #1c1917;
+  --text-secondary: #44403c;
+  --text-tertiary: #78716c;
+  --accent: #2b5c5c;
+  --accent-light: #3a7a7a;
+  --dot-unread: #2b7a7a;
+  --red: #c0392b;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
   --font-serif: 'Noto Serif SC', 'Georgia', serif;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   overflow: hidden;
 }
 
 /* Mobile viewport fix */
 @supports (height: 100dvh) {
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100dvh;
   }
 }
@@ -76,27 +82,50 @@ input {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-4px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position:  200% 0; }
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
 }
 
 .skeleton-bar {
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--border-light) 25%, var(--bg-hover) 50%, var(--border-light) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--border-light) 25%,
+    var(--bg-hover) 50%,
+    var(--border-light) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
 }

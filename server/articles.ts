@@ -1,17 +1,24 @@
 import crypto from 'node:crypto';
+
 import { db } from './db.ts';
 import type { RssItem } from './parse-url.ts';
 import type { Article, FeedCacheRow, StatePatch } from './types.ts';
 
 export function makeId(link?: string, title?: string, pubDate?: string): string {
-  return crypto.createHash('md5')
+  return crypto
+    .createHash('md5')
     .update(link || `${title}${pubDate}`)
-    .digest('hex').slice(0, 12);
+    .digest('hex')
+    .slice(0, 12);
 }
 
 export function dedupById(articles: Article[]): Article[] {
   const seen = new Set<string>();
-  return articles.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
+  return articles.filter((a) => {
+    if (seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  });
 }
 
 export function normalizeDuration(dur?: string): string {
@@ -22,8 +29,8 @@ export function normalizeDuration(dur?: string): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${m}:${String(s).padStart(2,'0')}`;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 export function enrich(
@@ -33,35 +40,39 @@ export function enrich(
   { withContent = true }: { withContent?: boolean } = {},
 ): Article[] {
   const ids = items.map((item, i) =>
-    makeId(item.link, item.title, item.pubDate || item.isoDate || String(i))
+    makeId(item.link, item.title, item.pubDate || item.isoDate || String(i)),
   );
   const stateMap: Record<string, { is_read: number; is_starred: number }> = ids.length
     ? Object.fromEntries(
-        (db.prepare(
-          `SELECT article_id, is_read, is_starred FROM article_states WHERE article_id IN (${ids.map(() => '?').join(',')})`
-        ).all(...ids) as Array<{ article_id: string; is_read: number; is_starred: number }>).map(r => [r.article_id, r])
+        (
+          db
+            .prepare(
+              `SELECT article_id, is_read, is_starred FROM article_states WHERE article_id IN (${ids.map(() => '?').join(',')})`,
+            )
+            .all(...ids) as Array<{ article_id: string; is_read: number; is_starred: number }>
+        ).map((r) => [r.article_id, r]),
       )
     : {};
   return items.map((item, i) => {
     const id = ids[i];
     const st = stateMap[id] || { is_read: 0, is_starred: 0 };
     const enc = item.enclosure;
-    const audioUrl      = (enc?.url && enc?.type?.startsWith('audio')) ? enc.url : '';
+    const audioUrl = enc?.url && enc?.type?.startsWith('audio') ? enc.url : '';
     const audioDuration = audioUrl ? normalizeDuration(item.itunes?.duration || '') : '';
     const rawSummary = item.contentSnippet || item.summary || '';
     return {
       id,
       feedId,
       feedName,
-      title:   item.title || 'Untitled',
+      title: item.title || 'Untitled',
       summary: withContent ? rawSummary : rawSummary.slice(0, 300),
-      content: withContent ? (item.contentEncoded || item.content || item.summary || '') : '',
-      link:    item.link || '',
+      content: withContent ? item.contentEncoded || item.content || item.summary || '' : '',
+      link: item.link || '',
       pubDate: item.pubDate || item.isoDate || '',
-      author:  item.creator || item.author || '',
+      author: item.creator || item.author || '',
       audioUrl,
       audioDuration,
-      isRead:    !!st.is_read,
+      isRead: !!st.is_read,
       isStarred: !!st.is_starred,
     };
   });
@@ -69,22 +80,30 @@ export function enrich(
 
 export function resolveUrl(url: string): string {
   if (!url || !url.startsWith('rsshub://')) return url;
-  const base = (db.prepare("SELECT value FROM settings WHERE key = 'rsshub_base_url'").get() as { value?: string } | undefined)?.value
-    || 'http://localhost:1200';
+  const base =
+    (
+      db.prepare("SELECT value FROM settings WHERE key = 'rsshub_base_url'").get() as
+        | { value?: string }
+        | undefined
+    )?.value || 'http://localhost:1200';
   return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
 }
 
 export function lookupContent(articleId: string, feedId?: string): string {
-  const saved = db.prepare('SELECT content FROM article_states WHERE article_id = ?').get(articleId) as { content?: string } | undefined;
+  const saved = db
+    .prepare('SELECT content FROM article_states WHERE article_id = ?')
+    .get(articleId) as { content?: string } | undefined;
   if (saved?.content) return saved.content;
   if (!feedId) return '';
-  const feedRow = db.prepare('SELECT * FROM feed_cache WHERE feed_id = ?').get(feedId) as FeedCacheRow | undefined;
+  const feedRow = db.prepare('SELECT * FROM feed_cache WHERE feed_id = ?').get(feedId) as
+    | FeedCacheRow
+    | undefined;
   if (!feedRow) return '';
   const items = JSON.parse(feedRow.items_json) as RssItem[];
-  const item = items.find((it, i) =>
-    makeId(it.link, it.title, it.pubDate || it.isoDate || String(i)) === articleId
+  const item = items.find(
+    (it, i) => makeId(it.link, it.title, it.pubDate || it.isoDate || String(i)) === articleId,
   );
-  return item ? (item.contentEncoded || item.content || item.summary || '') : '';
+  return item ? item.contentEncoded || item.content || item.summary || '' : '';
 }
 
 const upsertState = db.prepare(`
@@ -101,12 +120,18 @@ const upsertState = db.prepare(`
 
 export function saveState(article: Article, patch: StatePatch): void {
   upsertState.run(
-    article.id, article.feedId, article.feedName,
-    article.title, article.link, article.pubDate,
-    article.summary, article.content, article.author,
-    article.audioUrl      || null,
+    article.id,
+    article.feedId,
+    article.feedName,
+    article.title,
+    article.link,
+    article.pubDate,
+    article.summary,
+    article.content,
+    article.author,
+    article.audioUrl || null,
     article.audioDuration || null,
-    patch.is_read    ?? null,
+    patch.is_read ?? null,
     patch.is_starred ?? null,
   );
 }

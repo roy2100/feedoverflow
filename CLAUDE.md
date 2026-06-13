@@ -16,7 +16,36 @@ launchctl start com.rss-reader.app
 launchctl stop com.rss-reader.app
 launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
 tail -f ~/Deploy/rss-reader/logs/app.log      # structured NDJSON (slog); server.log holds raw stderr
+
+# Lint & format (oxc — run from repo root, covers client + server)
+npm run fmt              # oxfmt: format & write in place
+npm run fmt:check        # oxfmt: check only, no writes
+npm run lint             # oxlint: catch-bug rules (correctness=error)
+npm run lint:fix         # oxlint: auto-fix what it can
 ```
+
+## Lint & Format Workflow (oxlint + oxfmt)
+
+Formatting and linting use [oxlint](https://oxc.rs) (`.oxlintrc.json`) and [oxfmt](https://oxc.rs)
+(`.oxfmtrc.json`), both run from the repo root with `npm`. oxfmt owns all style/formatting; oxlint
+only runs catch-bug rules (`categories.correctness = "error"`) — never add style rules to the linter.
+
+**After generating or modifying any code, always run:**
+
+```bash
+npm run fmt              # auto-format the changes
+npm run lint:fix         # auto-fix lint issues
+```
+
+**Before committing, ensure both pass clean:**
+
+```bash
+npm run fmt:check        # must report no unformatted files
+npm run lint             # must exit 0 (no correctness errors)
+```
+
+Do not silence lint errors or rewrite business logic just to make `lint` pass — if a correctness
+rule flags real intent, surface it rather than auto-suppressing.
 
 ## Deployment
 

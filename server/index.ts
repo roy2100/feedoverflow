@@ -1,10 +1,10 @@
 import './load-env.ts'; // must precede ./app.ts so AUTH_* env is set before registerAuth()
 import { app } from './app.ts';
 import { startCacheWarming } from './cache.ts';
-import { startPoller } from './poller.ts';
-import { startResourceMonitor } from './resource.ts';
 import { PORT } from './config.ts';
 import { logger } from './logger.ts';
+import { startPoller } from './poller.ts';
+import { startResourceMonitor } from './resource.ts';
 
 process.title = 'rss-reader';
 

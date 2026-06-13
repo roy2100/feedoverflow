@@ -1,10 +1,10 @@
-import { db } from './db.ts';
 import { enrich } from './articles.ts';
 import { fetchAndCache } from './cache.ts';
-import { runMaintenance } from './maintenance.ts';
+import { db } from './db.ts';
 import { logger } from './logger.ts';
-import type { Feed } from './types.ts';
+import { runMaintenance } from './maintenance.ts';
 import type { RssItem } from './parse-url.ts';
+import type { Feed } from './types.ts';
 
 const log = logger.child({ mod: 'poller' });
 const POLL_INTERVAL = 15 * 60 * 1000;
@@ -26,17 +26,27 @@ export function persistPolled(
   db.transaction(() => {
     for (const a of enriched) {
       insertPolledArticle.run({
-        id: a.id, feedId: a.feedId, feedName: a.feedName,
-        title: a.title, link: a.link, pubDate: a.pubDate,
-        summary: a.summary, content: a.content, author: a.author,
-        audioUrl: a.audioUrl || null, audioDuration: a.audioDuration || null,
+        id: a.id,
+        feedId: a.feedId,
+        feedName: a.feedName,
+        title: a.title,
+        link: a.link,
+        pubDate: a.pubDate,
+        summary: a.summary,
+        content: a.content,
+        author: a.author,
+        audioUrl: a.audioUrl || null,
+        audioDuration: a.audioDuration || null,
         isRead: markRead ? 1 : 0,
       });
     }
   })();
 }
 
-async function pollFeed(feed: Feed, { markRead = false }: { markRead?: boolean } = {}): Promise<void> {
+async function pollFeed(
+  feed: Feed,
+  { markRead = false }: { markRead?: boolean } = {},
+): Promise<void> {
   try {
     const { items, feedName } = await fetchAndCache(feed);
     persistPolled(feed, items, feedName, { markRead });
@@ -48,7 +58,7 @@ async function pollFeed(feed: Feed, { markRead = false }: { markRead?: boolean }
 async function pollAllFeeds(): Promise<void> {
   const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   for (let i = 0; i < feeds.length; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+    if (i > 0) await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
     await pollFeed(feeds[i]);
   }
 }
@@ -60,7 +70,9 @@ export function startPoller(): void {
   setTimeout(async () => {
     const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
     for (const feed of feeds) {
-      const hasStates = !!db.prepare('SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1').get(feed.id);
+      const hasStates = !!db
+        .prepare('SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1')
+        .get(feed.id);
       await pollFeed(feed, { markRead: !hasStates });
     }
     setInterval(pollAllFeeds, POLL_INTERVAL);

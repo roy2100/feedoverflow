@@ -19,7 +19,7 @@ function makeParser() {
 }
 
 async function fetchFeedXml(url: string, signal?: AbortSignal): Promise<string> {
-  const headers = { 'User-Agent': 'RSS-Reader/1.0', 'Accept': '*/*' };
+  const headers = { 'User-Agent': 'RSS-Reader/1.0', Accept: '*/*' };
   const timeout = AbortSignal.timeout(10000);
   // Combine the caller's signal (e.g. request-close) with the hard timeout so a
   // slow feed aborts at 10s even when the client stays connected.

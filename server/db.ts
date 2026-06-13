@@ -1,6 +1,7 @@
-import Database from 'better-sqlite3';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import Database from 'better-sqlite3';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,19 +51,27 @@ db.exec(`
 `);
 
 // Migrate: add podcast columns if not yet present (safe to re-run)
-try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_url      TEXT DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE article_states ADD COLUMN audio_duration TEXT DEFAULT ''`); } catch {}
+try {
+  db.exec(`ALTER TABLE article_states ADD COLUMN audio_url      TEXT DEFAULT ''`);
+} catch {}
+try {
+  db.exec(`ALTER TABLE article_states ADD COLUMN audio_duration TEXT DEFAULT ''`);
+} catch {}
 
 // Seed default settings
-db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`).run();
+db.prepare(
+  `INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`,
+).run();
 
 // Seed default feeds once
 if ((db.prepare('SELECT COUNT(*) AS n FROM feeds').get() as { n: number }).n === 0) {
   const ins = db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)');
-  ([
-    ['1', '少数派',           'https://sspai.com/feed'],
-    ['2', '虎嗅',             'https://feeds.feedburner.com/huxiu'],
-    ['3', '36氪',             'https://36kr.com/feed'],
-    ['4', '阮一峰的网络日志', 'https://feeds.feedburner.com/ruanyifeng'],
-  ] as const).forEach(r => ins.run(...r));
+  (
+    [
+      ['1', '少数派', 'https://sspai.com/feed'],
+      ['2', '虎嗅', 'https://feeds.feedburner.com/huxiu'],
+      ['3', '36氪', 'https://36kr.com/feed'],
+      ['4', '阮一峰的网络日志', 'https://feeds.feedburner.com/ruanyifeng'],
+    ] as const
+  ).forEach((r) => ins.run(...r));
 }

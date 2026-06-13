@@ -1,5 +1,5 @@
-import { useStore } from '../store';
 import FeedSidebar from '../components/FeedSidebar';
+import { useStore } from '../store';
 
 export default function FeedsPage({ onOpenAddModal, onNavigate }) {
   const { feeds, selectedView, starredCount, selectView, loadArticles } = useStore();

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, Mic } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -8,15 +8,23 @@ function formatDate(dateStr) {
   const now = new Date();
   const diff = (now - d) / 1000;
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-  if (diff < 86400) return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  if (diff < 86400)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 export default function ArticleList({
-  isMobile, onBack,
-  articles, selectedArticle, onSelectArticle,
-  loading, viewTitle, onRefresh,
-  onPlay, currentEpisode, isPlaying,
+  isMobile,
+  onBack,
+  articles,
+  selectedArticle,
+  onSelectArticle,
+  loading,
+  viewTitle,
+  onRefresh,
+  onPlay,
+  currentEpisode,
+  isPlaying,
 }) {
   const listRef = useRef(null);
 
@@ -27,40 +35,59 @@ export default function ArticleList({
   }, [selectedArticle?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{
-      width: isMobile ? '100%' : 300,
-      flexShrink: 0,
-      background: 'var(--bg)',
-      borderRight: isMobile ? 'none' : '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      height: isMobile ? '100%' : undefined,
-    }}>
-      <div style={{
-        padding: isMobile ? '0 16px' : '14px 16px 12px',
-        height: isMobile ? 52 : undefined,
-        borderBottom: '1px solid var(--border-light)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
-      }}>
+    <div
+      style={{
+        width: isMobile ? '100%' : 300,
+        flexShrink: 0,
+        background: 'var(--bg)',
+        borderRight: isMobile ? 'none' : '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        height: isMobile ? '100%' : undefined,
+      }}
+    >
+      <div
+        style={{
+          padding: isMobile ? '0 16px' : '14px 16px 12px',
+          height: isMobile ? 52 : undefined,
+          borderBottom: '1px solid var(--border-light)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+        }}
+      >
         {isMobile && (
           <button
             onClick={onBack}
             style={{
-              display: 'flex', alignItems: 'center', gap: 2,
-              color: 'var(--accent)', background: 'none', border: 'none',
-              cursor: 'pointer', padding: '6px 8px 6px 0', fontSize: 15,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              color: 'var(--accent)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '6px 8px 6px 0',
+              fontSize: 15,
               flexShrink: 0,
             }}
           >
             <ChevronLeft size={20} strokeWidth={2} />
           </button>
         )}
-        <h2 style={{
-          fontSize: isMobile ? 16 : 14,
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          flex: 1,
-        }}>
+        <h2
+          style={{
+            fontSize: isMobile ? 16 : 14,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}
+        >
           {viewTitle}
         </h2>
       </div>
@@ -69,9 +96,31 @@ export default function ArticleList({
         {loading ? (
           Array.from({ length: 7 }, (_, i) => <SkeletonItem key={i} isMobile={isMobile} />)
         ) : articles.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-tertiary)', fontSize: 13, flexDirection: 'column', gap: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: 'var(--text-tertiary)',
+              fontSize: 13,
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
             <span>暂无文章</span>
-            <button onClick={onRefresh} style={{ fontSize: 12, color: 'var(--accent)', padding: '4px 10px', border: '1px solid var(--accent)', borderRadius: 5, cursor: 'pointer', background: 'none' }}>
+            <button
+              onClick={onRefresh}
+              style={{
+                fontSize: 12,
+                color: 'var(--accent)',
+                padding: '4px 10px',
+                border: '1px solid var(--accent)',
+                borderRadius: 5,
+                cursor: 'pointer',
+                background: 'none',
+              }}
+            >
               重新加载
             </button>
           </div>
@@ -112,7 +161,16 @@ function SkeletonItem({ isMobile }) {
   );
 }
 
-function ArticleItem({ article, selected, onClick, onPlay, episodePlaying, isMobile, style, 'data-id': dataId }) {
+function ArticleItem({
+  article,
+  selected,
+  onClick,
+  onPlay,
+  episodePlaying,
+  isMobile,
+  style,
+  'data-id': dataId,
+}) {
   const [hovered, setHovered] = useState(false);
   const summary = (article.summary || '').replace(/<[^>]+>/g, '').slice(0, 80);
 
@@ -137,33 +195,82 @@ function ArticleItem({ article, selected, onClick, onPlay, episodePlaying, isMob
       <div style={{ display: 'flex', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {article.feedName && (
-            <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-light)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div
+              style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--accent-light)',
+                marginBottom: 2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
               {article.feedName}
             </div>
           )}
-          <div style={{ fontSize: isMobile ? 14 : 13, fontWeight: 400, color: 'var(--text-primary)', lineHeight: 1.45, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <div
+            style={{
+              fontSize: isMobile ? 14 : 13,
+              fontWeight: 400,
+              color: 'var(--text-primary)',
+              lineHeight: 1.45,
+              marginBottom: 4,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
             {article.title}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {article.audioUrl ? (
               <button
-                onClick={(e) => { e.stopPropagation(); onPlay?.(article); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPlay?.(article);
+                }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 3,
-                  fontSize: 11, fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  fontSize: 11,
+                  fontWeight: 500,
                   color: episodePlaying ? 'var(--accent)' : 'var(--accent-light)',
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
                 }}
               >
                 <Mic size={10} strokeWidth={episodePlaying ? 2.5 : 2} />
-                {episodePlaying ? '播放中' : (article.audioDuration || '播客')}
+                {episodePlaying ? '播放中' : article.audioDuration || '播客'}
               </button>
             ) : (
-              <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span
+                style={{
+                  fontSize: 11.5,
+                  color: 'var(--text-tertiary)',
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {summary}
               </span>
             )}
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, marginLeft: 'auto' }}>
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                flexShrink: 0,
+                marginLeft: 'auto',
+              }}
+            >
               {formatDate(article.pubDate)}
             </span>
           </div>

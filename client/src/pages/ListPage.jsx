@@ -1,16 +1,20 @@
-import { useStore } from '../store';
 import { useAudio } from '../AudioContext';
 import ArticleList from '../components/ArticleList';
+import { useStore } from '../store';
 
 export default function ListPage({ onNavigate }) {
-  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } = useStore();
+  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } =
+    useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
 
   const viewTitle =
-    selectedView.type === 'all'     ? '全部未读' :
-    selectedView.type === 'today'   ? '今日' :
-    selectedView.type === 'starred' ? '已收藏' :
-    selectedView.feed?.name;
+    selectedView.type === 'all'
+      ? '全部未读'
+      : selectedView.type === 'today'
+        ? '今日'
+        : selectedView.type === 'starred'
+          ? '已收藏'
+          : selectedView.feed?.name;
 
   const handleSelectArticle = (article) => {
     selectArticle(article);

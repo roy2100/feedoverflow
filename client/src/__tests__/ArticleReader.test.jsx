@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+
 import ArticleReader from '../components/ArticleReader';
 
 const noop = () => {};
@@ -31,7 +32,7 @@ function renderReader(article, overrides = {}) {
       currentEpisode={null}
       isPlaying={false}
       {...overrides}
-    />
+    />,
   );
 }
 
@@ -92,42 +93,34 @@ describe('article without content (list endpoint)', () => {
     renderReader(BASE_ARTICLE);
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
-        `/api/articles/${BASE_ARTICLE.id}/content?feedId=${BASE_ARTICLE.feedId}`
-      )
+        `/api/articles/${BASE_ARTICLE.id}/content?feedId=${BASE_ARTICLE.feedId}`,
+      ),
     );
   });
 
   it('hides spinner after content loads', async () => {
     fetch.mockResolvedValue({ json: () => Promise.resolve({ content: '<p>Fetched</p>' }) });
     renderReader(BASE_ARTICLE);
-    await waitFor(() =>
-      expect(screen.queryByText('加载中…')).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText('加载中…')).not.toBeInTheDocument());
   });
 
   it('renders content returned by the API', async () => {
     fetch.mockResolvedValue({ json: () => Promise.resolve({ content: '<p>Fetched content</p>' }) });
     renderReader(BASE_ARTICLE);
-    await waitFor(() =>
-      expect(screen.getByText('Fetched content')).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText('Fetched content')).toBeInTheDocument());
   });
 
   it('falls back to summary when API returns empty content', async () => {
     fetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
     renderReader(BASE_ARTICLE);
-    await waitFor(() =>
-      expect(screen.queryByText('加载中…')).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText('加载中…')).not.toBeInTheDocument());
     expect(screen.getByText(BASE_ARTICLE.summary)).toBeInTheDocument();
   });
 
   it('falls back to summary when fetch rejects', async () => {
     fetch.mockRejectedValue(new Error('Network error'));
     renderReader(BASE_ARTICLE);
-    await waitFor(() =>
-      expect(screen.queryByText('加载中…')).not.toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.queryByText('加载中…')).not.toBeInTheDocument());
     expect(screen.getByText(BASE_ARTICLE.summary)).toBeInTheDocument();
   });
 });

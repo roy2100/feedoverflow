@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
+
 import type { Express, Request } from 'express';
 import { rateLimit } from 'express-rate-limit';
+
 import { db } from './db.ts';
 
 export const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
@@ -8,10 +10,11 @@ export const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
 export function parseCookies(req: Request): Record<string, string> {
   const list: Record<string, string> = {};
   const rc = req.headers.cookie;
-  if (rc) rc.split(';').forEach(cookie => {
-    const [k, ...v] = cookie.split('=');
-    list[k.trim()] = decodeURIComponent(v.join('='));
-  });
+  if (rc)
+    rc.split(';').forEach((cookie) => {
+      const [k, ...v] = cookie.split('=');
+      list[k.trim()] = decodeURIComponent(v.join('='));
+    });
   return list;
 }
 
@@ -35,9 +38,11 @@ const sessionCookie = (req: Request, token: string, maxAge: number) =>
 
 export function registerAuth(app: Express): void {
   if (process.env.AUTH_USER && process.env.AUTH_PASS) {
-    const stmtInsertSession = db.prepare('INSERT OR REPLACE INTO sessions (token, created_at) VALUES (?, ?)');
+    const stmtInsertSession = db.prepare(
+      'INSERT OR REPLACE INTO sessions (token, created_at) VALUES (?, ?)',
+    );
     const stmtDeleteSession = db.prepare('DELETE FROM sessions WHERE token = ?');
-    const stmtFindSession   = db.prepare('SELECT created_at FROM sessions WHERE token = ?');
+    const stmtFindSession = db.prepare('SELECT created_at FROM sessions WHERE token = ?');
     const stmtCleanSessions = db.prepare('DELETE FROM sessions WHERE created_at < ?');
 
     app.post('/api/login', loginLimiter, (req, res) => {
@@ -47,8 +52,10 @@ export function registerAuth(app: Express): void {
       }
       const expUser = process.env.AUTH_USER as string;
       const expPass = process.env.AUTH_PASS as string;
-      const uBuf = Buffer.from(user), eBuf = Buffer.from(expUser);
-      const pBuf = Buffer.from(pass), fBuf = Buffer.from(expPass);
+      const uBuf = Buffer.from(user),
+        eBuf = Buffer.from(expUser);
+      const pBuf = Buffer.from(pass),
+        fBuf = Buffer.from(expPass);
       const userOk = uBuf.length === eBuf.length && crypto.timingSafeEqual(uBuf, eBuf);
       const passOk = pBuf.length === fBuf.length && crypto.timingSafeEqual(pBuf, fBuf);
       if (!userOk || !passOk) return res.status(401).json({ error: 'Invalid credentials' });

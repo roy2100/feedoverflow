@@ -1,18 +1,19 @@
-import express from 'express';
-import compression from 'compression';
-import cors from 'cors';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import compression from 'compression';
+import cors from 'cors';
+import express from 'express';
 import { parseStringPromise } from 'xml2js';
 
-import { db } from './db.ts';
-import { parseURL } from './parse-url.ts';
-import { registerAuth } from './auth.ts';
 import { dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
+import { registerAuth } from './auth.ts';
 import { getCachedFeed, clearCache, cacheReady } from './cache.ts';
+import { db } from './db.ts';
 import { getFavicon, DEFAULT_FAVICON, DEFAULT_CONTENT_TYPE } from './favicon.ts';
 import { registerMcp } from './mcp.ts';
+import { parseURL } from './parse-url.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,7 +52,10 @@ app.post('/api/feeds', async (req, res) => {
     const parsed = await parseURL(resolveUrl(url));
     feedTitle = (typeof name === 'string' && name.trim()) || parsed.title?.trim() || url;
   } catch (err) {
-    return res.status(400).json({ error: '无法解析该 Feed，请检查 URL 是否正确', detail: (err as Error)?.message || String(err) });
+    return res.status(400).json({
+      error: '无法解析该 Feed，请检查 URL 是否正确',
+      detail: (err as Error)?.message || String(err),
+    });
   }
   const id = crypto.randomUUID();
   db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
@@ -68,17 +72,23 @@ app.post('/api/feeds/import-opml', async (req, res) => {
     function extract(nodes: any[]) {
       for (const node of nodes) {
         const attrs = node.$ || {};
-        if (attrs.xmlUrl) candidates.push({ name: attrs.text || attrs.title || attrs.xmlUrl, url: attrs.xmlUrl });
+        if (attrs.xmlUrl)
+          candidates.push({ name: attrs.text || attrs.title || attrs.xmlUrl, url: attrs.xmlUrl });
         if (node.outline?.length) extract(node.outline);
       }
     }
     extract(bodyOutlines);
-    const existingUrls = new Set((db.prepare('SELECT url FROM feeds').all() as Array<{ url: string }>).map(f => f.url));
+    const existingUrls = new Set(
+      (db.prepare('SELECT url FROM feeds').all() as Array<{ url: string }>).map((f) => f.url),
+    );
     const ins = db.prepare('INSERT OR IGNORE INTO feeds (id,name,url) VALUES (?,?,?)');
     const importedFeeds: Array<{ id: string; name: string; url: string }> = [];
     let skipped = 0;
     for (const feed of candidates) {
-      if (existingUrls.has(feed.url)) { skipped++; continue; }
+      if (existingUrls.has(feed.url)) {
+        skipped++;
+        continue;
+      }
       const id = crypto.randomUUID();
       ins.run(id, feed.name, feed.url);
       importedFeeds.push({ id, ...feed });
@@ -92,7 +102,9 @@ app.post('/api/feeds/import-opml', async (req, res) => {
 
 app.patch('/api/feeds/:id', (req, res) => {
   const { name } = req.body;
-  const info = db.prepare('UPDATE feeds SET name = ? WHERE id = ?').run(name || null, req.params.id);
+  const info = db
+    .prepare('UPDATE feeds SET name = ? WHERE id = ?')
+    .run(name || null, req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
@@ -106,8 +118,11 @@ app.delete('/api/feeds/:id', (req, res) => {
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 app.get('/api/settings', (_req, res) => {
-  const rows = db.prepare('SELECT key, value FROM settings').all() as Array<{ key: string; value: string }>;
-  res.json(Object.fromEntries(rows.map(r => [r.key, r.value])));
+  const rows = db.prepare('SELECT key, value FROM settings').all() as Array<{
+    key: string;
+    value: string;
+  }>;
+  res.json(Object.fromEntries(rows.map((r) => [r.key, r.value])));
 });
 
 app.patch('/api/settings', (req, res) => {
@@ -125,9 +140,15 @@ app.patch('/api/settings', (req, res) => {
 app.get('/api/fetch-content', async (req, res) => {
   const url = req.query.url as string | undefined;
   if (!url) return res.status(400).json({ error: 'url required' });
-  const fetchHeaders = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
+  const fetchHeaders = {
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
   try {
-    const response = await fetch(url, { headers: fetchHeaders, signal: AbortSignal.timeout(15000) });
+    const response = await fetch(url, {
+      headers: fetchHeaders,
+      signal: AbortSignal.timeout(15000),
+    });
     if (!response.ok) return res.status(502).json({ error: `Upstream ${response.status}` });
     const html = await response.text();
     // jsdom + Readability are ~100MB resident and only needed for this on-demand
@@ -148,7 +169,11 @@ app.get('/api/fetch-content', async (req, res) => {
 app.get('/api/favicon', async (req, res) => {
   const domain = (req.query.domain as string | undefined) ?? '';
   let result = null;
-  try { result = await getFavicon(domain); } catch { /* fall through to default */ }
+  try {
+    result = await getFavicon(domain);
+  } catch {
+    /* fall through to default */
+  }
   if (result) {
     res.set('Cache-Control', 'public, max-age=604800'); // overrides the global /api no-store
     res.type(result.contentType).send(result.image);
@@ -163,26 +188,38 @@ app.get('/api/favicon', async (req, res) => {
 // ── Articles ───────────────────────────────────────────────────────────────────
 
 app.get('/api/feeds/:id/articles', async (req, res) => {
-  const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(req.params.id) as Feed | undefined;
+  const feed = db.prepare('SELECT * FROM feeds WHERE id = ?').get(req.params.id) as
+    | Feed
+    | undefined;
   if (!feed) return res.status(404).json({ error: 'Not found' });
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   try {
     const cached = await getCachedFeed(feed, ac.signal);
     if (ac.signal.aborted || !cached) return;
-    const liveArticles = enrich(cached.items.slice(0, 50), feed.id, feed.name, { withContent: false });
-    const liveIds = new Set(liveArticles.map(a => a.id));
-    const persisted = db.prepare(
-      'SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_date DESC'
-    ).all(feed.id) as ArticleStateRow[];
+    const liveArticles = enrich(cached.items.slice(0, 50), feed.id, feed.name, {
+      withContent: false,
+    });
+    const liveIds = new Set(liveArticles.map((a) => a.id));
+    const persisted = db
+      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_date DESC')
+      .all(feed.id) as ArticleStateRow[];
     const historicArticles: Article[] = persisted
-      .filter(r => !liveIds.has(r.article_id))
-      .map(r => ({
-        id: r.article_id, feedId: r.feed_id, feedName: r.feed_name,
-        title: r.title, summary: (r.summary || '').slice(0, 300), content: '',
-        link: r.link, pubDate: r.pub_date, author: r.author || '',
-        audioUrl: r.audio_url || '', audioDuration: r.audio_duration || '',
-        isRead: !!r.is_read, isStarred: !!r.is_starred,
+      .filter((r) => !liveIds.has(r.article_id))
+      .map((r) => ({
+        id: r.article_id,
+        feedId: r.feed_id,
+        feedName: r.feed_name,
+        title: r.title,
+        summary: (r.summary || '').slice(0, 300),
+        content: '',
+        link: r.link,
+        pubDate: r.pub_date,
+        author: r.author || '',
+        audioUrl: r.audio_url || '',
+        audioDuration: r.audio_duration || '',
+        isRead: !!r.is_read,
+        isStarred: !!r.is_starred,
       }));
     const articles = dedupById([...liveArticles, ...historicArticles]);
     articles.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
@@ -198,69 +235,84 @@ app.get('/api/all-articles', async (req, res) => {
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
-    feeds.map(async f => {
+    feeds.map(async (f) => {
       const cached = await getCachedFeed(f, ac.signal);
       return cached ? enrich(cached.items.slice(0, 5), f.id, f.name, { withContent: false }) : [];
-    })
+    }),
   );
   if (ac.signal.aborted) return;
   const articles = dedupById(
     results
       .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
-      .flatMap(r => r.value)
-      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .flatMap((r) => r.value)
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()),
   );
   res.json({ articles, cacheReady });
 });
 
 app.get('/api/today', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   const results = await Promise.allSettled(
-    feeds.map(async f => {
+    feeds.map(async (f) => {
       const cached = await getCachedFeed(f, ac.signal);
       if (!cached) return [];
-      const todayItems = cached.items.filter(item =>
-        new Date(item.pubDate || item.isoDate || 0).getTime() >= todayStart.getTime()
+      const todayItems = cached.items.filter(
+        (item) => new Date(item.pubDate || item.isoDate || 0).getTime() >= todayStart.getTime(),
       );
       return enrich(todayItems, f.id, f.name, { withContent: false });
-    })
+    }),
   );
   if (ac.signal.aborted) return;
   const articles = dedupById(
     results
       .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
-      .flatMap(r => r.value)
-      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .flatMap((r) => r.value)
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()),
   );
   res.json({ articles, cacheReady });
 });
 
 app.get('/api/starred', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC').all() as ArticleStateRow[];
+  const rows = db
+    .prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC')
+    .all() as ArticleStateRow[];
   res.json({
-    articles: rows.map(r => ({
-      id: r.article_id, feedId: r.feed_id, feedName: r.feed_name,
-      title: r.title, summary: r.summary, content: r.content,
-      link: r.link, pubDate: r.pub_date, author: r.author,
-      audioUrl: r.audio_url || '', audioDuration: r.audio_duration || '',
-      isRead: !!r.is_read, isStarred: true,
+    articles: rows.map((r) => ({
+      id: r.article_id,
+      feedId: r.feed_id,
+      feedName: r.feed_name,
+      title: r.title,
+      summary: r.summary,
+      content: r.content,
+      link: r.link,
+      pubDate: r.pub_date,
+      author: r.author,
+      audioUrl: r.audio_url || '',
+      audioDuration: r.audio_duration || '',
+      isRead: !!r.is_read,
+      isStarred: true,
     })),
   });
 });
 
 app.get('/api/unread-counts', (_req, res) => {
-  const rows = db.prepare(
-    'SELECT feed_id, COUNT(*) AS count FROM article_states WHERE is_read = 0 GROUP BY feed_id'
-  ).all() as Array<{ feed_id: string; count: number }>;
-  res.json(Object.fromEntries(rows.map(r => [r.feed_id, r.count])));
+  const rows = db
+    .prepare(
+      'SELECT feed_id, COUNT(*) AS count FROM article_states WHERE is_read = 0 GROUP BY feed_id',
+    )
+    .all() as Array<{ feed_id: string; count: number }>;
+  res.json(Object.fromEntries(rows.map((r) => [r.feed_id, r.count])));
 });
 
 app.get('/api/starred/count', (_req, res) => {
   res.set('Cache-Control', 'private, max-age=10');
-  const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1').get() as { n: number };
+  const { n } = db
+    .prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1')
+    .get() as { n: number };
   res.json({ count: n });
 });
 

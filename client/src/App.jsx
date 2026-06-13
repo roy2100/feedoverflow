@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useStore } from './store';
+
 import { AudioContext } from './AudioContext';
-import { useIsMobile } from './hooks/useIsMobile';
-import FeedSidebar from './components/FeedSidebar';
 import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
+import FeedSidebar from './components/FeedSidebar';
+import LoginForm from './components/LoginForm';
+import { useIsMobile } from './hooks/useIsMobile';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
-import LoginForm from './components/LoginForm';
+import { useStore } from './store';
 
-const AddFeedModal     = lazy(() => import('./components/AddFeedModal'));
+const AddFeedModal = lazy(() => import('./components/AddFeedModal'));
 const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
-const SettingsModal    = lazy(() => import('./components/SettingsModal'));
-const PodcastPlayer    = lazy(() => import('./components/PodcastPlayer'));
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const PodcastPlayer = lazy(() => import('./components/PodcastPlayer'));
 
 export default function App() {
   const [authed, setAuthed] = useState(null); // null=checking, false=unauthed, true=authed
@@ -30,8 +31,20 @@ export default function App() {
   const readerRef = useRef(null);
 
   const {
-    feeds, articles, selectedView, selectedArticle, loadingArticles,
-    init, selectView, selectArticle, toggleStar, addFeed, importFeeds, deleteFeed, updateFeed, loadArticles,
+    feeds,
+    articles,
+    selectedView,
+    selectedArticle,
+    loadingArticles,
+    init,
+    selectView,
+    selectArticle,
+    toggleStar,
+    addFeed,
+    importFeeds,
+    deleteFeed,
+    updateFeed,
+    loadArticles,
   } = useStore();
 
   useEffect(() => {
@@ -39,26 +52,39 @@ export default function App() {
       if (isMobile) return;
       if (showAddModal || showManageModal || showSettingsModal) return;
       const tag = e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable)
+        return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'Escape') {
-        if (readingMode) { e.preventDefault(); setReadingMode(false); }
+        if (readingMode) {
+          e.preventDefault();
+          setReadingMode(false);
+        }
         return;
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
-        const idx = articles.findIndex(a => a.id === selectedArticle?.id);
+        const idx = articles.findIndex((a) => a.id === selectedArticle?.id);
         const next = idx === -1 ? articles[0] : articles[idx + 1];
         if (next) selectArticle(next);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        const idx = articles.findIndex(a => a.id === selectedArticle?.id);
+        const idx = articles.findIndex((a) => a.id === selectedArticle?.id);
         if (idx > 0) selectArticle(articles[idx - 1]);
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [articles, selectedArticle, showAddModal, showManageModal, showSettingsModal, isMobile, selectArticle, readingMode]);
+  }, [
+    articles,
+    selectedArticle,
+    showAddModal,
+    showManageModal,
+    showSettingsModal,
+    isMobile,
+    selectArticle,
+    readingMode,
+  ]);
 
   // Never leave the reader stuck fullscreen with nothing to show
   useEffect(() => {
@@ -71,12 +97,19 @@ export default function App() {
 
   useEffect(() => {
     fetch('/api/auth-check')
-      .then(r => r.json())
-      .then(data => {
+      .then((r) => r.json())
+      .then((data) => {
         setAuthed(data.authed);
-        if (data.authed) { init(); loadArticles({ type: 'today' }); }
+        if (data.authed) {
+          init();
+          loadArticles({ type: 'today' });
+        }
       })
-      .catch(() => { setAuthed(true); init(); loadArticles({ type: 'today' }); });
+      .catch(() => {
+        setAuthed(true);
+        init();
+        loadArticles({ type: 'today' });
+      });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -129,44 +162,85 @@ export default function App() {
   };
 
   const viewTitle =
-    selectedView.type === 'all'     ? '全部' :
-    selectedView.type === 'today'   ? '今日' :
-    selectedView.type === 'starred' ? '已收藏' :
-    selectedView.feed?.name;
+    selectedView.type === 'all'
+      ? '全部'
+      : selectedView.type === 'today'
+        ? '今日'
+        : selectedView.type === 'starred'
+          ? '已收藏'
+          : selectedView.feed?.name;
 
   const addModal = showAddModal && (
     <Suspense fallback={null}>
-      <AddFeedModal
-        onClose={() => setShowAddModal(false)}
-        onAdd={addFeed}
-        onImport={importFeeds}
-      />
+      <AddFeedModal onClose={() => setShowAddModal(false)} onAdd={addFeed} onImport={importFeeds} />
     </Suspense>
   );
 
   if (authed === null) return <div style={{ height: '100dvh', background: 'var(--bg)' }} />;
-  if (authed === false) return <LoginForm onLogin={() => { setAuthed(true); init(); loadArticles({ type: 'today' }); }} />;
+  if (authed === false)
+    return (
+      <LoginForm
+        onLogin={() => {
+          setAuthed(true);
+          init();
+          loadArticles({ type: 'today' });
+        }}
+      />
+    );
 
   if (isMobile) {
     const positions = {
-      feeds:   { feeds: 'translateX(0)',     list: 'translateX(100%)',  article: 'translateX(100%)' },
-      list:    { feeds: 'translateX(-100%)', list: 'translateX(0)',     article: 'translateX(100%)' },
-      article: { feeds: 'translateX(-100%)', list: 'translateX(0)',     article: 'translateX(0)'   },
+      feeds: { feeds: 'translateX(0)', list: 'translateX(100%)', article: 'translateX(100%)' },
+      list: { feeds: 'translateX(-100%)', list: 'translateX(0)', article: 'translateX(100%)' },
+      article: { feeds: 'translateX(-100%)', list: 'translateX(0)', article: 'translateX(0)' },
     };
     const tx = positions[mobilePage];
     const transition = 'transform 0.28s ease';
 
     return (
       <AudioContext.Provider value={audioCtx}>
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: 'var(--bg)' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100dvh',
+            overflow: 'hidden',
+            background: 'var(--bg)',
+          }}
+        >
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-            <div style={{ position: 'absolute', inset: 0, transform: tx.feeds, transition, willChange: 'transform' }}>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                transform: tx.feeds,
+                transition,
+                willChange: 'transform',
+              }}
+            >
               <FeedsPage onOpenAddModal={() => setShowAddModal(true)} onNavigate={setMobilePage} />
             </div>
-            <div style={{ position: 'absolute', inset: 0, transform: tx.list, transition, willChange: 'transform' }}>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                transform: tx.list,
+                transition,
+                willChange: 'transform',
+              }}
+            >
               <ListPage onNavigate={setMobilePage} />
             </div>
-            <div style={{ position: 'absolute', inset: 0, transform: tx.article, transition, willChange: 'transform', zIndex: 10 }}>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                transform: tx.article,
+                transition,
+                willChange: 'transform',
+                zIndex: 10,
+              }}
+            >
               <ReaderPage onNavigate={setMobilePage} />
             </div>
           </div>
@@ -189,7 +263,9 @@ export default function App() {
 
   return (
     <AudioContext.Provider value={audioCtx}>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+      <div
+        style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}
+      >
         {!readingMode && (
           <FeedSidebar
             feeds={feeds}
@@ -214,7 +290,15 @@ export default function App() {
             isPlaying={isPlaying}
           />
         )}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+            overflow: 'hidden',
+          }}
+        >
           <ArticleReader
             article={selectedArticle}
             onToggleStar={toggleStar}
@@ -223,7 +307,7 @@ export default function App() {
             isPlaying={isPlaying}
             scrollRef={readerRef}
             readingMode={readingMode}
-            onToggleReadingMode={() => setReadingMode(v => !v)}
+            onToggleReadingMode={() => setReadingMode((v) => !v)}
           />
           {currentEpisode && (
             <Suspense fallback={null}>
@@ -257,4 +341,3 @@ export default function App() {
     </AudioContext.Provider>
   );
 }
-

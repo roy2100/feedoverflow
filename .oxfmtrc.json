@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "singleQuote": true,
+  "semi": true,
+  "trailingComma": "all",
+  "sortImports": true,
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/build/**",
+    "**/dev-dist/**",
+    "**/node_modules/**",
+    "**/coverage/**",
+    "**/*.min.js",
+    "server/vendor/**",
+    "docs/**",
+    "**/*.md"
+  ]
+}

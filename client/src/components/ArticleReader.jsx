@@ -1,17 +1,31 @@
-import { useState, useEffect } from 'react';
 import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleString('zh-CN', {
-    year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
-export default function ArticleReader({ isMobile, onBack, article, onToggleStar, onPlay, currentEpisode, isPlaying, scrollRef, readingMode, onToggleReadingMode }) {
+export default function ArticleReader({
+  isMobile,
+  onBack,
+  article,
+  onToggleStar,
+  onPlay,
+  currentEpisode,
+  isPlaying,
+  scrollRef,
+  readingMode,
+  onToggleReadingMode,
+}) {
   const [fullContent, setFullContent] = useState(null);
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
@@ -19,15 +33,18 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
 
   useEffect(() => {
     setFullContent(null);
-    if (!article) { setRssContent(null); return; }
+    if (!article) {
+      setRssContent(null);
+      return;
+    }
     if (article.content) {
       // starred articles already carry content from article_states
       setRssContent(article.content);
     } else {
       setRssContent(null);
       fetch(`/api/articles/${article.id}/content?feedId=${article.feedId}`)
-        .then(r => r.json())
-        .then(d => setRssContent(d.content || ''))
+        .then((r) => r.json())
+        .then((d) => setRssContent(d.content || ''))
         .catch(() => setRssContent(''));
     }
   }, [article?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,18 +65,25 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
   if (!article) {
     if (isMobile) return null;
     return (
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-reader)',
-        flexDirection: 'column',
-        gap: 12,
-      }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-reader)',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity="0.15">
-          <rect x="8" y="10" width="32" height="28" rx="3" stroke="#141210" strokeWidth="2"/>
-          <path d="M14 18h20M14 24h20M14 30h12" stroke="#141210" strokeWidth="2" strokeLinecap="round"/>
+          <rect x="8" y="10" width="32" height="28" rx="3" stroke="#141210" strokeWidth="2" />
+          <path
+            d="M14 18h20M14 24h20M14 30h12"
+            stroke="#141210"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
         <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>选择一篇文章开始阅读</p>
       </div>
@@ -90,20 +114,32 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
     >
       {/* Mobile back header */}
       {isMobile && (
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          padding: '0 12px',
-          height: 52, flexShrink: 0,
-          borderBottom: '1px solid var(--border-light)',
-          background: 'var(--bg-reader)',
-          position: 'sticky', top: 0, zIndex: 10,
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            height: 52,
+            flexShrink: 0,
+            borderBottom: '1px solid var(--border-light)',
+            background: 'var(--bg-reader)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+          }}
+        >
           <button
             onClick={onBack}
             style={{
-              display: 'flex', alignItems: 'center', gap: 2,
-              color: 'var(--accent)', background: 'none', border: 'none',
-              cursor: 'pointer', padding: '6px 8px 6px 0', fontSize: 15,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              color: 'var(--accent)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '6px 8px 6px 0',
+              fontSize: 15,
               flexShrink: 0,
             }}
           >
@@ -114,9 +150,14 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
           <button
             onClick={() => onToggleStar(article)}
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
               color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
-              display: 'flex', alignItems: 'center', padding: 6, borderRadius: 5,
+              display: 'flex',
+              alignItems: 'center',
+              padding: 6,
+              borderRadius: 5,
             }}
           >
             <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
@@ -127,63 +168,81 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                display: 'flex', alignItems: 'center', gap: 3,
-                fontSize: 13, color: 'var(--accent)',
-                textDecoration: 'none', padding: 6,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 13,
+                color: 'var(--accent)',
+                textDecoration: 'none',
+                padding: 6,
               }}
             >
               原文
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                <path d="M2 10L10 2M10 2H5M10 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path
+                  d="M2 10L10 2M10 2H5M10 2v5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </a>
           )}
         </div>
       )}
 
-      <div style={{
-        maxWidth: readingMode ? 820 : 680,
-        width: '100%',
-        margin: '0 auto',
-        padding: isMobile ? '24px 20px 80px' : '48px 48px 80px',
-      }}>
+      <div
+        style={{
+          maxWidth: readingMode ? 820 : 680,
+          width: '100%',
+          margin: '0 auto',
+          padding: isMobile ? '24px 20px 80px' : '48px 48px 80px',
+        }}
+      >
         {/* Feed name */}
         {article.feedName && (
-          <div style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--accent)',
-            marginBottom: 12,
-          }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--accent)',
+              marginBottom: 12,
+            }}
+          >
             {article.feedName}
           </div>
         )}
 
         {/* Title */}
-        <h1 style={{
-          fontFamily: 'var(--font-serif)',
-          fontSize: isMobile ? 22 : 'clamp(22px, 3vw, 28px)',
-          fontWeight: 600,
-          lineHeight: 1.35,
-          color: 'var(--text-primary)',
-          marginBottom: 14,
-          letterSpacing: '-0.01em',
-        }}>
+        <h1
+          style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: isMobile ? 22 : 'clamp(22px, 3vw, 28px)',
+            fontWeight: 600,
+            lineHeight: 1.35,
+            color: 'var(--text-primary)',
+            marginBottom: 14,
+            letterSpacing: '-0.01em',
+          }}
+        >
           {article.title}
         </h1>
 
         {/* Meta */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: isMobile ? 10 : 16,
-          marginBottom: 32,
-          paddingBottom: 24,
-          borderBottom: '1px solid var(--border-light)',
-          flexWrap: isMobile ? 'wrap' : 'nowrap',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: isMobile ? 10 : 16,
+            marginBottom: 32,
+            paddingBottom: 24,
+            borderBottom: '1px solid var(--border-light)',
+            flexWrap: isMobile ? 'wrap' : 'nowrap',
+          }}
+        >
           {article.author && (
             <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 500 }}>
               {article.author}
@@ -200,28 +259,50 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
                   onClick={onToggleReadingMode}
                   title={readingMode ? '退出专注阅读 (Esc)' : '专注阅读'}
                   style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
                     color: readingMode ? 'var(--accent)' : 'var(--text-tertiary)',
-                    display: 'flex', alignItems: 'center', padding: 4, borderRadius: 5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: 4,
+                    borderRadius: 5,
                     transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => { if (!readingMode) e.currentTarget.style.color = 'var(--accent)'; }}
-                  onMouseLeave={e => { if (!readingMode) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                  onMouseEnter={(e) => {
+                    if (!readingMode) e.currentTarget.style.color = 'var(--accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!readingMode) e.currentTarget.style.color = 'var(--text-tertiary)';
+                  }}
                 >
-                  {readingMode ? <Minimize2 size={15} strokeWidth={1.5} /> : <Maximize2 size={15} strokeWidth={1.5} />}
+                  {readingMode ? (
+                    <Minimize2 size={15} strokeWidth={1.5} />
+                  ) : (
+                    <Maximize2 size={15} strokeWidth={1.5} />
+                  )}
                 </button>
               )}
               <button
                 onClick={() => onToggleStar(article)}
                 title={article.isStarred ? '取消收藏' : '收藏'}
                 style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
                   color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
-                  display: 'flex', alignItems: 'center', padding: 4, borderRadius: 5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 4,
+                  borderRadius: 5,
                   transition: 'color 0.15s',
                 }}
-                onMouseEnter={e => { if (!article.isStarred) e.currentTarget.style.color = '#F5C518'; }}
-                onMouseLeave={e => { if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                onMouseEnter={(e) => {
+                  if (!article.isStarred) e.currentTarget.style.color = '#F5C518';
+                }}
+                onMouseLeave={(e) => {
+                  if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)';
+                }}
               >
                 <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
               </button>
@@ -231,22 +312,52 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
                   onClick={handleFetchFull}
                   title="从原始网页提取全文"
                   style={{
-                    fontSize: 12, color: 'var(--text-tertiary)',
-                    background: 'none', border: '1px solid var(--border)',
-                    borderRadius: 5, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '3px 8px', transition: 'color 0.15s, border-color 0.15s',
+                    fontSize: 12,
+                    color: 'var(--text-tertiary)',
+                    background: 'none',
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    transition: 'color 0.15s, border-color 0.15s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--accent)';
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--text-tertiary)';
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                  }}
                 >
                   <AlignLeft size={11} />
                   加载全文
                 </button>
               )}
               {fullContent === 'loading' && (
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 11, height: 11, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-tertiary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 11,
+                      height: 11,
+                      border: '1.5px solid var(--border)',
+                      borderTopColor: 'var(--accent)',
+                      borderRadius: '50%',
+                      display: 'inline-block',
+                      animation: 'spin 0.8s linear infinite',
+                    }}
+                  />
                   加载中…
                 </span>
               )}
@@ -255,13 +366,18 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
                   onClick={() => setFullContent(null)}
                   title="恢复 RSS 原文"
                   style={{
-                    fontSize: 12, color: 'var(--accent)',
-                    background: 'none', border: '1px solid var(--accent)',
-                    borderRadius: 5, cursor: 'pointer',
-                    padding: '3px 8px', opacity: 0.7, transition: 'opacity 0.15s',
+                    fontSize: 12,
+                    color: 'var(--accent)',
+                    background: 'none',
+                    border: '1px solid var(--accent)',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    padding: '3px 8px',
+                    opacity: 0.7,
+                    transition: 'opacity 0.15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                  onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
                 >
                   全文模式
                 </button>
@@ -272,16 +388,27 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
-                    fontSize: 12, color: 'var(--accent)',
-                    textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
-                    opacity: 0.8, transition: 'opacity 0.15s',
+                    fontSize: 12,
+                    color: 'var(--accent)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    opacity: 0.8,
+                    transition: 'opacity 0.15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
-                  onMouseLeave={e => e.currentTarget.style.opacity = 0.8}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.8)}
                 >
                   原文
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 10L10 2M10 2H5M10 2v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path
+                      d="M2 10L10 2M10 2H5M10 2v5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </a>
               )}
@@ -292,10 +419,15 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
             <button
               onClick={handleFetchFull}
               style={{
-                fontSize: 12, color: 'var(--text-tertiary)',
-                background: 'none', border: '1px solid var(--border)',
-                borderRadius: 5, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
                 padding: '3px 8px',
               }}
             >
@@ -304,8 +436,26 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
             </button>
           )}
           {isMobile && fullContent === 'loading' && (
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 11, height: 11, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  width: 11,
+                  height: 11,
+                  border: '1.5px solid var(--border)',
+                  borderTopColor: 'var(--accent)',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  animation: 'spin 0.8s linear infinite',
+                }}
+              />
               加载中…
             </span>
           )}
@@ -313,9 +463,12 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
             <button
               onClick={() => setFullContent(null)}
               style={{
-                fontSize: 12, color: 'var(--accent)',
-                background: 'none', border: '1px solid var(--accent)',
-                borderRadius: 5, cursor: 'pointer',
+                fontSize: 12,
+                color: 'var(--accent)',
+                background: 'none',
+                border: '1px solid var(--accent)',
+                borderRadius: 5,
+                cursor: 'pointer',
                 padding: '3px 8px',
               }}
             >
@@ -326,15 +479,23 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
 
         {/* Podcast play button */}
         {article.audioUrl && (
-          <div style={{
-            marginBottom: 32,
-            padding: '12px 16px',
-            background: 'var(--bg-panel)',
-            borderRadius: 8,
-            border: '1px solid var(--border-light)',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <Mic size={13} strokeWidth={2} style={{ color: 'var(--accent-light)', flexShrink: 0 }} />
+          <div
+            style={{
+              marginBottom: 32,
+              padding: '12px 16px',
+              background: 'var(--bg-panel)',
+              borderRadius: 8,
+              border: '1px solid var(--border-light)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <Mic
+              size={13}
+              strokeWidth={2}
+              style={{ color: 'var(--accent-light)', flexShrink: 0 }}
+            />
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
               播客{article.audioDuration ? ` · ${article.audioDuration}` : ''}
             </span>
@@ -342,23 +503,36 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
               onClick={() => onPlay(article)}
               style={{
                 marginLeft: 'auto',
-                display: 'flex', alignItems: 'center', gap: 5,
-                fontSize: 12, fontWeight: 500, color: 'var(--accent)',
-                padding: '4px 10px', borderRadius: 5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--accent)',
+                padding: '4px 10px',
+                borderRadius: 5,
                 border: '1px solid var(--accent)',
-                background: 'none', cursor: 'pointer',
+                background: 'none',
+                cursor: 'pointer',
                 transition: 'background 0.12s',
                 flexShrink: 0,
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
             >
-              {currentEpisode?.id === article.id && isPlaying
-                ? <><Pause size={11} strokeWidth={2} /> 暂停</>
-                : currentEpisode?.id === article.id
-                  ? <><Play size={11} strokeWidth={2} /> 继续</>
-                  : <><Play size={11} strokeWidth={2} /> 播放</>
-              }
+              {currentEpisode?.id === article.id && isPlaying ? (
+                <>
+                  <Pause size={11} strokeWidth={2} /> 暂停
+                </>
+              ) : currentEpisode?.id === article.id ? (
+                <>
+                  <Play size={11} strokeWidth={2} /> 继续
+                </>
+              ) : (
+                <>
+                  <Play size={11} strokeWidth={2} /> 播放
+                </>
+              )}
             </button>
           </div>
         )}
@@ -367,11 +541,42 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
         {fullContent?.error ? (
           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
             加载失败：{fullContent.error}。
-            <button onClick={() => setFullContent(null)} style={{ marginLeft: 8, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>重置</button>
+            <button
+              onClick={() => setFullContent(null)}
+              style={{
+                marginLeft: 8,
+                color: 'var(--accent)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
+              重置
+            </button>
           </div>
         ) : isLoadingContent ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
-            <span style={{ width: 12, height: 12, border: '1.5px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '20px 0',
+              color: 'var(--text-tertiary)',
+              fontSize: 13,
+            }}
+          >
+            <span
+              style={{
+                width: 12,
+                height: 12,
+                border: '1.5px solid var(--border)',
+                borderTopColor: 'var(--accent)',
+                borderRadius: '50%',
+                display: 'inline-block',
+                animation: 'spin 0.8s linear infinite',
+              }}
+            />
             加载中…
           </div>
         ) : hasHtml ? (
@@ -382,9 +587,12 @@ export default function ArticleReader({ isMobile, onBack, article, onToggleStar,
           />
         ) : (
           <div className="rss-article" style={articleContentStyle}>
-            {rawContent.split('\n').filter(Boolean).map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
+            {rawContent
+              .split('\n')
+              .filter(Boolean)
+              .map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
           </div>
         )}
       </div>

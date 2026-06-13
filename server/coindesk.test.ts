@@ -4,8 +4,9 @@
 // with "bad record mac" because the 308 redirect triggered a new TLS connection
 // that the proxy couldn't handle via session resumption.
 
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
 import { parseURL } from './parse-url.ts';
 
 test('coindesk: trailing-slash URL returns articles', async () => {

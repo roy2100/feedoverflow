@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 import { useStore } from '../store';
 
 const INITIAL_STATE = {
@@ -94,7 +95,10 @@ describe('selectArticle', () => {
 // ─── deleteFeed ──────────────────────────────────────────────────────────────
 
 describe('deleteFeed', () => {
-  const feeds = [{ id: 1, name: 'Feed A' }, { id: 2, name: 'Feed B' }];
+  const feeds = [
+    { id: 1, name: 'Feed A' },
+    { id: 2, name: 'Feed B' },
+  ];
 
   it('删除后 feeds 列表移除该条目', async () => {
     useStore.setState({ feeds });

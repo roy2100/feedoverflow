@@ -1,5 +1,6 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
 import { parseURL } from './parse-url.ts';
 
 const SSPAI_URL = 'https://sspai.com/feed';
@@ -18,6 +19,6 @@ test('sspai: articles have required fields', async () => {
 
 test('sspai: titles are correctly decoded as chinese', async () => {
   const feed = await parseURL(SSPAI_URL);
-  const hasChinese = feed.items.some(item => /[一-鿿]/.test(item.title ?? ''));
+  const hasChinese = feed.items.some((item) => /[一-鿿]/.test(item.title ?? ''));
   assert.ok(hasChinese, 'at least one title should contain Chinese characters');
 });

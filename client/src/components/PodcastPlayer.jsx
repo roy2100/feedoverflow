@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
 import { Play, Pause, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
 import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePlay, onClose }) {
@@ -20,7 +21,7 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
       audio.removeEventListener('loadedmetadata', onMeta);
       audio.removeEventListener('durationchange', onMeta);
     };
-  }, []); // audioRef is stable
+  }, []); // eslint-disable-line -- audioRef is a stable ref
 
   useEffect(() => {
     setCurrentTime(0);
@@ -47,20 +48,30 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
   };
 
   const btnStyle = {
-    background: 'none', border: 'none', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: 5, flexShrink: 0, transition: 'background 0.12s',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 5,
+    flexShrink: 0,
+    transition: 'background 0.12s',
   };
 
   if (isMobile) {
     return (
-      <div style={{
-        flexShrink: 0,
-        background: 'var(--bg-panel)',
-        borderTop: '1px solid var(--border)',
-        padding: '8px 12px 10px',
-        display: 'flex', flexDirection: 'column', gap: 6,
-      }}>
+      <div
+        style={{
+          flexShrink: 0,
+          background: 'var(--bg-panel)',
+          borderTop: '1px solid var(--border)',
+          padding: '8px 12px 10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
         {/* Row 1: play + title + speed + close */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
@@ -70,7 +81,17 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
             {isPlaying ? <Pause size={18} strokeWidth={2} /> : <Play size={18} strokeWidth={2} />}
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: 1.4,
+              }}
+            >
               {episode.title}
             </div>
             {episode.feedName && (
@@ -81,7 +102,14 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
           </div>
           <button
             onClick={cycleSpeed}
-            style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--accent-light)', padding: '2px 6px', minWidth: 28 }}
+            style={{
+              ...btnStyle,
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--accent-light)',
+              padding: '2px 6px',
+              minWidth: 28,
+            }}
           >
             {speed}×
           </button>
@@ -97,7 +125,13 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
             onClick={() => skip(-15)}
-            style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', padding: '2px 5px' }}
+            style={{
+              ...btnStyle,
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--text-secondary)',
+              padding: '2px 5px',
+            }}
           >
             -15
           </button>
@@ -107,7 +141,7 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
             max={duration || 100}
             value={currentTime}
             step={1}
-            onChange={e => {
+            onChange={(e) => {
               const t = parseFloat(e.target.value);
               audioRef.current.currentTime = t;
               setCurrentTime(t);
@@ -116,11 +150,25 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
           />
           <button
             onClick={() => skip(15)}
-            style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', padding: '2px 5px' }}
+            style={{
+              ...btnStyle,
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--text-secondary)',
+              padding: '2px 5px',
+            }}
           >
             +15
           </button>
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 38, textAlign: 'right' }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              flexShrink: 0,
+              minWidth: 38,
+              textAlign: 'right',
+            }}
+          >
             {fmt(currentTime)}
           </span>
         </div>
@@ -130,28 +178,52 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
 
   // Desktop layout (unchanged)
   return (
-    <div style={{
-      height: 56, flexShrink: 0,
-      background: 'var(--bg-panel)',
-      borderTop: '1px solid var(--border)',
-      display: 'flex', alignItems: 'center',
-      padding: '0 16px', gap: 10,
-    }}>
+    <div
+      style={{
+        height: 56,
+        flexShrink: 0,
+        background: 'var(--bg-panel)',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
+        gap: 10,
+      }}
+    >
       <button
         onClick={onTogglePlay}
         style={{ ...btnStyle, padding: 6, color: 'var(--accent)' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
       >
         {isPlaying ? <Pause size={17} strokeWidth={2} /> : <Play size={17} strokeWidth={2} />}
       </button>
 
       <div style={{ minWidth: 0, width: 180, flexShrink: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: 'var(--text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            lineHeight: 1.4,
+          }}
+        >
           {episode.title}
         </div>
         {episode.feedName && (
-          <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+          <div
+            style={{
+              fontSize: 10.5,
+              color: 'var(--text-tertiary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.4,
+            }}
+          >
             {episode.feedName}
           </div>
         )}
@@ -160,14 +232,28 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
       <button
         onClick={() => skip(-15)}
         title="-15秒"
-        style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', padding: '3px 6px' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        style={{
+          ...btnStyle,
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+          padding: '3px 6px',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
       >
         -15
       </button>
 
-      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 32, textAlign: 'right' }}>
+      <span
+        style={{
+          fontSize: 11,
+          color: 'var(--text-tertiary)',
+          flexShrink: 0,
+          minWidth: 32,
+          textAlign: 'right',
+        }}
+      >
         {fmt(currentTime)}
       </span>
 
@@ -177,7 +263,7 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         max={duration || 100}
         value={currentTime}
         step={1}
-        onChange={e => {
+        onChange={(e) => {
           const t = parseFloat(e.target.value);
           audioRef.current.currentTime = t;
           setCurrentTime(t);
@@ -192,9 +278,15 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
       <button
         onClick={() => skip(15)}
         title="+15秒"
-        style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', padding: '3px 6px' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        style={{
+          ...btnStyle,
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+          padding: '3px 6px',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
       >
         +15
       </button>
@@ -202,9 +294,16 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
       <button
         onClick={cycleSpeed}
         title="切换播放速度"
-        style={{ ...btnStyle, fontSize: 11, fontWeight: 600, color: 'var(--accent-light)', padding: '3px 7px', minWidth: 30 }}
-        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        style={{
+          ...btnStyle,
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--accent-light)',
+          padding: '3px 7px',
+          minWidth: 30,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
       >
         {speed}×
       </button>
@@ -213,8 +312,14 @@ export default function PodcastPlayer({ episode, audioRef, isPlaying, onTogglePl
         onClick={onClose}
         title="关闭播放器"
         style={{ ...btnStyle, padding: 5, color: 'var(--text-tertiary)' }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--bg-hover)';
+          e.currentTarget.style.color = 'var(--text-primary)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'none';
+          e.currentTarget.style.color = 'var(--text-tertiary)';
+        }}
       >
         <X size={14} strokeWidth={2} />
       </button>

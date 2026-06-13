@@ -1,6 +1,6 @@
+import { DB_MAX_SIZE_BYTES } from './config.ts';
 import { db } from './db.ts';
 import { logger } from './logger.ts';
-import { DB_MAX_SIZE_BYTES } from './config.ts';
 
 const log = logger.child({ mod: 'maintenance' });
 

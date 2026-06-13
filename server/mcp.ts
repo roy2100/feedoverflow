@@ -1,7 +1,8 @@
-import type { Express, Request, Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { Express, Request, Response } from 'express';
 import { z } from 'zod';
+
 import { isLocalhost } from './auth.ts';
 import { PORT } from './config.ts';
 
@@ -54,7 +55,7 @@ function buildServer(): McpServer {
   server.registerTool(
     'list_feeds',
     { description: 'List all subscribed RSS feeds with their id, name, and URL.' },
-    async () => text(await get('/api/feeds'))
+    async () => text(await get('/api/feeds')),
   );
 
   server.registerTool(
@@ -66,7 +67,7 @@ function buildServer(): McpServer {
         name: z.string().optional().describe('Display name; defaults to feed title if omitted'),
       },
     },
-    async ({ url, name }) => text(await post('/api/feeds', { url, name }))
+    async ({ url, name }) => text(await post('/api/feeds', { url, name })),
   );
 
   server.registerTool(
@@ -78,7 +79,7 @@ function buildServer(): McpServer {
         name: z.string().describe('New display name'),
       },
     },
-    async ({ id, name }) => text(await patch(`/api/feeds/${encodeURIComponent(id)}`, { name }))
+    async ({ id, name }) => text(await patch(`/api/feeds/${encodeURIComponent(id)}`, { name })),
   );
 
   server.registerTool(
@@ -87,36 +88,40 @@ function buildServer(): McpServer {
       description: 'Unsubscribe from a feed and remove it from the list.',
       inputSchema: { id: z.string().describe('Feed ID from list_feeds') },
     },
-    async ({ id }) => text(await del(`/api/feeds/${encodeURIComponent(id)}`))
+    async ({ id }) => text(await del(`/api/feeds/${encodeURIComponent(id)}`)),
   );
 
   server.registerTool(
     'import_opml',
     {
-      description: 'Bulk-import feeds from an OPML XML string. Returns count of imported and skipped feeds.',
+      description:
+        'Bulk-import feeds from an OPML XML string. Returns count of imported and skipped feeds.',
       inputSchema: { opml: z.string().describe('OPML XML content as a string') },
     },
-    async ({ opml }) => text(await post('/api/feeds/import-opml', { opml }))
+    async ({ opml }) => text(await post('/api/feeds/import-opml', { opml })),
   );
 
   // --- Articles ---
 
   server.registerTool(
     'get_all_articles',
-    { description: 'Get the latest articles across all feeds (up to 5 per feed), sorted by date descending.' },
-    async () => text(await get('/api/all-articles'))
+    {
+      description:
+        'Get the latest articles across all feeds (up to 5 per feed), sorted by date descending.',
+    },
+    async () => text(await get('/api/all-articles')),
   );
 
   server.registerTool(
     'get_today_articles',
     { description: 'Get all articles published today across all feeds.' },
-    async () => text(await get('/api/today'))
+    async () => text(await get('/api/today')),
   );
 
   server.registerTool(
     'get_starred_articles',
     { description: 'Get all starred/bookmarked articles.' },
-    async () => text(await get('/api/starred'))
+    async () => text(await get('/api/starred')),
   );
 
   server.registerTool(
@@ -125,13 +130,13 @@ function buildServer(): McpServer {
       description: 'Get the latest articles (up to 50) from a specific feed.',
       inputSchema: { feed_id: z.string().describe('Feed ID from list_feeds') },
     },
-    async ({ feed_id }) => text(await get(`/api/feeds/${encodeURIComponent(feed_id)}/articles`))
+    async ({ feed_id }) => text(await get(`/api/feeds/${encodeURIComponent(feed_id)}/articles`)),
   );
 
   server.registerTool(
     'get_starred_count',
     { description: 'Get the total count of starred articles.' },
-    async () => text(await get('/api/starred/count'))
+    async () => text(await get('/api/starred/count')),
   );
 
   // --- Article state ---
@@ -139,22 +144,24 @@ function buildServer(): McpServer {
   server.registerTool(
     'mark_article_read',
     {
-      description: 'Mark an article as read. Pass the full article object returned by any get_*_articles tool.',
+      description:
+        'Mark an article as read. Pass the full article object returned by any get_*_articles tool.',
       inputSchema: articleFields,
     },
-    async (article) => text(await post('/api/articles/read', { article }))
+    async (article) => text(await post('/api/articles/read', { article })),
   );
 
   server.registerTool(
     'toggle_star',
     {
-      description: 'Star or unstar an article. Pass the full article object and the desired starred state.',
+      description:
+        'Star or unstar an article. Pass the full article object and the desired starred state.',
       inputSchema: {
         ...articleFields,
         starred: z.boolean().describe('true to star, false to unstar'),
       },
     },
-    async ({ starred, ...article }) => text(await post('/api/articles/star', { article, starred }))
+    async ({ starred, ...article }) => text(await post('/api/articles/star', { article, starred })),
   );
 
   // --- Current article ---
@@ -165,7 +172,7 @@ function buildServer(): McpServer {
       description:
         "Get the article currently open in the RSS reader UI. Returns the full article object including title, link, summary, content, author, feed name, and read/starred state. Use this when the user says 'this article', 'the current article', or 'what I'm reading'.",
     },
-    async () => text(await get('/api/current-article'))
+    async () => text(await get('/api/current-article')),
   );
 
   // --- Content ---
@@ -173,10 +180,11 @@ function buildServer(): McpServer {
   server.registerTool(
     'fetch_article_content',
     {
-      description: 'Fetch the full readable content of an article from its original URL using Mozilla Readability. Use when the article summary is truncated.',
+      description:
+        'Fetch the full readable content of an article from its original URL using Mozilla Readability. Use when the article summary is truncated.',
       inputSchema: { url: z.string().url().describe('Article URL') },
     },
-    async ({ url }) => text(await get(`/api/fetch-content?url=${encodeURIComponent(url)}`))
+    async ({ url }) => text(await get(`/api/fetch-content?url=${encodeURIComponent(url)}`)),
   );
 
   return server;

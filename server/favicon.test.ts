@@ -1,10 +1,10 @@
-import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { unlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { unlinkSync } from 'node:fs';
+import { test, before, after, beforeEach } from 'node:test';
 
 // Isolate every test run in its own temp DB so tests are repeatable.
 const TEST_DB_PATH = join(tmpdir(), `rss-favicon-test-${process.pid}.db`);
@@ -26,13 +26,16 @@ function stubFetch(bytes: Buffer | null, contentType = 'image/png') {
   globalThis.fetch = (async () => {
     calls.n++;
     if (bytes === null) throw new Error('network down');
-    return new Response(bytes as unknown as BodyInit, { status: 200, headers: { 'content-type': contentType } });
+    return new Response(bytes as unknown as BodyInit, {
+      status: 200,
+      headers: { 'content-type': contentType },
+    });
   }) as typeof fetch;
   return calls;
 }
 
 before(async () => {
-  await new Promise<void>(resolve => {
+  await new Promise<void>((resolve) => {
     server = createServer(app);
     server.listen(0, '127.0.0.1', () => {
       baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -52,9 +55,11 @@ beforeEach(() => {
 
 after(async () => {
   globalThis.fetch = realFetch;
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await new Promise<void>((resolve) => server.close(() => resolve()));
   db.close();
-  try { unlinkSync(TEST_DB_PATH); } catch {}
+  try {
+    unlinkSync(TEST_DB_PATH);
+  } catch {}
 });
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
@@ -64,7 +69,7 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG magic bytes
 test('getFavicon — returns null for an invalid domain (no fetch, no row)', async () => {
   const calls = stubFetch(PNG);
   assert.equal(await getFavicon('not a domain'), null);
-  assert.equal(await getFavicon('anthropic'), null);   // single-label hostname
+  assert.equal(await getFavicon('anthropic'), null); // single-label hostname
   assert.equal(calls.n, 0, 'invalid input must not hit the network');
   assert.equal((db.prepare('SELECT COUNT(*) n FROM favicon_cache').get() as { n: number }).n, 0);
 });
@@ -76,7 +81,9 @@ test('getFavicon — miss fetches upstream and persists the bytes', async () => 
   assert.deepEqual(result!.image, PNG);
   assert.equal(result!.contentType, 'image/x-icon');
 
-  const row = db.prepare('SELECT image, content_type FROM favicon_cache WHERE domain = ?').get('example.com') as { image: Buffer; content_type: string };
+  const row = db
+    .prepare('SELECT image, content_type FROM favicon_cache WHERE domain = ?')
+    .get('example.com') as { image: Buffer; content_type: string };
   assert.deepEqual(row.image, PNG);
 });
 
@@ -92,7 +99,9 @@ test('getFavicon — upstream failure returns null and negative-caches', async (
   assert.equal(await getFavicon('broken.com'), null);
   assert.equal(calls.n, 1);
 
-  const row = db.prepare('SELECT image FROM favicon_cache WHERE domain = ?').get('broken.com') as { image: Buffer | null };
+  const row = db.prepare('SELECT image FROM favicon_cache WHERE domain = ?').get('broken.com') as {
+    image: Buffer | null;
+  };
   assert.equal(row.image, null, 'negative cache stores a NULL image');
 
   // A fresh negative row should be served without another upstream hit.
