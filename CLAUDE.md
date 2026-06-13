@@ -89,11 +89,12 @@ client/             Vite + React + TypeScript (port 3000)
   src/components/    *.tsx — FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, SettingsModal, PodcastPlayer, LoginForm
   src/pages/         *.tsx — mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
   src/index.css     CSS variables (--bg, --accent, etc.)
-  tsconfig*.json    tsconfig.json (refs) → tsconfig.app.json (src) + tsconfig.node.json (vite config)
+  tsconfig.json     single strict config covering src/ (type gate only, noEmit)
+  vite.config.js    stays plain JS (runs in Node, not part of the src/ type gate)
 ```
 
 TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `npm run typecheck`
-(`tsc -b`, in `client/`) is the type gate — Vite does not type-check. `strict: true`, matching the server.
+(`tsc --noEmit`, in `client/`) is the type gate — Vite does not type-check. `strict: true`, matching the server.
 
 **Data flow:** the `store.ts` zustand store owns app state (`feeds`, `articles`, `selectedView`, `selectedArticle`, `starredCount`) and exposes the action creators; components subscribe via `useStore`. Audio-player wiring lives in `App.tsx` and is shared through `AudioContext`. `selectedView` shape: `{ type: 'all' | 'today' | 'starred' | 'feed', feed? }`. Read/star use optimistic updates — mutate local state immediately, fire-and-forget POST to sync.
 

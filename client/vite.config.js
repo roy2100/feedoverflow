@@ -3,7 +3,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 
 const now = new Date();
-const pad = (n: number) => String(n).padStart(2, '0');
+const pad = (n) => String(n).padStart(2, '0');
 const buildDate = `v${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}.${pad(now.getHours())}.${pad(now.getMinutes())}.${pad(now.getSeconds())}`;
 
 export default defineConfig({
