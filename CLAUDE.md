@@ -8,6 +8,10 @@ npm run server / client  # individual processes
 
 npm install && cd server && npm install && cd ../client && npm install
 
+# Tests
+cd server && npm test           # typecheck + node:test suites
+cd server && npm run test:coverage  # node:test with V8 coverage report (excludes *.test.ts, vendor/)
+
 # Production deploy
 ./deploy.sh              # install deps, build frontend, restart backend service
 

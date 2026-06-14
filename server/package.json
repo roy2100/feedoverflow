@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.ts",
     "test": "npm run typecheck && node --test *.test.ts",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude='*.test.ts' --test-coverage-exclude='vendor/**' --test-coverage-exclude='mcp.ts' *.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
