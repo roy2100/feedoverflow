@@ -10,6 +10,8 @@ const INITIAL_STATE = {
   selectedArticle: null,
   loadingArticles: false,
   starredCount: 0,
+  lastListView: { type: 'today' } as View,
+  scopedSearch: false,
 };
 
 function mockFetch(json: unknown = { articles: [] }) {
@@ -30,7 +32,7 @@ afterEach(() => {
 describe('toggleStar', () => {
   const article = { id: 'a1', isStarred: false } as Article;
 
-  it('标记星标：isStarred 变 true，starredCount +1', () => {
+  it('star: isStarred becomes true, starredCount +1', () => {
     useStore.setState({ articles: [article], starredCount: 0 });
     useStore.getState().toggleStar(article);
     const { articles, starredCount } = useStore.getState();
@@ -38,7 +40,7 @@ describe('toggleStar', () => {
     expect(starredCount).toBe(1);
   });
 
-  it('取消星标：isStarred 变 false，starredCount -1', () => {
+  it('unstar: isStarred becomes false, starredCount -1', () => {
     const starred = { ...article, isStarred: true };
     useStore.setState({ articles: [starred], starredCount: 1 });
     useStore.getState().toggleStar(starred);
@@ -47,28 +49,28 @@ describe('toggleStar', () => {
     expect(starredCount).toBe(0);
   });
 
-  it('starred 视图下取消星标 → 文章从列表移除', () => {
+  it('unstar in starred view removes the article from the list', () => {
     const starred = { ...article, isStarred: true };
     useStore.setState({ articles: [starred], selectedView: { type: 'starred' }, starredCount: 1 });
     useStore.getState().toggleStar(starred);
     expect(useStore.getState().articles).toHaveLength(0);
   });
 
-  it('非 starred 视图下取消星标 → 文章保留在列表', () => {
+  it('unstar in a non-starred view keeps the article in the list', () => {
     const starred = { ...article, isStarred: true };
     useStore.setState({ articles: [starred], selectedView: { type: 'all' }, starredCount: 1 });
     useStore.getState().toggleStar(starred);
     expect(useStore.getState().articles).toHaveLength(1);
   });
 
-  it('starredCount 不低于 0（防御性）', () => {
+  it('starredCount never drops below 0 (defensive)', () => {
     const starred = { ...article, isStarred: true };
     useStore.setState({ articles: [starred], starredCount: 0 });
     useStore.getState().toggleStar(starred);
     expect(useStore.getState().starredCount).toBe(0);
   });
 
-  it('star/unstar 同步更新 selectedArticle', () => {
+  it('star/unstar also updates selectedArticle', () => {
     useStore.setState({ articles: [article], selectedArticle: article, starredCount: 0 });
     useStore.getState().toggleStar(article);
     expect(useStore.getState().selectedArticle?.isStarred).toBe(true);
@@ -78,7 +80,7 @@ describe('toggleStar', () => {
 // ─── selectArticle ───────────────────────────────────────────────────────────
 
 describe('selectArticle', () => {
-  it('选中文章后 selectedArticle 被设置', () => {
+  it('sets selectedArticle when an article is selected', () => {
     const article = { id: 'a1' } as Article;
     useStore.setState({ articles: [article] });
     useStore.getState().selectArticle(article);
@@ -94,7 +96,7 @@ describe('deleteFeed', () => {
     { id: '2', name: 'Feed B' },
   ] as Feed[];
 
-  it('删除后 feeds 列表移除该条目', async () => {
+  it('removes the entry from the feeds list after deletion', async () => {
     useStore.setState({ feeds });
     await useStore.getState().deleteFeed('1');
     const remaining = useStore.getState().feeds;
@@ -102,40 +104,175 @@ describe('deleteFeed', () => {
     expect(remaining[0].id).toBe('2');
   });
 
-  it('删除当前正在查看的 feed → 切换到 all 视图', async () => {
+  it('deleting the currently viewed feed switches to the all view', async () => {
     useStore.setState({ feeds, selectedView: { type: 'feed', feed: { id: '1' } as Feed } });
     await useStore.getState().deleteFeed('1');
     expect(useStore.getState().selectedView.type).toBe('all');
   });
 
-  it('删除其他 feed → 当前视图不变', async () => {
+  it('deleting another feed leaves the current view unchanged', async () => {
     useStore.setState({ feeds, selectedView: { type: 'feed', feed: { id: '2' } as Feed } });
     await useStore.getState().deleteFeed('1');
     expect(useStore.getState().selectedView).toEqual({ type: 'feed', feed: { id: '2' } });
   });
 });
 
-// ─── loadArticles URL 映射 ───────────────────────────────────────────────────
+// ─── loadArticles URL mapping ────────────────────────────────────────────────
 
-describe('loadArticles URL 映射', () => {
+describe('loadArticles URL mapping', () => {
   it.each<[View, string]>([
     [{ type: 'all' }, '/api/all-articles'],
     [{ type: 'today' }, '/api/today'],
     [{ type: 'starred' }, '/api/starred'],
     [{ type: 'feed', feed: { id: '5' } as Feed }, '/api/feeds/5/articles'],
-  ])('view %o → 请求 %s', async (view, expectedUrl) => {
+  ])('view %o requests %s', async (view, expectedUrl) => {
     await useStore.getState().loadArticles(view);
     expect(fetch).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
   });
 
-  it('加载完成后 loadingArticles 重置为 false', async () => {
+  it('resets loadingArticles to false after loading', async () => {
     await useStore.getState().loadArticles({ type: 'all' });
     expect(useStore.getState().loadingArticles).toBe(false);
   });
 
-  it('返回数据写入 articles', async () => {
+  it('writes returned data into articles', async () => {
     vi.stubGlobal('fetch', mockFetch({ articles: [{ id: 'x1' }] }));
     await useStore.getState().loadArticles({ type: 'all' });
     expect(useStore.getState().articles).toHaveLength(1);
+  });
+});
+
+// ─── loadArticles URL — search scope ─────────────────────────────────────────
+
+describe('loadArticles search URL', () => {
+  it('global search (no scope) hits /api/search?q=', async () => {
+    await useStore.getState().loadArticles({ type: 'search', query: 'kw' });
+    expect(fetch).toHaveBeenCalledWith('/api/search?q=kw', expect.any(Object));
+  });
+
+  it('feed scope appends scope=feed&feedId=', async () => {
+    await useStore.getState().loadArticles({
+      type: 'search',
+      query: 'kw',
+      scope: { kind: 'feed', feedId: '7', feedName: 'F' },
+    });
+    expect(fetch).toHaveBeenCalledWith('/api/search?q=kw&scope=feed&feedId=7', expect.any(Object));
+  });
+
+  it('starred scope appends scope=starred', async () => {
+    await useStore.getState().loadArticles({
+      type: 'search',
+      query: 'kw',
+      scope: { kind: 'starred' },
+    });
+    expect(fetch).toHaveBeenCalledWith('/api/search?q=kw&scope=starred', expect.any(Object));
+  });
+
+  it('URL-encodes the query', async () => {
+    await useStore.getState().loadArticles({ type: 'search', query: 'a b&c' });
+    expect(fetch).toHaveBeenCalledWith('/api/search?q=a%20b%26c', expect.any(Object));
+  });
+});
+
+// ─── search ──────────────────────────────────────────────────────────────────
+
+describe('search', () => {
+  it('query too short (<2) falls back to lastListView', () => {
+    useStore.setState({ lastListView: { type: 'all' } });
+    useStore.getState().search('a');
+    expect(useStore.getState().selectedView.type).toBe('all');
+  });
+
+  it('normal query sets selectedView to search with the query', () => {
+    useStore.getState().search('hello');
+    expect(useStore.getState().selectedView).toMatchObject({ type: 'search', query: 'hello' });
+  });
+
+  it('scope off leaves selectedView.scope undefined', () => {
+    useStore.setState({
+      scopedSearch: false,
+      lastListView: { type: 'feed', feed: { id: '7', name: 'F' } as Feed },
+    });
+    useStore.getState().search('kw');
+    expect(useStore.getState().selectedView.scope).toBeUndefined();
+  });
+
+  it('scope on with feed base carries feedId/feedName', () => {
+    useStore.setState({
+      scopedSearch: true,
+      lastListView: { type: 'feed', feed: { id: '7', name: 'F' } as Feed },
+    });
+    useStore.getState().search('kw');
+    expect(useStore.getState().selectedView.scope).toEqual({
+      kind: 'feed',
+      feedId: '7',
+      feedName: 'F',
+    });
+  });
+
+  it('scope on with starred base sets scope.kind to starred', () => {
+    useStore.setState({ scopedSearch: true, lastListView: { type: 'starred' } });
+    useStore.getState().search('kw');
+    expect(useStore.getState().selectedView.scope).toEqual({ kind: 'starred' });
+  });
+
+  it('scope on with non-scopable base (all) leaves scope undefined', () => {
+    useStore.setState({ scopedSearch: true, lastListView: { type: 'all' } });
+    useStore.getState().search('kw');
+    expect(useStore.getState().selectedView.scope).toBeUndefined();
+  });
+});
+
+// ─── toggleSearchScope ───────────────────────────────────────────────────────
+
+describe('toggleSearchScope', () => {
+  it('flips the scopedSearch boolean', () => {
+    expect(useStore.getState().scopedSearch).toBe(false);
+    useStore.getState().toggleSearchScope();
+    expect(useStore.getState().scopedSearch).toBe(true);
+  });
+
+  it('toggling during an active search re-runs it with the scope', () => {
+    useStore.setState({
+      scopedSearch: false,
+      selectedView: { type: 'search', query: 'kw' },
+      lastListView: { type: 'feed', feed: { id: '7', name: 'F' } as Feed },
+    });
+    useStore.getState().toggleSearchScope();
+    expect(useStore.getState().scopedSearch).toBe(true);
+    expect(useStore.getState().selectedView.scope).toMatchObject({ kind: 'feed', feedId: '7' });
+  });
+
+  it('toggling off again clears the scope', () => {
+    useStore.setState({
+      scopedSearch: true,
+      selectedView: { type: 'search', query: 'kw', scope: { kind: 'starred' } },
+      lastListView: { type: 'starred' },
+    });
+    useStore.getState().toggleSearchScope();
+    expect(useStore.getState().scopedSearch).toBe(false);
+    expect(useStore.getState().selectedView.scope).toBeUndefined();
+  });
+
+  it('toggling outside a search view does not trigger a search', () => {
+    useStore.setState({ selectedView: { type: 'all' } });
+    useStore.getState().toggleSearchScope();
+    expect(useStore.getState().selectedView.type).toBe('all');
+  });
+});
+
+// ─── selectView lastListView tracking ───────────────────────────────────────
+
+describe('selectView records lastListView', () => {
+  it('selecting a non-search view updates lastListView', () => {
+    const view: View = { type: 'feed', feed: { id: '9', name: 'Nine' } as Feed };
+    useStore.getState().selectView(view);
+    expect(useStore.getState().lastListView).toEqual(view);
+  });
+
+  it('a search view does not overwrite lastListView', () => {
+    useStore.setState({ lastListView: { type: 'all' } });
+    useStore.getState().selectView({ type: 'search', query: 'x' });
+    expect(useStore.getState().lastListView).toEqual({ type: 'all' });
   });
 });
