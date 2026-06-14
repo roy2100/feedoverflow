@@ -1,6 +1,7 @@
 node_modules/
 server/feeds.json
 dist/
+coverage/
 .DS_Store
 server/rss.db*
 server/.env

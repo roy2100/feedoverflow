@@ -11,6 +11,8 @@ npm install && cd server && npm install && cd ../client && npm install
 # Tests
 cd server && npm test           # typecheck + node:test suites
 cd server && npm run test:coverage  # node:test with V8 coverage report (excludes *.test.ts, vendor/)
+cd client && npm test           # vitest suites (jsdom)
+cd client && npm run test:coverage  # vitest with V8 coverage report (text + html, excludes tests/types/entry)
 
 # Production deploy
 ./deploy.sh              # install deps, build frontend, restart backend service

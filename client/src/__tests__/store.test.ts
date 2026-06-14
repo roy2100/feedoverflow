@@ -276,3 +276,103 @@ describe('selectView records lastListView', () => {
     expect(useStore.getState().lastListView).toEqual({ type: 'all' });
   });
 });
+
+// ─── init ────────────────────────────────────────────────────────────────────
+
+function mockFetchByUrl(map: Record<string, unknown>) {
+  return vi.fn((url: string) =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve(map[url] ?? {}) }),
+  );
+}
+
+describe('init', () => {
+  it('loads feeds and starredCount from the two endpoints', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchByUrl({
+        '/api/feeds': [{ id: '1', name: 'A' }],
+        '/api/starred/count': { count: 3 },
+      }),
+    );
+    await useStore.getState().init();
+    const { feeds, starredCount } = useStore.getState();
+    expect(feeds).toHaveLength(1);
+    expect(starredCount).toBe(3);
+  });
+
+  it('defaults starredCount to 0 when count is missing', async () => {
+    vi.stubGlobal('fetch', mockFetchByUrl({ '/api/feeds': [], '/api/starred/count': {} }));
+    await useStore.getState().init();
+    expect(useStore.getState().starredCount).toBe(0);
+  });
+
+  it('swallows fetch errors and leaves state intact', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('network'))),
+    );
+    await useStore.getState().init();
+    expect(useStore.getState().feeds).toEqual([]);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+// ─── addFeed ──────────────────────────────────────────────────────────────────
+
+describe('addFeed', () => {
+  it('appends the returned feed on success', async () => {
+    vi.stubGlobal('fetch', mockFetch({ id: '9', name: 'New', url: 'http://x' }));
+    useStore.setState({ feeds: [{ id: '1', name: 'A' } as Feed] });
+    await useStore.getState().addFeed({ url: 'http://x' });
+    const { feeds } = useStore.getState();
+    expect(feeds).toHaveLength(2);
+    expect(feeds[1]).toMatchObject({ id: '9', name: 'New' });
+  });
+
+  it('throws with the server error message when the response is not ok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'duplicate' }) }),
+      ),
+    );
+    await expect(useStore.getState().addFeed({ url: 'http://x' })).rejects.toThrow('duplicate');
+    expect(useStore.getState().feeds).toEqual([]);
+  });
+
+  it('throws a default message when the error response has no message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) })),
+    );
+    await expect(useStore.getState().addFeed({ url: 'http://x' })).rejects.toThrow('添加失败');
+  });
+});
+
+// ─── importFeeds ──────────────────────────────────────────────────────────────
+
+describe('importFeeds', () => {
+  it('appends the imported feeds to the existing list', () => {
+    useStore.setState({ feeds: [{ id: '1', name: 'A' } as Feed] });
+    useStore
+      .getState()
+      .importFeeds([{ id: '2', name: 'B' } as Feed, { id: '3', name: 'C' } as Feed]);
+    expect(useStore.getState().feeds.map((f) => f.id)).toEqual(['1', '2', '3']);
+  });
+});
+
+// ─── updateFeed ───────────────────────────────────────────────────────────────
+
+describe('updateFeed', () => {
+  it('renames the matching feed and leaves others unchanged', async () => {
+    useStore.setState({
+      feeds: [{ id: '1', name: 'Old' } as Feed, { id: '2', name: 'Keep' } as Feed],
+    });
+    await useStore.getState().updateFeed('1', { name: 'Renamed' });
+    const feeds = useStore.getState().feeds;
+    expect(feeds[0].name).toBe('Renamed');
+    expect(feeds[1].name).toBe('Keep');
+  });
+});
