@@ -70,6 +70,7 @@ export default function FeedSidebar({
 }: FeedSidebarProps) {
   const [query, setQuery] = useState('');
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Keep the box in sync when search is exited from elsewhere (e.g. a feed click).
   useEffect(() => {
@@ -176,6 +177,7 @@ export default function FeedSidebar({
             }}
           />
           <input
+            ref={inputRef}
             type="search"
             value={query}
             onChange={(e) => handleChange(e.target.value)}
@@ -224,7 +226,10 @@ export default function FeedSidebar({
             {scopeToggle && (
               <button
                 type="button"
-                onClick={onToggleSearchScope}
+                onClick={() => {
+                  onToggleSearchScope?.();
+                  inputRef.current?.focus();
+                }}
                 title={scopedSearch ? `在「${scopeLabel}」中搜索` : '全局搜索'}
                 aria-pressed={scopedSearch}
                 style={{
