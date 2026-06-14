@@ -1,4 +1,4 @@
-import { ChevronLeft, Mic } from 'lucide-react';
+import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 import type { Article } from '../types';
@@ -27,6 +27,8 @@ interface ArticleListProps {
   onPlay: (article: Article) => void;
   currentEpisode: Article | null;
   isPlaying: boolean;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export default function ArticleList({
@@ -41,6 +43,8 @@ export default function ArticleList({
   onPlay,
   currentEpisode,
   isPlaying,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -91,6 +95,29 @@ export default function ArticleList({
             }}
           >
             <ChevronLeft size={20} strokeWidth={2} />
+          </button>
+        )}
+        {!isMobile && sidebarCollapsed && onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            title="展开侧边栏"
+            style={{
+              color: 'var(--text-tertiary)',
+              padding: 4,
+              marginRight: 8,
+              borderRadius: 6,
+              transition: 'color 0.15s',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+          >
+            <PanelLeft size={14} />
           </button>
         )}
         <h2

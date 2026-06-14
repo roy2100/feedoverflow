@@ -1,5 +1,17 @@
-import { RefreshCw, Plus, Sun, Star, List, Rss, Settings, SlidersHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import {
+  RefreshCw,
+  Plus,
+  Sun,
+  Star,
+  List,
+  Rss,
+  Settings,
+  SlidersHorizontal,
+  PanelLeft,
+  Search,
+  X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 import { faviconDomain } from '../faviconDomain';
 import type { Feed, View } from '../types';
@@ -28,9 +40,11 @@ interface FeedSidebarProps {
   selectedView: View;
   onSelectView: (view: View) => void;
   onRefresh: () => void;
+  onToggleSidebar?: (() => void) | null;
   onOpenAddModal: () => void;
   onOpenManageModal?: (() => void) | null;
   onOpenSettings?: (() => void) | null;
+  onSearch?: (query: string) => void;
 }
 
 export default function FeedSidebar({
@@ -39,10 +53,39 @@ export default function FeedSidebar({
   selectedView,
   onSelectView,
   onRefresh,
+  onToggleSidebar,
   onOpenAddModal,
   onOpenManageModal,
   onOpenSettings,
+  onSearch,
 }: FeedSidebarProps) {
+  const [query, setQuery] = useState('');
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep the box in sync when search is exited from elsewhere (e.g. a feed click).
+  useEffect(() => {
+    if (selectedView.type !== 'search') setQuery('');
+  }, [selectedView.type]);
+
+  const handleChange = (value: string) => {
+    setQuery(value);
+    if (isMobile) return; // mobile searches on submit to avoid sliding away mid-typing
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => onSearch?.(value.trim()), 250);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (debounce.current) clearTimeout(debounce.current);
+    onSearch?.(query.trim());
+  };
+
+  const clearSearch = () => {
+    setQuery('');
+    if (debounce.current) clearTimeout(debounce.current);
+    onSearch?.('');
+  };
+
   return (
     <aside
       style={{
@@ -67,17 +110,24 @@ export default function FeedSidebar({
           justifyContent: 'space-between',
         }}
       >
-        <span
-          style={{
-            fontSize: isMobile ? 15 : 12,
-            fontWeight: 600,
-            letterSpacing: isMobile ? 0 : '0.08em',
-            textTransform: isMobile ? 'none' : 'uppercase',
-            color: isMobile ? 'var(--text-primary)' : 'var(--text-tertiary)',
-          }}
-        >
-          订阅
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {!isMobile && onToggleSidebar && (
+            <IconBtn onClick={onToggleSidebar} title="收起侧边栏">
+              <PanelLeft size={14} />
+            </IconBtn>
+          )}
+          <span
+            style={{
+              fontSize: isMobile ? 15 : 12,
+              fontWeight: 600,
+              letterSpacing: isMobile ? 0 : '0.08em',
+              textTransform: isMobile ? 'none' : 'uppercase',
+              color: isMobile ? 'var(--text-primary)' : 'var(--text-tertiary)',
+            }}
+          >
+            订阅
+          </span>
+        </div>
         <div style={{ display: 'flex', gap: isMobile ? 8 : 4 }}>
           <IconBtn onClick={onRefresh} title="刷新" isMobile={isMobile}>
             <RefreshCw size={isMobile ? 17 : 13} />
@@ -93,8 +143,68 @@ export default function FeedSidebar({
         </div>
       </div>
 
+      {/* Search */}
+      {onSearch && (
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            padding: isMobile ? '12px 16px 4px' : '10px 12px 6px',
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <Search
+            size={13}
+            style={{
+              position: 'absolute',
+              left: isMobile ? 26 : 22,
+              color: 'var(--text-tertiary)',
+              pointerEvents: 'none',
+            }}
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder="搜索文章…"
+            enterKeyHint="search"
+            style={{
+              width: '100%',
+              padding: isMobile ? '9px 28px 9px 30px' : '6px 26px 6px 28px',
+              fontSize: isMobile ? 15 : 13,
+              color: 'var(--text-primary)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 7,
+              outline: 'none',
+            }}
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              title="清除"
+              style={{
+                position: 'absolute',
+                right: isMobile ? 24 : 20,
+                display: 'flex',
+                alignItems: 'center',
+                color: 'var(--text-tertiary)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 2,
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </form>
+      )}
+
       {/* Nav */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '12px 0 0' : '8px 0 0' }}>
+      <nav style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '8px 0 0' : '4px 0 0' }}>
         {!isMobile && <SectionLabel>智能订阅</SectionLabel>}
         {isMobile && <SectionLabel>智能订阅</SectionLabel>}
 

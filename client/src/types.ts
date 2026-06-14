@@ -22,10 +22,12 @@ export interface Article {
   isStarred: boolean;
 }
 
-// Which list is shown in the middle panel. `feed` is present only for `type: 'feed'`.
+// Which list is shown in the middle panel. `feed` is present only for `type: 'feed'`,
+// `query` only for `type: 'search'`.
 export interface View {
-  type: 'all' | 'today' | 'starred' | 'feed';
+  type: 'all' | 'today' | 'starred' | 'feed' | 'search';
   feed?: Feed;
+  query?: string;
 }
 
 // Mobile single-pane navigation.

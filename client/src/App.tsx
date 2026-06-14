@@ -25,6 +25,9 @@ export default function App() {
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [readingMode, setReadingMode] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebar-collapsed') === '1',
+  );
   const [currentEpisode, setCurrentEpisode] = useState<Article | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -39,6 +42,7 @@ export default function App() {
     loadingArticles,
     init,
     selectView,
+    search,
     selectArticle,
     toggleStar,
     addFeed,
@@ -92,6 +96,12 @@ export default function App() {
   useEffect(() => {
     if (!selectedArticle) setReadingMode(false);
   }, [selectedArticle]);
+
+  useEffect(() => {
+    localStorage.setItem('sidebar-collapsed', sidebarCollapsed ? '1' : '0');
+  }, [sidebarCollapsed]);
+
+  const toggleSidebar = () => setSidebarCollapsed((v) => !v);
 
   useEffect(() => {
     readerRef.current?.focus({ preventScroll: true });
@@ -176,7 +186,9 @@ export default function App() {
         ? '今日'
         : selectedView.type === 'starred'
           ? '已收藏'
-          : selectedView.feed?.name;
+          : selectedView.type === 'search'
+            ? `搜索：${selectedView.query ?? ''}`
+            : selectedView.feed?.name;
 
   const addModal = showAddModal && (
     <Suspense fallback={null}>
@@ -274,15 +286,17 @@ export default function App() {
       <div
         style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}
       >
-        {!readingMode && (
+        {!readingMode && !sidebarCollapsed && (
           <FeedSidebar
             feeds={feeds}
             selectedView={selectedView}
             onSelectView={selectView}
             onRefresh={() => loadArticles(selectedView)}
+            onToggleSidebar={toggleSidebar}
             onOpenAddModal={() => setShowAddModal(true)}
             onOpenManageModal={() => setShowManageModal(true)}
             onOpenSettings={() => setShowSettingsModal(true)}
+            onSearch={search}
           />
         )}
         {!readingMode && (
@@ -296,6 +310,8 @@ export default function App() {
             onPlay={handlePlay}
             currentEpisode={currentEpisode}
             isPlaying={isPlaying}
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
           />
         )}
         <div

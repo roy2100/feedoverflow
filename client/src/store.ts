@@ -25,6 +25,7 @@ interface StoreState {
   init: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
   selectView: (view: View) => void;
+  search: (query: string) => void;
   selectArticle: (article: Article) => void;
   toggleStar: (article: Article) => void;
   addFeed: (input: { url: string }) => Promise<void>;
@@ -64,7 +65,10 @@ export const useStore = create<StoreState>((set, get) => ({
         today: `${API}/today`,
         starred: `${API}/starred`,
       };
-      const url = urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`;
+      const url =
+        view.type === 'search'
+          ? `${API}/search?q=${encodeURIComponent(view.query ?? '')}`
+          : (urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`);
       const data = await apiFetch(url, { signal: controller.signal }).then((r) => r.json());
       set({ articles: data.articles || [] });
     } catch (e) {
@@ -77,6 +81,16 @@ export const useStore = create<StoreState>((set, get) => ({
   selectView: (view) => {
     set({ selectedView: view });
     get().loadArticles(view);
+  },
+
+  search: (query) => {
+    const q = query.trim();
+    // Too short to be meaningful — fall back to the default view.
+    if (q.length < 2) {
+      get().selectView({ type: 'today' });
+      return;
+    }
+    get().selectView({ type: 'search', query: q });
   },
 
   selectArticle: (article) => {

@@ -8,10 +8,16 @@ interface FeedsPageProps {
 }
 
 export default function FeedsPage({ onOpenAddModal, onNavigate }: FeedsPageProps) {
-  const { feeds, selectedView, selectView, loadArticles } = useStore();
+  const { feeds, selectedView, selectView, search, loadArticles } = useStore();
 
   const handleSelectView = (view: View) => {
     selectView(view);
+    onNavigate('list');
+  };
+
+  const handleSearch = (query: string) => {
+    if (query.trim().length < 2) return;
+    search(query);
     onNavigate('list');
   };
 
@@ -25,6 +31,7 @@ export default function FeedsPage({ onOpenAddModal, onNavigate }: FeedsPageProps
       onOpenAddModal={onOpenAddModal}
       onOpenManageModal={null}
       onOpenSettings={null}
+      onSearch={handleSearch}
     />
   );
 }

@@ -316,6 +316,69 @@ app.get('/api/starred/count', (_req, res) => {
   res.json({ count: n });
 });
 
+// ── Search ───────────────────────────────────────────────────────────────────
+
+app.get('/api/search', async (req, res) => {
+  const q = ((req.query.q as string | undefined) || '').trim();
+  if (q.length < 2) return res.json({ articles: [], query: q });
+  const needle = q.toLowerCase();
+
+  // Persisted rows hold title/summary/content for polled + read/starred articles,
+  // so a SQL LIKE covers the bulk of history without loading every row into JS.
+  const like = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
+  const rows = db
+    .prepare(
+      `SELECT * FROM article_states
+       WHERE title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'
+       ORDER BY pub_date DESC LIMIT 200`,
+    )
+    .all(like, like, like) as ArticleStateRow[];
+  const persisted: Article[] = rows.map((r) => ({
+    id: r.article_id,
+    feedId: r.feed_id,
+    feedName: r.feed_name,
+    title: r.title,
+    summary: (r.summary || '').slice(0, 300),
+    content: '',
+    link: r.link,
+    pubDate: r.pub_date,
+    author: r.author || '',
+    audioUrl: r.audio_url || '',
+    audioDuration: r.audio_duration || '',
+    isRead: !!r.is_read,
+    isStarred: !!r.is_starred,
+  }));
+
+  // Live cached items catch very fresh articles the poller hasn't persisted yet.
+  const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
+  const ac = new AbortController();
+  req.on('close', () => ac.abort());
+  const results = await Promise.allSettled(
+    feeds.map(async (f) => {
+      const cached = await getCachedFeed(f, ac.signal);
+      return cached ? enrich(cached.items, f.id, f.name, { withContent: true }) : [];
+    }),
+  );
+  if (ac.signal.aborted) return;
+  const strip = (s: string) => s.replace(/<[^>]+>/g, ' ').toLowerCase();
+  const live = results
+    .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
+    .flatMap((r) => r.value)
+    .filter(
+      (a) =>
+        a.title.toLowerCase().includes(needle) ||
+        strip(a.summary || '').includes(needle) ||
+        strip(a.content || '').includes(needle),
+    )
+    .map((a) => ({ ...a, content: '', summary: (a.summary || '').slice(0, 300) }));
+
+  // Persisted rows go first so dedup keeps their correct read/starred flags.
+  const articles = dedupById([...persisted, ...live])
+    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+    .slice(0, 100);
+  res.json({ articles, query: q });
+});
+
 app.post('/api/articles/read', (req, res) => {
   const { article } = req.body;
   if (!article?.id) return res.status(400).json({ error: 'article required' });
