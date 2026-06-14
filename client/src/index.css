@@ -128,3 +128,10 @@ input {
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
 }
+
+/* Hide WebKit's native search clear button — we render a custom one */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
