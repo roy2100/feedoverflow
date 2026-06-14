@@ -113,8 +113,8 @@ describe('GET /api/articles/:id/content', () => {
     const SAVED_ID = 'saved-in-states';
     db.prepare(`
       INSERT OR REPLACE INTO article_states
-        (article_id, feed_id, feed_name, title, link, pub_date, summary, content, author, is_read, is_starred)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+        (article_id, feed_id, feed_name, title, link, pub_date, summary, content, author, is_starred)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `).run(
       SAVED_ID,
       FEED_ID,
@@ -142,61 +142,6 @@ describe('GET /api/articles/:id/content', () => {
     const res = await request(app).get('/api/articles/no-such-id/content');
     assert.equal(res.status, 200);
     assert.equal(res.body.content, '');
-  });
-});
-
-// ── POST /api/articles/read — persists content via lookupContent ──────────────
-
-describe('POST /api/articles/read', () => {
-  test('saves content from feed_cache when article.content is empty', async () => {
-    const article = {
-      id: ARTICLE_1_ID,
-      feedId: FEED_ID,
-      feedName: 'Test Feed',
-      title: TEST_ITEMS[0].title,
-      link: TEST_ITEMS[0].link,
-      pubDate: TEST_ITEMS[0].pubDate,
-      summary: TEST_ITEMS[0].contentSnippet,
-      content: '',
-      author: '',
-      audioUrl: '',
-      audioDuration: '',
-    };
-
-    const res = await request(app).post('/api/articles/read').send({ article });
-    assert.equal(res.status, 200);
-    assert.ok(res.body.ok);
-
-    const saved = db
-      .prepare('SELECT content FROM article_states WHERE article_id = ?')
-      .get(ARTICLE_1_ID) as { content: string } | undefined;
-    assert.equal(
-      saved?.content,
-      '<p>Full HTML content here</p>',
-      'content should be persisted from feed_cache',
-    );
-  });
-
-  test('marks article as read in article_states', async () => {
-    const article = {
-      id: ARTICLE_2_ID,
-      feedId: FEED_ID,
-      feedName: 'Test Feed',
-      title: TEST_ITEMS[1].title,
-      link: TEST_ITEMS[1].link,
-      pubDate: TEST_ITEMS[1].pubDate,
-      summary: TEST_ITEMS[1].contentSnippet,
-      content: '',
-      author: '',
-      audioUrl: '',
-      audioDuration: '',
-    };
-
-    await request(app).post('/api/articles/read').send({ article });
-    const saved = db
-      .prepare('SELECT is_read FROM article_states WHERE article_id = ?')
-      .get(ARTICLE_2_ID) as { is_read: number } | undefined;
-    assert.equal(saved?.is_read, 1);
   });
 });
 

@@ -12,7 +12,7 @@ process.env.TEST_DB = TEST_DB_PATH;
 
 const { app } = await import('./app.ts');
 const { db } = await import('./db.ts');
-const { persistPolled } = await import('./poller.ts');
+const { persistItems } = await import('./articles.ts');
 
 let server: Server;
 let baseUrl: string;
@@ -49,7 +49,7 @@ before(async () => {
       creator: 'A',
     },
   ];
-  persistPolled(feed, items, 'Test Feed', { markRead: false });
+  persistItems(feed, items, 'Test Feed');
 
   await new Promise<void>((resolve) => {
     server = createServer(app);

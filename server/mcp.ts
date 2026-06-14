@@ -43,7 +43,6 @@ const articleFields = {
   summary: z.string().optional().default('').describe('Article summary/snippet'),
   content: z.string().optional().default('').describe('Full article HTML content'),
   author: z.string().optional().default('').describe('Article author'),
-  isRead: z.boolean().optional().default(false),
   isStarred: z.boolean().optional().default(false),
 };
 
@@ -142,16 +141,6 @@ function buildServer(): McpServer {
   // --- Article state ---
 
   server.registerTool(
-    'mark_article_read',
-    {
-      description:
-        'Mark an article as read. Pass the full article object returned by any get_*_articles tool.',
-      inputSchema: articleFields,
-    },
-    async (article) => text(await post('/api/articles/read', { article })),
-  );
-
-  server.registerTool(
     'toggle_star',
     {
       description:
@@ -170,7 +159,7 @@ function buildServer(): McpServer {
     'get_current_article',
     {
       description:
-        "Get the article currently open in the RSS reader UI. Returns the full article object including title, link, summary, content, author, feed name, and read/starred state. Use this when the user says 'this article', 'the current article', or 'what I'm reading'.",
+        "Get the article currently open in the RSS reader UI. Returns the full article object including title, link, summary, content, author, feed name, and starred state. Use this when the user says 'this article', 'the current article', or 'what I'm reading'.",
     },
     async () => text(await get('/api/current-article')),
   );

@@ -16,7 +16,6 @@ export interface Article {
   author: string;
   audioUrl: string;
   audioDuration: string;
-  isRead: boolean;
   isStarred: boolean;
 }
 
@@ -32,7 +31,6 @@ export interface ArticleStateRow {
   author: string;
   audio_url: string;
   audio_duration: string;
-  is_read: number;
   is_starred: number;
   updated_at: string;
 }
@@ -45,6 +43,5 @@ export interface FeedCacheRow {
 }
 
 export interface StatePatch {
-  is_read?: number | null;
   is_starred?: number | null;
 }

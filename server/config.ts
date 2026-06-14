@@ -5,5 +5,6 @@ export const PORT = Number(process.env.PORT) || 3002;
 
 // Soft cap on the logical SQLite DB size (page_count * page_size). When exceeded, the
 // maintenance pass deletes the oldest non-starred articles down to ~90% of this value.
-// Override via DB_MAX_SIZE_MB (server/.env or the plist); defaults to 500MB.
-export const DB_MAX_SIZE_BYTES = (Number(process.env.DB_MAX_SIZE_MB) || 500) * 1024 * 1024;
+// Override via DB_MAX_SIZE_MB (server/.env or the plist); defaults to 2GB — the app durably
+// persists every fetched article for statistics/research, so the store is expected to grow.
+export const DB_MAX_SIZE_BYTES = (Number(process.env.DB_MAX_SIZE_MB) || 2048) * 1024 * 1024;

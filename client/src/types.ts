@@ -18,7 +18,6 @@ export interface Article {
   author: string;
   audioUrl: string;
   audioDuration: string;
-  isRead: boolean;
   isStarred: boolean;
 }
 

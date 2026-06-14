@@ -25,7 +25,6 @@ db.exec(`
     summary    TEXT,
     content    TEXT,
     author     TEXT,
-    is_read    INTEGER DEFAULT 0,
     is_starred INTEGER DEFAULT 0,
     updated_at TEXT DEFAULT (datetime('now'))
   );
@@ -57,6 +56,13 @@ try {
 } catch {}
 try {
   db.exec(`ALTER TABLE article_states ADD COLUMN audio_duration TEXT DEFAULT ''`);
+} catch {}
+
+// Migrate: drop the retired read/unread column. The feature was removed; article_states is
+// now a durable record for statistics/research, with no read state. Throws (and is ignored)
+// on a fresh DB where the column was never created.
+try {
+  db.exec(`ALTER TABLE article_states DROP COLUMN is_read`);
 } catch {}
 
 // Seed default settings

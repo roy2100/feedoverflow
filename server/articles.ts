@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 import { db } from './db.ts';
 import type { RssItem } from './parse-url.ts';
-import type { Article, FeedCacheRow, StatePatch } from './types.ts';
+import type { Article, Feed, FeedCacheRow, StatePatch } from './types.ts';
 
 export function makeId(link?: string, title?: string, pubDate?: string): string {
   return crypto
@@ -42,20 +42,20 @@ export function enrich(
   const ids = items.map((item, i) =>
     makeId(item.link, item.title, item.pubDate || item.isoDate || String(i)),
   );
-  const stateMap: Record<string, { is_read: number; is_starred: number }> = ids.length
+  const stateMap: Record<string, { is_starred: number }> = ids.length
     ? Object.fromEntries(
         (
           db
             .prepare(
-              `SELECT article_id, is_read, is_starred FROM article_states WHERE article_id IN (${ids.map(() => '?').join(',')})`,
+              `SELECT article_id, is_starred FROM article_states WHERE article_id IN (${ids.map(() => '?').join(',')})`,
             )
-            .all(...ids) as Array<{ article_id: string; is_read: number; is_starred: number }>
+            .all(...ids) as Array<{ article_id: string; is_starred: number }>
         ).map((r) => [r.article_id, r]),
       )
     : {};
   return items.map((item, i) => {
     const id = ids[i];
-    const st = stateMap[id] || { is_read: 0, is_starred: 0 };
+    const st = stateMap[id] || { is_starred: 0 };
     const enc = item.enclosure;
     const audioUrl = enc?.url && enc?.type?.startsWith('audio') ? enc.url : '';
     const audioDuration = audioUrl ? normalizeDuration(item.itunes?.duration || '') : '';
@@ -72,10 +72,40 @@ export function enrich(
       author: item.creator || item.author || '',
       audioUrl,
       audioDuration,
-      isRead: !!st.is_read,
       isStarred: !!st.is_starred,
     };
   });
+}
+
+// Persist fetched items into article_states. INSERT OR IGNORE only — never overwrites an
+// existing row or its starred flag, so it is safe to call from every fetch path (on-demand
+// cache miss, background refresh, startup warming, poller). All items are persisted (no cap)
+// so article_states is a durable, complete record for offline statistics/research.
+const insertPolledArticle = db.prepare(`
+  INSERT OR IGNORE INTO article_states
+    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_starred)
+  VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@summary,@content,@author,@audioUrl,@audioDuration,0)
+`);
+
+export function persistItems(feed: Feed, items: RssItem[], feedName: string): void {
+  const enriched = enrich(items, feed.id, feedName, { withContent: true });
+  db.transaction(() => {
+    for (const a of enriched) {
+      insertPolledArticle.run({
+        id: a.id,
+        feedId: a.feedId,
+        feedName: a.feedName,
+        title: a.title,
+        link: a.link,
+        pubDate: a.pubDate,
+        summary: a.summary,
+        content: a.content,
+        author: a.author,
+        audioUrl: a.audioUrl || null,
+        audioDuration: a.audioDuration || null,
+      });
+    }
+  })();
 }
 
 export function resolveUrl(url: string): string {
@@ -108,12 +138,11 @@ export function lookupContent(articleId: string, feedId?: string): string {
 
 const upsertState = db.prepare(`
   INSERT INTO article_states
-    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_read,is_starred)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_starred)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(article_id) DO UPDATE SET
     audio_url      = COALESCE(excluded.audio_url, audio_url),
     audio_duration = COALESCE(excluded.audio_duration, audio_duration),
-    is_read    = CASE WHEN excluded.is_read    IS NOT NULL THEN excluded.is_read    ELSE is_read    END,
     is_starred = CASE WHEN excluded.is_starred IS NOT NULL THEN excluded.is_starred ELSE is_starred END,
     updated_at = datetime('now')
 `);
@@ -131,7 +160,6 @@ export function saveState(article: Article, patch: StatePatch): void {
     article.author,
     article.audioUrl || null,
     article.audioDuration || null,
-    patch.is_read ?? null,
     patch.is_starred ?? null,
   );
 }

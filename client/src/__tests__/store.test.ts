@@ -84,13 +84,6 @@ describe('selectArticle', () => {
     useStore.getState().selectArticle(article);
     expect(useStore.getState().selectedArticle).toEqual(article);
   });
-
-  it('不调用 /api/articles/read', () => {
-    const article = { id: 'a1' } as Article;
-    useStore.setState({ articles: [article] });
-    useStore.getState().selectArticle(article);
-    expect(fetch).not.toHaveBeenCalledWith('/api/articles/read', expect.any(Object));
-  });
 });
 
 // ─── deleteFeed ──────────────────────────────────────────────────────────────

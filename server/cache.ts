@@ -1,4 +1,4 @@
-import { resolveUrl } from './articles.ts';
+import { persistItems, resolveUrl } from './articles.ts';
 import { db } from './db.ts';
 import { logger } from './logger.ts';
 import { parseURL } from './parse-url.ts';
@@ -15,10 +15,18 @@ const setCacheRow = db.prepare(
 );
 export const clearCache = db.prepare('DELETE FROM feed_cache');
 
-export async function fetchAndCache(feed: Feed): Promise<{ items: RssItem[]; feedName: string }> {
-  const parsed = await parseURL(resolveUrl(feed.url));
-  setCacheRow.run(feed.id, parsed.title || feed.name, JSON.stringify(parsed.items), Date.now());
-  return { items: parsed.items, feedName: parsed.title || feed.name };
+// The single fetch chain shared by every path: fetch upstream → write the feed_cache row →
+// persist all items into article_states. On-demand cold misses, background refresh, startup
+// warming and the poller all route through here, so every successful fetch persists.
+export async function refreshFeed(
+  feed: Feed,
+  signal?: AbortSignal,
+): Promise<{ items: RssItem[]; feedName: string }> {
+  const parsed = await parseURL(resolveUrl(feed.url), signal);
+  const feedName = parsed.title || feed.name;
+  setCacheRow.run(feed.id, feedName, JSON.stringify(parsed.items), Date.now());
+  persistItems(feed, parsed.items, feedName);
+  return { items: parsed.items, feedName };
 }
 
 export async function getCachedFeed(
@@ -27,13 +35,11 @@ export async function getCachedFeed(
 ): Promise<{ items: RssItem[]; feedName: string } | null> {
   const row = getCacheRow.get(feed.id) as FeedCacheRow | undefined;
   if (!row) {
-    const parsed = await parseURL(resolveUrl(feed.url), signal);
-    if (signal?.aborted) return null;
-    setCacheRow.run(feed.id, parsed.title || feed.name, JSON.stringify(parsed.items), Date.now());
-    return { items: parsed.items, feedName: parsed.title || feed.name };
+    const result = await refreshFeed(feed, signal);
+    return signal?.aborted ? null : result;
   }
   if (Date.now() - row.fetched_at >= CACHE_TTL) {
-    fetchAndCache(feed).catch((err) =>
+    refreshFeed(feed).catch((err) =>
       log.debug('background refresh failed', { feedId: feed.id, feedUrl: feed.url, err }),
     );
   }
@@ -47,7 +53,7 @@ export function startCacheWarming(): void {
   if (process.env.TEST_DB) return;
   const allFeeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const warm = (f: Feed) =>
-    fetchAndCache(f).catch((err) =>
+    refreshFeed(f).catch((err) =>
       log.warn('cache warm failed', { feedId: f.id, feedUrl: f.url, err }),
     );
   // Re-fetch stale entries in background

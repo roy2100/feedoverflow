@@ -218,7 +218,6 @@ app.get('/api/feeds/:id/articles', async (req, res) => {
         author: r.author || '',
         audioUrl: r.audio_url || '',
         audioDuration: r.audio_duration || '',
-        isRead: !!r.is_read,
         isStarred: !!r.is_starred,
       }));
     const articles = dedupById([...liveArticles, ...historicArticles]);
@@ -293,19 +292,9 @@ app.get('/api/starred', (_req, res) => {
       author: r.author,
       audioUrl: r.audio_url || '',
       audioDuration: r.audio_duration || '',
-      isRead: !!r.is_read,
       isStarred: true,
     })),
   });
-});
-
-app.get('/api/unread-counts', (_req, res) => {
-  const rows = db
-    .prepare(
-      'SELECT feed_id, COUNT(*) AS count FROM article_states WHERE is_read = 0 GROUP BY feed_id',
-    )
-    .all() as Array<{ feed_id: string; count: number }>;
-  res.json(Object.fromEntries(rows.map((r) => [r.feed_id, r.count])));
 });
 
 app.get('/api/starred/count', (_req, res) => {
@@ -345,7 +334,6 @@ app.get('/api/search', async (req, res) => {
     author: r.author || '',
     audioUrl: r.audio_url || '',
     audioDuration: r.audio_duration || '',
-    isRead: !!r.is_read,
     isStarred: !!r.is_starred,
   }));
 
@@ -372,19 +360,11 @@ app.get('/api/search', async (req, res) => {
     )
     .map((a) => ({ ...a, content: '', summary: (a.summary || '').slice(0, 300) }));
 
-  // Persisted rows go first so dedup keeps their correct read/starred flags.
+  // Persisted rows go first so dedup keeps their correct starred flags.
   const articles = dedupById([...persisted, ...live])
     .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
     .slice(0, 100);
   res.json({ articles, query: q });
-});
-
-app.post('/api/articles/read', (req, res) => {
-  const { article } = req.body;
-  if (!article?.id) return res.status(400).json({ error: 'article required' });
-  const content = article.content || lookupContent(article.id, article.feedId);
-  saveState({ ...article, content }, { is_read: 1 });
-  res.json({ ok: true });
 });
 
 app.post('/api/articles/star', (req, res) => {

@@ -61,6 +61,13 @@ Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.roy
 
 Three-panel RSS reader: **sidebar → article list → reader pane**.
 
+One of the app's purposes is to **durably persist every fetched article** (not just starred
+ones) into `article_states` for offline statistics/research. That is why *every* fetch path —
+on-demand reads, background refresh, startup warming, and the poller — persists through one
+shared chain (`refreshFeed` in `cache.ts` → `persistItems` in `articles.ts`), there is no
+per-feed item cap on persistence, and the DB size cap defaults to 2GB. There is no read/unread
+feature — articles only carry a starred flag.
+
 ```
 root/               concurrently orchestrator
 server/             (ESM + TS, run natively by Node, port 3002)
@@ -104,11 +111,11 @@ TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `np
 
 ### Server (`server/`)
 
-- Split into focused modules (see tree above); `app.ts` owns the Express app and routes, `index.ts` is the thin entrypoint. Tests import `app`, `db`, `makeId`, `persistPolled` re-exported from `app.ts`.
+- Split into focused modules (see tree above); `app.ts` owns the Express app and routes, `index.ts` is the thin entrypoint. Tests import `app`, `db`, and helpers (`makeId`, `persistItems`) from `articles.ts`.
 - TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
-- RSS fetched via `rss-parser` through a read-through `feed_cache` (5 min TTL, `cache.ts`); a background poller (`poller.ts`) refreshes feeds and persists new items into `article_states`
-- Maintenance (`maintenance.ts`): runs at poller startup + every 24h. `cleanupOrphans()` deletes non-starred rows whose feed is gone (starred orphans kept). `enforceSizeCap()` caps the logical DB size at `DB_MAX_SIZE_MB` (default 500MB) — when over, deletes the oldest non-starred articles (publish time parsed from RFC-822 `pub_date`, falling back to `updated_at`) down to 90% of the cap, then `VACUUM`s. Starred articles are never deleted
+- RSS fetched via `rss-parser` through `refreshFeed` (`cache.ts`): fetch upstream → write the read-through `feed_cache` (5 min TTL) → `persistItems` all items into `article_states`. Every fetch path routes through it — on-demand reads (`getCachedFeed` cold-miss + stale background refresh), startup warming, and the background poller (`poller.ts`, every 15 min). `INSERT OR IGNORE`, so re-persists never clobber existing rows or the starred flag
+- Maintenance (`maintenance.ts`): runs at poller startup + every 24h. `cleanupOrphans()` deletes non-starred rows whose feed is gone (starred orphans kept). `enforceSizeCap()` caps the logical DB size at `DB_MAX_SIZE_MB` (default 2GB) — when over, deletes the oldest non-starred articles (publish time parsed from RFC-822 `pub_date`, falling back to `updated_at`) down to 90% of the cap, then `VACUUM`s. Starred articles are never deleted
 - Logging: shared `logger` (`logger.ts`, vendored slog in `vendor/slog.ts`) writes NDJSON to `logs/app.log` (size rotation + gzip + retention) and pretty colorized output to a dev TTY. Use `logger.info|warn|error(...)` with a fields object; pass an Error as the `err` field to auto-serialize its stack/cause. Disabled under `TEST_DB`. Tune via `LOG_LEVEL` / `LOG_DIR`
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`
 - `enrich()` joins live RSS items with persisted `article_states` rows
@@ -116,7 +123,7 @@ TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `np
 
 **SQLite tables:**
 - `feeds(id, name, url)`
-- `article_states(article_id, feed_id, feed_name, title, link, pub_date, summary, content, author, audio_url, audio_duration, is_read, is_starred, updated_at)` — caches content so starred articles survive feed removal (`audio_*` added via migration for podcasts)
+- `article_states(article_id, feed_id, feed_name, title, link, pub_date, summary, content, author, audio_url, audio_duration, is_starred, updated_at)` — durable record of every fetched article (caches content so starred articles survive feed removal). `audio_*` added via migration for podcasts; `is_read` dropped via migration when the read/unread feature was removed
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `feed_cache(feed_id, feed_name, items_json, fetched_at)` — read-through RSS cache (5 min TTL)
 - `sessions(token, created_at)` — auth session tokens (30-day TTL)
@@ -135,8 +142,6 @@ TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `np
 | GET | `/api/today` | all-articles filtered to today |
 | GET | `/api/starred` | starred articles |
 | GET | `/api/starred/count` | badge count |
-| GET | `/api/unread-counts` | per-feed unread counts |
-| POST | `/api/articles/read` | upsert `is_read=1` |
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id/content` | cached full content for an article |
 | GET | `/api/fetch-content?url=` | extract readable content via Readability |
@@ -148,4 +153,4 @@ TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `np
 
 ### MCP server (`server/mcp.ts`)
 
-Mounted into the same Express app via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405). Registered in `app.ts` before the SPA `*` fallback. **Localhost-only**: non-local requests (i.e. via the tunnel) get `404` — MCP clients connect over loopback, so there is no public MCP surface. Exposes 14 tools (feed CRUD, OPML import, article lists, read/star, current article, full-content fetch) that call the API above over loopback (`http://localhost:3002`). Configure clients with `{ "type": "http", "url": "http://localhost:3002/mcp" }`.
+Mounted into the same Express app via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405). Registered in `app.ts` before the SPA `*` fallback. **Localhost-only**: non-local requests (i.e. via the tunnel) get `404` — MCP clients connect over loopback, so there is no public MCP surface. Exposes 13 tools (feed CRUD, OPML import, article lists, star, current article, full-content fetch) that call the API above over loopback (`http://localhost:3002`). Configure clients with `{ "type": "http", "url": "http://localhost:3002/mcp" }`.

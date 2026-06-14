@@ -17,7 +17,6 @@ const BASE_ARTICLE: Article = {
   link: 'https://example.com/article',
   pubDate: '2025-01-01T00:00:00Z',
   author: 'Test Author',
-  isRead: true,
   isStarred: false,
   audioUrl: '',
   audioDuration: '',
