@@ -113,79 +113,146 @@ it. The real care is in the migration decision (step 7) and the persist-timing t
 
 ---
 
-# Phase 2: Retire `feed_cache`
+# Phase 2: Slim, then (optionally) retire `feed_cache`
 
 > Deferred — do **not** start until Phase 1 has landed and `article_states` is proven to be a
-> complete superset of every fetched feed's live items (persist-on-every-fetch + no 50-cap).
-> Phase 2's read endpoints stop trusting `feed_cache` and trust `article_states` instead, so
-> that completeness must hold first.
+> complete superset of every fetched feed's items (persist-on-every-fetch + no 50-cap), since
+> Phase 2 stops trusting `feed_cache` for article bodies (2a) and eventually for reads (2b).
 
-## Goal
+After Phase 1, `feed_cache` holds two distinct kinds of data:
 
-Once on-demand fetch persists all items to `article_states`, `feed_cache`'s **storage** role
-is redundant — `article_states` already holds every live item. The only thing `feed_cache`
-still uniquely provides is `fetched_at`: the per-feed "last fetched from upstream" timestamp
-that gates the 5-min network-debounce. Move that timestamp onto the feed, serve reads from
-`article_states`, and drop the `feed_cache` table entirely.
+1. **Heavy — article bodies** (`content` / `contentEncoded` in `items_json`). Now 100%
+   redundant with `article_states.content`: `refreshFeed` writes the cache row and
+   `persistItems` in the same call, so any body in the cache is also in `article_states`.
+2. **Light — the freshness timestamp (`fetched_at`) + the current-feed item list** (title,
+   link, pubDate, summary, author, enclosure) used by the debounce gate and the live-merge.
 
-## Scope
+Phase 2 is split so the big, low-risk win (drop the redundant bodies) lands first, and the
+larger architectural change (remove the table entirely) stays optional.
+
+---
+
+## Phase 2a — slim `feed_cache` to metadata; bodies come from `article_states` (recommended)
+
+### Goal
+
+Stop storing article bodies in `feed_cache`. The body lives only in `article_states.content`
+(the "content state"). `feed_cache` keeps just the lightweight list fields + `fetched_at`, so
+it shrinks dramatically (bodies are the bulk of `items_json`) and the body duplication is gone.
+The table, TTL gate, and live/history merge all stay — so **no freshness-gate migration and no
+read-semantics change**.
+
+### Scope
+
+**Included**
+- In `refreshFeed`, strip `content` / `contentEncoded` from items before
+  `JSON.stringify` into `feed_cache` (keep `summary` / `contentSnippet` for the 300-char list
+  snippet).
+- Remove the now-dead `lookupContent` → `feed_cache.items_json` body fallback.
+- Remove the now-redundant `/api/search` live-cache body scan arm (the SQL `LIKE` over
+  `article_states` already covers bodies).
+
+**Out of scope**
+- The `feed_cache` table, the TTL gate, and the read-endpoint merge — all unchanged.
+
+### Steps
+
+1. **Strip bodies on write.** In `refreshFeed`, map items to drop `content`/`contentEncoded`
+   before caching. Persist (`persistItems`) still runs on the full items with `withContent: true`,
+   so `article_states.content` keeps the body. Document the ordering: cache-write then persist
+   in one call; consider wrapping both in a single transaction so a `persistItems` failure
+   doesn't leave a body-less cache row whose body never made it to `article_states`.
+
+2. **Drop the dead body fallback.** Remove the `feed_cache` branch in `lookupContent`
+   (`articles.ts`) — body now always resolves from `article_states.content`.
+
+3. **Simplify search.** Delete the live-cache scan arm in `/api/search`; keep the
+   `article_states` `LIKE` query. (`getCachedFeed` is no longer needed there.)
+
+4. **Tests + docs.** Rewrite the `content.test.ts` "from `feed_cache`" cases to seed
+   `article_states` instead. Update `docs/backend-fetch-cache.md` (feed_cache stores metadata
+   only; bodies via content state) and `CLAUDE.md` schema note.
+
+### Risks & Open Questions
+
+- **Cache/persist consistency.** Bodies in `article_states` now depend on `persistItems`
+  succeeding whenever a cache row is written. If `setCacheRow` succeeds but `persistItems`
+  throws, that feed's new bodies wait for the next refresh. Mitigate by wrapping the two writes
+  in one transaction (step 1) and/or persisting before caching.
+- **List snippet source.** `summary`/`contentSnippet` is kept in the cache; if a feed puts its
+  whole body in `summary` it stays heavy. Acceptable — the dominant `content`/`contentEncoded`
+  fields are what's stripped.
+
+### Estimated Complexity
+
+**Low.** A field strip on write plus two dead-code removals; captures the main storage win
+without touching the freshness gate or read semantics.
+
+---
+
+## Phase 2b — retire `feed_cache` entirely (optional)
+
+> Reassess the need for this only after 2a ships — with bodies gone, the remaining `feed_cache`
+> payload is tiny, so 2b's marginal benefit may not justify its risk. Likely skippable.
+
+### Goal
+
+Remove the `feed_cache` table altogether. Its only remaining unique value is `fetched_at` (the
+debounce timestamp); relocate that to a per-feed `last_fetched_at`, serve reads from
+`article_states`, and delete the cache layer.
+
+### Scope
 
 **Included**
 - Replace `feed_cache.fetched_at` with a per-feed `last_fetched_at` marker.
 - Re-point `/api/feeds/:id/articles`, `/api/all-articles`, `/api/today`, `/api/search` at
   `article_states`, with a background `refreshFeed` trigger when `last_fetched_at` is stale.
-- Drop the `feed_cache` table, `cache.ts`'s cache read/write helpers, and the
-  `lookupContent` → `feed_cache.items_json` fallback (now dead).
+- Drop the `feed_cache` table and `cache.ts`'s cache read/write helpers (`clearCache`, the
+  cache-row reads); `refreshFeed` + warming stay.
 
 **Out of scope**
 - The freshness *policy* (5-min staleness, force-fetch poller) — unchanged, only its storage
   moves.
 
-## Steps
+### Steps
 
-1. **Add `last_fetched_at`.** New column on `feeds` (epoch ms, nullable) via a guarded
+1. **Add `last_fetched_at`.** New nullable column on `feeds` (epoch ms) via a guarded
    migration, or a tiny `feed_poll(feed_id, last_fetched_at)` table. `refreshFeed` updates it
-   on every successful fetch (alongside the `article_states` write).
+   on every successful fetch.
 
 2. **New freshness gate.** Replace `getCachedFeed`'s TTL-on-`feed_cache.fetched_at` check with
-   a check on `last_fetched_at`: if `now - last_fetched_at >= CACHE_TTL`, fire-and-forget
-   `refreshFeed(feed)`; if `last_fetched_at` is null (feed never fetched), fetch synchronously
-   (the old cold-miss path). Reads always return from `article_states` immediately.
+   one on `last_fetched_at`: stale → fire-and-forget `refreshFeed(feed)`; null (never fetched)
+   → fetch synchronously. Reads always return from `article_states` immediately.
 
 3. **Collapse the read endpoints.** Each becomes "query `article_states` + trigger the gate":
-   - `/api/feeds/:id/articles` → all rows for the feed, ordered by `pub_date` desc. The live+
-     historic merge/dedup disappears.
-   - `/api/all-articles` → newest N per feed from `article_states`.
-   - `/api/today` → `article_states` filtered to today.
-   - `/api/search` → the SQL `LIKE` arm only; delete the live-cache scan arm.
+   `/api/feeds/:id/articles` (all rows for the feed, `pub_date` desc), `/api/all-articles`
+   (newest N per feed), `/api/today` (filtered to today), `/api/search` (already `LIKE`-only
+   after 2a). The live+historic merge/dedup disappears.
 
-4. **Delete dead code.** Remove `feed_cache` from `db.ts`; remove `getCachedFeed`/`fetchAndCache`
-   cache-row helpers and `clearCache` from `cache.ts` (keep `refreshFeed` + warming, now
-   warming just calls `refreshFeed`); drop the `feed_cache` branch in `lookupContent`; remove
-   the `PATCH /api/settings` → `clearCache` call (nothing to clear).
+4. **Delete dead code.** Remove `feed_cache` from `db.ts`, the cache-row helpers + `clearCache`
+   from `cache.ts`, and the `PATCH /api/settings` → `clearCache` call (nothing to clear).
 
-5. **Tests + docs.** Update endpoint tests to seed `article_states` instead of `feed_cache`;
-   update `docs/backend-fetch-cache.md` and `CLAUDE.md` (drop the `feed_cache` table from the
-   schema list, rewrite the "read-through cache" sections as the `last_fetched_at` gate).
+5. **Tests + docs.** Update endpoint tests to seed `article_states`; rewrite the
+   `docs/backend-fetch-cache.md` read-through sections as the `last_fetched_at` gate and drop
+   `feed_cache` from the `CLAUDE.md` schema list.
 
-## Risks & Open Questions
+### Risks & Open Questions
 
 - **Behavioral change — snapshot → accumulated union.** `feed_cache.items_json` reflects the
   *current* feed (items the publisher dropped disappear); `article_states` is append-only, so
-  `/api/feeds/:id/articles` shifts from "current feed top N" to "every item ever seen for this
-  feed." For a research-persistence reader this is the desired direction (nothing is lost) and
-  the endpoint already merged history — but it is a visible change in what the list shows.
-- **Completeness dependency.** If Phase 1 ever fails to persist some live items, Phase 2 reads
-  silently miss them (no cache fallback). Validate Phase 1 coverage before starting.
-- **`last_fetched_at` storage choice.** Column on `feeds` (simplest) vs. separate table
-  (keeps `feeds` purely user-config). Recommend the column unless we want to keep `feeds`
-  config-only. Decide in step 1.
+  `/api/feeds/:id/articles` shifts from "current feed top N" to "every item ever seen." For a
+  research-persistence reader this is the desired direction, but it is a visible change — needs
+  sign-off.
+- **Completeness dependency.** If Phase 1/2a ever fail to persist some items, 2b reads silently
+  miss them (no cache fallback). Validate coverage before starting.
+- **`last_fetched_at` storage choice.** Column on `feeds` (simplest) vs. separate table (keeps
+  `feeds` config-only). Recommend the column. Decide in step 1.
 
-## Estimated Complexity
+### Estimated Complexity
 
-**Medium.** Net **deletion** — removes a table, four endpoints' merge logic, and a
-`lookupContent` branch — but it relocates the freshness gate and changes read semantics, so
-the endpoint tests need real rework and the snapshot→union change needs sign-off.
+**Medium.** Net deletion (a table + four endpoints' merge logic) but relocates the freshness
+gate and changes read semantics, so endpoint tests need rework and the snapshot→union change
+needs sign-off.
 
 ---
 
@@ -214,4 +281,19 @@ the removed `/api/unread-counts` tests) rather than kept and trimmed. `persistPo
 aliased — tests import `persistItems` from `articles.ts` directly, since they needed rewriting
 anyway.
 
-**Phase 2 — not started.**
+**Phase 2a — done (2026-06-14).** `feed_cache` now stores list metadata only:
+
+- `refreshFeed` (`cache.ts`) strips `content`/`contentEncoded` before writing the cache row,
+  and persists full bodies to `article_states`; both writes wrapped in one transaction.
+- `lookupContent` (`articles.ts`) simplified to read `article_states.content` only (dropped
+  the `feed_cache` fallback + the `feedId` param; callers in `app.ts` updated).
+- `/api/search` collapsed to a single `article_states` `LIKE` query (dropped the live-cache
+  scan arm; now synchronous).
+- Tests: `content.test.ts` seeds `article_states` via `persistItems` and reframes the
+  body-source cases; `search.test.ts` comment updated. Gates green: server `tsc`, 42 server +
+  30 client tests, `fmt:check`, `lint`.
+- Docs: `CLAUDE.md` + `docs/backend-fetch-cache.md` updated.
+
+**Phase 2b — not started (optional, likely skippable).** With bodies gone, the remaining
+`feed_cache` payload is tiny, so full retirement's marginal benefit may not justify the
+`last_fetched_at` migration + snapshot→union read-semantics change.

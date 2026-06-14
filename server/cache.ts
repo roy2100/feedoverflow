@@ -24,8 +24,21 @@ export async function refreshFeed(
 ): Promise<{ items: RssItem[]; feedName: string }> {
   const parsed = await parseURL(resolveUrl(feed.url), signal);
   const feedName = parsed.title || feed.name;
-  setCacheRow.run(feed.id, feedName, JSON.stringify(parsed.items), Date.now());
-  persistItems(feed, parsed.items, feedName);
+  // The cache row only needs the lightweight list fields; article bodies live in
+  // article_states (the content state), so strip them before caching — they are the bulk
+  // of items_json. summary/contentSnippet stay for the list snippet.
+  const slimItems = parsed.items.map((item) => {
+    const slim = { ...item };
+    delete slim.content;
+    delete slim.contentEncoded;
+    return slim;
+  });
+  // One transaction so a persistItems failure can't leave a body-less cache row whose
+  // body never reached article_states (the only place lookupContent now reads bodies).
+  db.transaction(() => {
+    persistItems(feed, parsed.items, feedName);
+    setCacheRow.run(feed.id, feedName, JSON.stringify(slimItems), Date.now());
+  })();
   return { items: parsed.items, feedName };
 }
 

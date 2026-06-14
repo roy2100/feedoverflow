@@ -307,13 +307,13 @@ app.get('/api/starred/count', (_req, res) => {
 
 // ── Search ───────────────────────────────────────────────────────────────────
 
-app.get('/api/search', async (req, res) => {
+app.get('/api/search', (req, res) => {
   const q = ((req.query.q as string | undefined) || '').trim();
   if (q.length < 2) return res.json({ articles: [], query: q });
-  const needle = q.toLowerCase();
 
-  // Persisted rows hold title/summary/content for polled + read/starred articles,
-  // so a SQL LIKE covers the bulk of history without loading every row into JS.
+  // article_states durably holds title/summary/content for every fetched + starred article,
+  // so a single SQL LIKE covers search with no live fetch. (pub_date is an RFC-822 string, so
+  // the SQL ORDER BY is only a coarse text sort — re-sort by parsed date in JS before slicing.)
   const like = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
   const rows = db
     .prepare(
@@ -322,46 +322,21 @@ app.get('/api/search', async (req, res) => {
        ORDER BY pub_date DESC LIMIT 200`,
     )
     .all(like, like, like) as ArticleStateRow[];
-  const persisted: Article[] = rows.map((r) => ({
-    id: r.article_id,
-    feedId: r.feed_id,
-    feedName: r.feed_name,
-    title: r.title,
-    summary: (r.summary || '').slice(0, 300),
-    content: '',
-    link: r.link,
-    pubDate: r.pub_date,
-    author: r.author || '',
-    audioUrl: r.audio_url || '',
-    audioDuration: r.audio_duration || '',
-    isStarred: !!r.is_starred,
-  }));
-
-  // Live cached items catch very fresh articles the poller hasn't persisted yet.
-  const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
-  const ac = new AbortController();
-  req.on('close', () => ac.abort());
-  const results = await Promise.allSettled(
-    feeds.map(async (f) => {
-      const cached = await getCachedFeed(f, ac.signal);
-      return cached ? enrich(cached.items, f.id, f.name, { withContent: true }) : [];
-    }),
-  );
-  if (ac.signal.aborted) return;
-  const strip = (s: string) => s.replace(/<[^>]+>/g, ' ').toLowerCase();
-  const live = results
-    .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
-    .flatMap((r) => r.value)
-    .filter(
-      (a) =>
-        a.title.toLowerCase().includes(needle) ||
-        strip(a.summary || '').includes(needle) ||
-        strip(a.content || '').includes(needle),
-    )
-    .map((a) => ({ ...a, content: '', summary: (a.summary || '').slice(0, 300) }));
-
-  // Persisted rows go first so dedup keeps their correct starred flags.
-  const articles = dedupById([...persisted, ...live])
+  const articles: Article[] = rows
+    .map((r) => ({
+      id: r.article_id,
+      feedId: r.feed_id,
+      feedName: r.feed_name,
+      title: r.title,
+      summary: (r.summary || '').slice(0, 300),
+      content: '',
+      link: r.link,
+      pubDate: r.pub_date,
+      author: r.author || '',
+      audioUrl: r.audio_url || '',
+      audioDuration: r.audio_duration || '',
+      isStarred: !!r.is_starred,
+    }))
     .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
     .slice(0, 100);
   res.json({ articles, query: q });
@@ -370,13 +345,13 @@ app.get('/api/search', async (req, res) => {
 app.post('/api/articles/star', (req, res) => {
   const { article, starred } = req.body;
   if (!article?.id) return res.status(400).json({ error: 'article required' });
-  const content = article.content || lookupContent(article.id, article.feedId);
+  const content = article.content || lookupContent(article.id);
   saveState({ ...article, content }, { is_starred: starred ? 1 : 0 });
   res.json({ ok: true, isStarred: !!starred });
 });
 
 app.get('/api/articles/:id/content', (req, res) => {
-  const content = lookupContent(req.params.id, req.query.feedId as string | undefined);
+  const content = lookupContent(req.params.id);
   res.json({ content });
 });
 

@@ -8,7 +8,7 @@ process.env.TEST_DB = ':memory:';
 
 const { app } = await import('./app.ts');
 const { db } = await import('./db.ts');
-const { makeId } = await import('./articles.ts');
+const { makeId, persistItems } = await import('./articles.ts');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -40,14 +40,19 @@ const ARTICLE_1_ID = makeId(TEST_ITEMS[0].link, TEST_ITEMS[0].title, TEST_ITEMS[
 const ARTICLE_2_ID = makeId(TEST_ITEMS[1].link, TEST_ITEMS[1].title, TEST_ITEMS[1].pubDate);
 
 before(() => {
+  const feed = { id: FEED_ID, name: 'Test Feed', url: 'https://example.com/feed.xml' };
   db.prepare('INSERT OR IGNORE INTO feeds (id, name, url) VALUES (?, ?, ?)').run(
-    FEED_ID,
-    'Test Feed',
-    'https://example.com/feed.xml',
+    feed.id,
+    feed.name,
+    feed.url,
   );
+  // feed_cache feeds only the list endpoints (which strip bodies via enrich); the article
+  // body is read from article_states, so what the cache row carries here is immaterial.
   db.prepare(
     'INSERT OR REPLACE INTO feed_cache (feed_id, feed_name, items_json, fetched_at) VALUES (?, ?, ?, ?)',
   ).run(FEED_ID, 'Test Feed', JSON.stringify(TEST_ITEMS), Date.now());
+  // article_states is the content state — it holds every item's body.
+  persistItems(feed, TEST_ITEMS, 'Test Feed');
 });
 
 // ── enrich() strips content in list endpoints ─────────────────────────────────
@@ -97,19 +102,19 @@ describe('GET /api/feeds/:id/articles — content stripped', () => {
 // ── GET /api/articles/:id/content ────────────────────────────────────────────
 
 describe('GET /api/articles/:id/content', () => {
-  test('returns contentEncoded from feed_cache', async () => {
-    const res = await request(app).get(`/api/articles/${ARTICLE_1_ID}/content?feedId=${FEED_ID}`);
+  test('returns the persisted contentEncoded body from article_states', async () => {
+    const res = await request(app).get(`/api/articles/${ARTICLE_1_ID}/content`);
     assert.equal(res.status, 200);
     assert.equal(res.body.content, '<p>Full HTML content here</p>');
   });
 
-  test('falls back to item.content when contentEncoded is absent', async () => {
-    const res = await request(app).get(`/api/articles/${ARTICLE_2_ID}/content?feedId=${FEED_ID}`);
+  test('returns the persisted body when contentEncoded was absent', async () => {
+    const res = await request(app).get(`/api/articles/${ARTICLE_2_ID}/content`);
     assert.equal(res.status, 200);
     assert.equal(res.body.content, 'Summary only');
   });
 
-  test('article_states content takes priority over feed_cache', async () => {
+  test('returns content stored directly in article_states', async () => {
     const SAVED_ID = 'saved-in-states';
     db.prepare(`
       INSERT OR REPLACE INTO article_states
@@ -148,7 +153,7 @@ describe('GET /api/articles/:id/content', () => {
 // ── POST /api/articles/star — persists content via lookupContent ──────────────
 
 describe('POST /api/articles/star', () => {
-  test('saves content from feed_cache when starring with empty content', async () => {
+  test('backfills content from article_states when starring with empty content', async () => {
     const article = {
       id: ARTICLE_1_ID,
       feedId: FEED_ID,
@@ -174,7 +179,7 @@ describe('POST /api/articles/star', () => {
     assert.equal(
       saved?.content,
       '<p>Full HTML content here</p>',
-      'content should be persisted from feed_cache',
+      'content should be backfilled from article_states',
     );
   });
 

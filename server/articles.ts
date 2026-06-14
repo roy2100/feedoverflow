@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 
 import { db } from './db.ts';
 import type { RssItem } from './parse-url.ts';
-import type { Article, Feed, FeedCacheRow, StatePatch } from './types.ts';
+import type { Article, Feed, StatePatch } from './types.ts';
 
 export function makeId(link?: string, title?: string, pubDate?: string): string {
   return crypto
@@ -119,21 +119,14 @@ export function resolveUrl(url: string): string {
   return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
 }
 
-export function lookupContent(articleId: string, feedId?: string): string {
+// Body lives only in article_states.content (the content state) — every fetched item is
+// persisted there with its body (persistItems, withContent: true), so no feed_cache fallback
+// is needed.
+export function lookupContent(articleId: string): string {
   const saved = db
     .prepare('SELECT content FROM article_states WHERE article_id = ?')
     .get(articleId) as { content?: string } | undefined;
-  if (saved?.content) return saved.content;
-  if (!feedId) return '';
-  const feedRow = db.prepare('SELECT * FROM feed_cache WHERE feed_id = ?').get(feedId) as
-    | FeedCacheRow
-    | undefined;
-  if (!feedRow) return '';
-  const items = JSON.parse(feedRow.items_json) as RssItem[];
-  const item = items.find(
-    (it, i) => makeId(it.link, it.title, it.pubDate || it.isoDate || String(i)) === articleId,
-  );
-  return item ? item.contentEncoded || item.content || item.summary || '' : '';
+  return saved?.content || '';
 }
 
 const upsertState = db.prepare(`

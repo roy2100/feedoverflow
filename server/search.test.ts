@@ -18,8 +18,8 @@ let server: Server;
 let baseUrl: string;
 
 before(async () => {
-  // Drop the seeded default feeds so /api/search's live-cache loop makes no
-  // network calls — this suite only exercises the persisted (article_states) path.
+  // /api/search reads only from article_states (no live fetch), so the seeded default
+  // feeds are irrelevant; drop them to keep the test DB minimal.
   db.prepare('DELETE FROM feeds').run();
 
   const feed = { id: 'f1', name: 'Test Feed', url: 'https://example.com/feed' };

@@ -12,7 +12,7 @@ persists, and how the read endpoints stitch those layers together.
 
 | Store | Table | Role | Persistence | TTL |
 |-------|-------|------|-------------|-----|
-| **Feed cache** | `feed_cache` | Read-through cache of the latest parsed RSS items per feed | Transient (just a cache) | 5 min (`CACHE_TTL`) |
+| **Feed cache** | `feed_cache` | Read-through cache of the latest parsed RSS item **metadata** per feed (article bodies stripped) | Transient (just a cache) | 5 min (`CACHE_TTL`) |
 | **Article states** | `article_states` | Durable record of every fetched article + starred flag + cached content | Permanent (the source of truth for history) | none (size-capped) |
 | **Favicon cache** | `favicon_cache` | Per-domain favicon BLOBs | Long-lived | 30 d positive / 1 d negative |
 
@@ -35,13 +35,17 @@ Everything that touches the network for feeds goes through `parse-url.ts → par
 `refreshFeed(feed, signal?)` is the single chain every fetch path routes through:
 
 1. `parseURL` the feed from upstream.
-2. Write the `feed_cache` row (`INSERT OR REPLACE`, `fetched_at = now`).
-3. `persistItems(feed, items, feedName)` — `INSERT OR IGNORE` **all** items into
-   `article_states` (`articles.ts`).
+2. `persistItems(feed, items, feedName)` — `INSERT OR IGNORE` **all** items (full bodies)
+   into `article_states` (`articles.ts`).
+3. Write the `feed_cache` row (`INSERT OR REPLACE`, `fetched_at = now`) with item bodies
+   (`content` / `contentEncoded`) **stripped** — the cache only carries list metadata; bodies
+   live in `article_states.content`.
 
-Because persistence lives in step 3, **every** path that fetches persists: on-demand cold
-misses, stale background refresh, startup warming, and the poller. `INSERT OR IGNORE` makes
-it idempotent — a re-persist never overwrites an existing row or its starred flag.
+Steps 2–3 run in **one transaction**, so a `persistItems` failure can't leave a body-less
+cache row whose body never reached `article_states`. Because persistence lives in step 2,
+**every** path that fetches persists: on-demand cold misses, stale background refresh, startup
+warming, and the poller. `INSERT OR IGNORE` makes it idempotent — a re-persist never
+overwrites an existing row or its starred flag.
 
 ### Read-through wrapper — `getCachedFeed` (on-demand)
 
@@ -95,7 +99,7 @@ from `article_states` collides and dedups correctly.
 | `GET /api/feeds/:id/articles` | `getCachedFeed` top 50 | all `article_states` for the feed | live wins; history backfills items aged out of the feed |
 | `GET /api/all-articles` | `getCachedFeed` top 5 / feed | — | cache only, merged across feeds |
 | `GET /api/today` | `getCachedFeed`, filtered to today | — | cache only |
-| `GET /api/search` | `getCachedFeed` (all items, filtered in JS) | SQL `LIKE` over `article_states` (limit 200) | persisted first so its starred flags win on dedup |
+| `GET /api/search` | — | SQL `LIKE` over `article_states` (title/summary/content, limit 200) | DB only, re-sorted by parsed date, top 100 |
 | `GET /api/starred` | — | `article_states WHERE is_starred=1` | DB only |
 | `GET /api/starred/count` | — | `article_states` aggregate | DB only |
 
@@ -107,11 +111,9 @@ the current `is_starred` from `article_states` in one `IN (…)` query, and shap
 ## Content lookup
 
 The list endpoints send `content: ''`; the reader fetches it lazily via
-`GET /api/articles/:id/content` → `lookupContent(articleId, feedId)`:
-
-1. Prefer `article_states.content` (persisted by any fetch path / on star).
-2. Fall back to scanning the feed's `feed_cache.items_json` for a matching id.
-3. Otherwise empty.
+`GET /api/articles/:id/content` → `lookupContent(articleId)`, which reads
+`article_states.content` (or empty). Every fetched item is persisted there with its body, so
+there is no `feed_cache` fallback — the cache no longer stores bodies.
 
 Star writes (`/api/articles/star`) backfill content via the same `lookupContent` before
 `saveState()` upserts the row — so starring an article captures its body so it survives
@@ -184,11 +186,11 @@ try/catch so a bad pass never crashes the process.
    from read endpoints                                + startup warming
               │                                                      │
               ▼                                                      ▼
-        ┌───────────┐  persistItems(): INSERT OR IGNORE (all items)  ┌──────────────┐
-        │ feed_cache │ ────────────────────────────────────────────▶│ article_states│
-        │  (5 min)  │                                                │  (durable)    │
-        └─────┬─────┘                                                └──────┬───────┘
-              │ live items                                 history / starred│
+        ┌───────────┐  persistItems(): INSERT OR IGNORE (all items, bodies)  ┌──────────────┐
+        │ feed_cache │◀── one txn ──────────────────────────────────────────▶│ article_states│
+        │ (5min,meta)│                                                        │  (durable)    │
+        └─────┬─────┘                                                         └──────┬───────┘
+              │ list metadata                                      history / bodies  │
               └───────────────┬────────────────────────────────────────────┘
                               ▼  enrich() + dedupById + sort
                      read endpoints → client
