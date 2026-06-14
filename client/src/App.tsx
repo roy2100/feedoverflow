@@ -50,7 +50,18 @@ export default function App() {
     deleteFeed,
     updateFeed,
     loadArticles,
+    lastListView,
+    scopedSearch,
+    toggleSearchScope,
   } = useStore();
+
+  // Label for the scopable base view (Starred / a feed). Null ⇒ not scopable ⇒ no toggle.
+  const scopeLabel =
+    lastListView.type === 'starred'
+      ? 'Starred'
+      : lastListView.type === 'feed'
+        ? (lastListView.feed?.name ?? null)
+        : null;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -297,6 +308,9 @@ export default function App() {
             onOpenManageModal={() => setShowManageModal(true)}
             onOpenSettings={() => setShowSettingsModal(true)}
             onSearch={search}
+            scopedSearch={scopedSearch}
+            scopeLabel={scopeLabel}
+            onToggleSearchScope={toggleSearchScope}
           />
         )}
         {!readingMode && (

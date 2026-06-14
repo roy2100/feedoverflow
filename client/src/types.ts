@@ -21,12 +21,22 @@ export interface Article {
   isStarred: boolean;
 }
 
+// Optional scope on a search view: restrict results to starred articles or one feed.
+// Captured from the base view (Starred / a specific feed) active before search began.
+// `全部/All` and `Today` are not scopable, so they never produce a scope.
+export interface SearchScope {
+  kind: 'starred' | 'feed';
+  feedId?: string;
+  feedName?: string;
+}
+
 // Which list is shown in the middle panel. `feed` is present only for `type: 'feed'`,
-// `query` only for `type: 'search'`.
+// `query` / `scope` only for `type: 'search'`.
 export interface View {
   type: 'all' | 'today' | 'starred' | 'feed' | 'search';
   feed?: Feed;
   query?: string;
+  scope?: SearchScope;
 }
 
 // Mobile single-pane navigation.

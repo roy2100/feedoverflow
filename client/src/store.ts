@@ -1,9 +1,19 @@
 import { create } from 'zustand';
 
-import type { Article, Feed, View } from './types';
+import type { Article, Feed, SearchScope, View } from './types';
 
 const API = '/api';
 let loadAbortController: AbortController | null = null;
+
+// A base view is "scopable" only when it maps to a pure SQL filter: Starred or a single feed.
+// 全部/All and Today are not scopable (All would be a no-op; Today needs date logic).
+function scopeFromView(view: View): SearchScope | undefined {
+  if (view.type === 'starred') return { kind: 'starred' };
+  if (view.type === 'feed' && view.feed) {
+    return { kind: 'feed', feedId: view.feed.id, feedName: view.feed.name };
+  }
+  return undefined;
+}
 
 async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
   const r = await fetch(url, opts);
@@ -21,11 +31,16 @@ interface StoreState {
   selectedArticle: Article | null;
   loadingArticles: boolean;
   starredCount: number;
+  // The most recent non-search view — the base whose scope search can restrict to.
+  lastListView: View;
+  // Whether scoped search is enabled (desktop toggle). Only effective when lastListView is scopable.
+  scopedSearch: boolean;
 
   init: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
   selectView: (view: View) => void;
   search: (query: string) => void;
+  toggleSearchScope: () => void;
   selectArticle: (article: Article) => void;
   toggleStar: (article: Article) => void;
   addFeed: (input: { url: string }) => Promise<void>;
@@ -41,6 +56,8 @@ export const useStore = create<StoreState>((set, get) => ({
   selectedArticle: null,
   loadingArticles: false,
   starredCount: 0,
+  lastListView: { type: 'today' },
+  scopedSearch: false,
 
   init: async () => {
     try {
@@ -65,10 +82,16 @@ export const useStore = create<StoreState>((set, get) => ({
         today: `${API}/today`,
         starred: `${API}/starred`,
       };
-      const url =
-        view.type === 'search'
-          ? `${API}/search?q=${encodeURIComponent(view.query ?? '')}`
-          : (urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`);
+      let url: string;
+      if (view.type === 'search') {
+        url = `${API}/search?q=${encodeURIComponent(view.query ?? '')}`;
+        if (view.scope?.kind === 'starred') url += '&scope=starred';
+        else if (view.scope?.kind === 'feed' && view.scope.feedId) {
+          url += `&scope=feed&feedId=${encodeURIComponent(view.scope.feedId)}`;
+        }
+      } else {
+        url = urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`;
+      }
       const data = await apiFetch(url, { signal: controller.signal }).then((r) => r.json());
       set({ articles: data.articles || [] });
     } catch (e) {
@@ -79,18 +102,32 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   selectView: (view) => {
+    // Remember the last real list view so search can scope to it later.
+    if (view.type !== 'search') set({ lastListView: view });
     set({ selectedView: view });
     get().loadArticles(view);
   },
 
   search: (query) => {
     const q = query.trim();
-    // Too short to be meaningful — fall back to the default view.
+    // Too short to be meaningful — fall back to the last list view.
     if (q.length < 2) {
-      get().selectView({ type: 'today' });
+      get().selectView(get().lastListView);
       return;
     }
-    get().selectView({ type: 'search', query: q });
+    const scope = get().scopedSearch ? scopeFromView(get().lastListView) : undefined;
+    set({ selectedView: { type: 'search', query: q, scope } });
+    get().loadArticles({ type: 'search', query: q, scope });
+  },
+
+  toggleSearchScope: () => {
+    const next = !get().scopedSearch;
+    set({ scopedSearch: next });
+    // Re-run the active search so results update immediately.
+    const view = get().selectedView;
+    if (view.type === 'search' && (view.query?.trim().length ?? 0) >= 2) {
+      get().search(view.query ?? '');
+    }
   },
 
   selectArticle: (article) => {

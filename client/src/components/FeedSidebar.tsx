@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   PanelLeft,
   Search,
+  Filter,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -45,6 +46,11 @@ interface FeedSidebarProps {
   onOpenManageModal?: (() => void) | null;
   onOpenSettings?: (() => void) | null;
   onSearch?: (query: string) => void;
+  // Scoped-search toggle (desktop only). `scopeLabel` is non-null only when the base view is
+  // scopable (Starred / a feed); the toggle button renders only then.
+  scopedSearch?: boolean;
+  scopeLabel?: string | null;
+  onToggleSearchScope?: () => void;
 }
 
 export default function FeedSidebar({
@@ -58,6 +64,9 @@ export default function FeedSidebar({
   onOpenManageModal,
   onOpenSettings,
   onSearch,
+  scopedSearch,
+  scopeLabel,
+  onToggleSearchScope,
 }: FeedSidebarProps) {
   const [query, setQuery] = useState('');
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,6 +94,9 @@ export default function FeedSidebar({
     if (debounce.current) clearTimeout(debounce.current);
     onSearch?.('');
   };
+
+  // Scope toggle shows only on desktop and only when the base view is scopable (scopeLabel set).
+  const scopeToggle = !isMobile && !!onToggleSearchScope && !!scopeLabel;
 
   return (
     <aside
@@ -167,11 +179,13 @@ export default function FeedSidebar({
             type="search"
             value={query}
             onChange={(e) => handleChange(e.target.value)}
-            placeholder="搜索文章…"
+            placeholder={scopedSearch && scopeLabel ? `在「${scopeLabel}」中搜索…` : '搜索文章…'}
             enterKeyHint="search"
             style={{
               width: '100%',
-              padding: isMobile ? '9px 28px 9px 30px' : '6px 26px 6px 28px',
+              padding: isMobile
+                ? '9px 28px 9px 30px'
+                : `6px ${20 + (scopeToggle ? 20 : 0) + (query ? 20 : 0)}px 6px 28px`,
               fontSize: isMobile ? 15 : 13,
               color: 'var(--text-primary)',
               background: 'var(--bg)',
@@ -180,26 +194,53 @@ export default function FeedSidebar({
               outline: 'none',
             }}
           />
-          {query && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              title="清除"
-              style={{
-                position: 'absolute',
-                right: isMobile ? 24 : 20,
-                display: 'flex',
-                alignItems: 'center',
-                color: 'var(--text-tertiary)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 2,
-              }}
-            >
-              <X size={14} />
-            </button>
-          )}
+          <div
+            style={{
+              position: 'absolute',
+              right: isMobile ? 24 : 18,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+            }}
+          >
+            {query && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                title="清除"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: 'var(--text-tertiary)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 2,
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+            {scopeToggle && (
+              <button
+                type="button"
+                onClick={onToggleSearchScope}
+                title={scopedSearch ? `在「${scopeLabel}」中搜索` : '全局搜索'}
+                aria-pressed={scopedSearch}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: scopedSearch ? 'var(--accent)' : 'var(--text-tertiary)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 2,
+                }}
+              >
+                <Filter size={14} fill={scopedSearch ? 'var(--accent)' : 'none'} />
+              </button>
+            )}
+          </div>
         </form>
       )}
 

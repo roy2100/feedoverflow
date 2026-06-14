@@ -51,6 +51,28 @@ before(async () => {
   ];
   persistItems(feed, items, 'Test Feed');
 
+  // A second feed sharing the keyword "plain", to verify feed-scoped search excludes it.
+  const feed2 = { id: 'f2', name: 'Other Feed', url: 'https://other.com/feed' };
+  persistItems(
+    feed2,
+    [
+      {
+        title: 'plain title in other feed',
+        link: 'https://other.com/1',
+        pubDate: new Date(Date.now() - 500).toISOString(),
+        contentSnippet: 'plain summary other',
+        contentEncoded: '<p>plain body other</p>',
+        creator: 'B',
+      },
+    ],
+    'Other Feed',
+  );
+
+  // Star one f1 article so scope=starred can be verified.
+  db.prepare('UPDATE article_states SET is_starred = 1 WHERE link = ?').run(
+    'https://example.com/1',
+  );
+
   await new Promise<void>((resolve) => {
     server = createServer(app);
     server.listen(0, '127.0.0.1', () => {
@@ -69,9 +91,14 @@ after(async () => {
   } catch {}
 });
 
-async function search(q: string) {
-  const res = await fetch(`${baseUrl}/api/search?q=${encodeURIComponent(q)}`);
-  return (await res.json()) as { articles: Array<{ title: string }>; query: string };
+async function search(q: string, scope?: string) {
+  const res = await fetch(
+    `${baseUrl}/api/search?q=${encodeURIComponent(q)}${scope ? `&${scope}` : ''}`,
+  );
+  return (await res.json()) as {
+    articles: Array<{ title: string; feedId: string; isStarred: boolean }>;
+    query: string;
+  };
 }
 
 test('matches on title', async () => {
@@ -105,4 +132,28 @@ test('query shorter than 2 chars returns empty', async () => {
 test('no match returns empty list', async () => {
   const { articles } = await search('Platypus');
   assert.equal(articles.length, 0);
+});
+
+test('global "plain" matches across both feeds', async () => {
+  const { articles } = await search('plain');
+  // 3 f1 titles/summaries/bodies + 1 f2 = 4
+  assert.equal(articles.length, 4);
+});
+
+test('scope=feed restricts to one feed', async () => {
+  const { articles } = await search('plain', 'scope=feed&feedId=f2');
+  assert.equal(articles.length, 1);
+  assert.equal(articles[0].feedId, 'f2');
+});
+
+test('scope=starred restricts to starred articles', async () => {
+  const { articles } = await search('plain', 'scope=starred');
+  assert.equal(articles.length, 1);
+  assert.equal(articles[0].isStarred, true);
+  assert.match(articles[0].title, /Zebra/);
+});
+
+test('unknown scope falls back to global', async () => {
+  const { articles } = await search('plain', 'scope=bogus');
+  assert.equal(articles.length, 4);
 });
