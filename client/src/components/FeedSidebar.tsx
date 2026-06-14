@@ -99,6 +99,12 @@ export default function FeedSidebar({
   // Scope toggle shows only on desktop and only when the base view is scopable (scopeLabel set).
   const scopeToggle = !isMobile && !!onToggleSearchScope && !!scopeLabel;
 
+  // During a scoped search, keep the scoped base row (Starred / a feed) highlighted in the
+  // sidebar — otherwise the selection would visually disappear while searching.
+  const scoped = selectedView.type === 'search' ? selectedView.scope : undefined;
+  const hlType = scoped ? scoped.kind : selectedView.type;
+  const hlFeedId = scoped?.kind === 'feed' ? scoped.feedId : selectedView.feed?.id;
+
   return (
     <aside
       style={{
@@ -259,7 +265,7 @@ export default function FeedSidebar({
           label="Today"
           icon={<Sun size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5A623"
-          selected={selectedView.type === 'today'}
+          selected={hlType === 'today'}
           onClick={() => onSelectView({ type: 'today' })}
         />
         <NavItem
@@ -267,7 +273,7 @@ export default function FeedSidebar({
           label="全部"
           icon={<List size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="var(--text-secondary)"
-          selected={selectedView.type === 'all'}
+          selected={hlType === 'all'}
           onClick={() => onSelectView({ type: 'all' })}
         />
         <NavItem
@@ -275,14 +281,14 @@ export default function FeedSidebar({
           label="Starred"
           icon={<Star size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5C518"
-          selected={selectedView.type === 'starred'}
+          selected={hlType === 'starred'}
           onClick={() => onSelectView({ type: 'starred' })}
         />
 
         {/* Feed list */}
         {feeds.length > 0 && <SectionLabel style={{ marginTop: 8 }}>订阅源</SectionLabel>}
         {feeds.map((feed) => {
-          const isSelected = selectedView.type === 'feed' && selectedView.feed?.id === feed.id;
+          const isSelected = hlType === 'feed' && hlFeedId === feed.id;
           return (
             <NavItem
               key={feed.id}
