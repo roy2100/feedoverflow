@@ -19,6 +19,28 @@ function formatFullDate(dateStr: string): string {
   });
 }
 
+// Split a comma-separated byline into trimmed names (handles ASCII + full-width commas).
+function splitAuthors(author: string): string[] {
+  return author
+    .split(/[,，]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// Normalize a byline ("A,B,C" → "A · B · C") so multi-author feeds read cleanly.
+function formatAuthor(author: string): string {
+  return splitAuthors(author).join(' · ');
+}
+
+// Collapse long multi-author bylines: show the first MAX_AUTHORS names, then "等".
+// The full list stays available via the title tooltip.
+const MAX_AUTHORS = 2;
+function truncateAuthor(author: string): string {
+  const names = splitAuthors(author);
+  if (names.length <= MAX_AUTHORS) return names.join(' · ');
+  return `${names.slice(0, MAX_AUTHORS).join(' · ')} 等`;
+}
+
 interface ArticleReaderProps {
   isMobile?: boolean;
   onBack?: () => void;
@@ -261,19 +283,43 @@ export default function ArticleReader({
             alignItems: 'center',
             gap: isMobile ? 10 : 16,
             marginBottom: 32,
-            paddingBottom: 24,
+            paddingBottom: 12,
             borderBottom: '1px solid var(--border-light)',
-            flexWrap: isMobile ? 'wrap' : 'nowrap',
+            flexWrap: 'wrap',
           }}
         >
-          {article.author && (
-            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 500 }}>
-              {article.author}
+          {/* Byline + date — one wrapping group so actions stay aligned right */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '4px 10px',
+              minWidth: 0,
+              flex: '1 1 auto',
+            }}
+          >
+            {article.author && (
+              <span
+                title={formatAuthor(article.author)}
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--text-secondary)',
+                  fontWeight: 500,
+                  letterSpacing: '0.01em',
+                  maxWidth: isMobile ? '100%' : 360,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncateAuthor(article.author)}
+              </span>
+            )}
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+              {formatFullDate(article.pubDate)}
             </span>
-          )}
-          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-            {formatFullDate(article.pubDate)}
-          </span>
+          </div>
           {/* Desktop-only actions */}
           {!isMobile && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
