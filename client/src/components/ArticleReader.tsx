@@ -1,4 +1,15 @@
-import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  Star,
+  AlignLeft,
+  Mic,
+  Play,
+  Pause,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Image,
+  ImageOff,
+} from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 import type { Article } from '../types';
@@ -70,7 +81,14 @@ export default function ArticleReader({
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
   const [rssContent, setRssContent] = useState<string | null>(() => article?.content || null);
+  // 无图模式 — strips images/media from the article body for distraction-free reading.
+  // Display-only and self-contained (unlike readingMode, which changes the App layout).
+  const [textOnly, setTextOnly] = useState(() => localStorage.getItem('text-only') === '1');
   const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('text-only', textOnly ? '1' : '0');
+  }, [textOnly]);
 
   useEffect(() => {
     setFullContent(null);
@@ -105,7 +123,7 @@ export default function ArticleReader({
       const h = Number(img.getAttribute('height'));
       if (w > 0 && h > 0) img.style.aspectRatio = `${w} / ${h}`;
     });
-  }, [article?.id, rssContent, fullContent]);
+  }, [article?.id, rssContent, fullContent, textOnly]);
 
   const handleFetchFull = async () => {
     if (!article?.link) return;
@@ -210,6 +228,26 @@ export default function ArticleReader({
             文章列表
           </button>
           <div style={{ flex: 1 }} />
+          <button
+            onClick={() => setTextOnly((v) => !v)}
+            aria-label={textOnly ? '显示图片' : '无图模式'}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: textOnly ? 'var(--accent)' : 'var(--text-tertiary)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: 6,
+              borderRadius: 5,
+            }}
+          >
+            {textOnly ? (
+              <ImageOff size={18} strokeWidth={1.5} />
+            ) : (
+              <Image size={18} strokeWidth={1.5} />
+            )}
+          </button>
           <button
             onClick={() => onToggleStar(article)}
             style={{
@@ -341,6 +379,33 @@ export default function ArticleReader({
           {/* Desktop-only actions */}
           {!isMobile && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setTextOnly((v) => !v)}
+                title={textOnly ? '显示图片' : '无图模式'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: textOnly ? 'var(--accent)' : 'var(--text-tertiary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 4,
+                  borderRadius: 5,
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!textOnly) e.currentTarget.style.color = 'var(--accent)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!textOnly) e.currentTarget.style.color = 'var(--text-tertiary)';
+                }}
+              >
+                {textOnly ? (
+                  <ImageOff size={15} strokeWidth={1.5} />
+                ) : (
+                  <Image size={15} strokeWidth={1.5} />
+                )}
+              </button>
               {onToggleReadingMode && (
                 <button
                   onClick={onToggleReadingMode}
@@ -671,7 +736,9 @@ export default function ArticleReader({
             ref={contentRef}
             className="rss-article"
             style={articleContentStyle}
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawContent) }}
+            dangerouslySetInnerHTML={{
+              __html: textOnly ? stripMedia(sanitizeHtml(rawContent)) : sanitizeHtml(rawContent),
+            }}
           />
         ) : (
           <div className="rss-article" style={articleContentStyle}>
@@ -686,6 +753,19 @@ export default function ArticleReader({
       </div>
     </div>
   );
+}
+
+// Tags removed in 无图模式 — images and other non-text "content-irrelevant" elements.
+const MEDIA_SELECTOR =
+  'img, picture, source, figure, figcaption, video, audio, iframe, embed, object, svg';
+
+// Strip media via the browser-native DOM parser (robust against nested/malformed markup,
+// no dependency). Falls back to the input where DOMParser is unavailable (non-browser).
+export function stripMedia(html: string): string {
+  if (typeof DOMParser === 'undefined') return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll(MEDIA_SELECTOR).forEach((el) => el.remove());
+  return doc.body.innerHTML;
 }
 
 function sanitizeHtml(html: string): string {
