@@ -1,5 +1,5 @@
 import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 import type { Article } from '../types';
 
@@ -70,9 +70,6 @@ export default function ArticleReader({
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
   const [rssContent, setRssContent] = useState<string | null>(() => article?.content || null);
-  // Click-to-zoom lightbox for inline article images
-  const [zoomSrc, setZoomSrc] = useState<string | null>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setFullContent(null);
@@ -91,36 +88,6 @@ export default function ArticleReader({
         .catch(() => setRssContent(''));
     }
   }, [article?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Post-process the rendered article HTML: lazy-load images + mark them
-  // zoomable, and force every link to open in a new tab.
-  useEffect(() => {
-    const root = contentRef.current;
-    if (!root) return;
-    root.querySelectorAll('img').forEach((img) => {
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.style.cursor = 'zoom-in';
-    });
-    root.querySelectorAll('a').forEach((a) => {
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-    });
-  }, [article?.id, rssContent, fullContent]);
-
-  // Close the lightbox on Escape — capture phase so it pre-empts the global
-  // Esc handler (which would otherwise exit reading mode).
-  useEffect(() => {
-    if (!zoomSrc) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setZoomSrc(null);
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [zoomSrc]);
 
   const handleFetchFull = async () => {
     if (!article?.link) return;
@@ -173,227 +140,198 @@ export default function ArticleReader({
   const hasHtml = /<[a-z][\s\S]*>/i.test(rawContent);
 
   return (
-    <>
-      <div
-        ref={scrollRef}
-        key={article.id}
-        tabIndex={-1}
-        style={{
-          flex: 1,
-          background: 'var(--bg-reader)',
-          overflowY: 'auto',
-          outline: 'none',
-          overflowX: 'hidden',
-          WebkitOverflowScrolling: 'touch',
-          animation: 'fadeIn 0.2s ease',
-          display: 'flex',
-          flexDirection: 'column',
-          height: isMobile ? '100%' : undefined,
-        }}
-      >
-        {/* Mobile back header */}
-        {isMobile && (
-          <div
+    <div
+      ref={scrollRef}
+      key={article.id}
+      tabIndex={-1}
+      style={{
+        flex: 1,
+        background: 'var(--bg-reader)',
+        overflowY: 'auto',
+        outline: 'none',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        animation: 'fadeIn 0.2s ease',
+        display: 'flex',
+        flexDirection: 'column',
+        height: isMobile ? '100%' : undefined,
+      }}
+    >
+      {/* Mobile back header */}
+      {isMobile && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            height: 52,
+            flexShrink: 0,
+            borderBottom: '1px solid var(--border-light)',
+            background: 'var(--bg-reader)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+          }}
+        >
+          <button
+            onClick={onBack}
             style={{
               display: 'flex',
               alignItems: 'center',
-              padding: '0 12px',
-              height: 52,
+              gap: 2,
+              color: 'var(--accent)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '6px 8px 6px 0',
+              fontSize: 15,
               flexShrink: 0,
-              borderBottom: '1px solid var(--border-light)',
-              background: 'var(--bg-reader)',
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
             }}
           >
-            <button
-              onClick={onBack}
+            <ChevronLeft size={20} strokeWidth={2} />
+            文章列表
+          </button>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => onToggleStar(article)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: 6,
+              borderRadius: 5,
+            }}
+          >
+            <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
+          </button>
+          {article.link && (
+            <a
+              href={article.link}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 2,
+                gap: 3,
+                fontSize: 13,
                 color: 'var(--accent)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '6px 8px 6px 0',
-                fontSize: 15,
-                flexShrink: 0,
-              }}
-            >
-              <ChevronLeft size={20} strokeWidth={2} />
-              文章列表
-            </button>
-            <div style={{ flex: 1 }} />
-            <button
-              onClick={() => onToggleStar(article)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
-                display: 'flex',
-                alignItems: 'center',
+                textDecoration: 'none',
                 padding: 6,
-                borderRadius: 5,
               }}
             >
-              <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
-            </button>
-            {article.link && (
-              <a
-                href={article.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  fontSize: 13,
-                  color: 'var(--accent)',
-                  textDecoration: 'none',
-                  padding: 6,
-                }}
-              >
-                原文
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M2 10L10 2M10 2H5M10 2v5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </a>
-            )}
+              原文
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M2 10L10 2M10 2H5M10 2v5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </a>
+          )}
+        </div>
+      )}
+
+      <div
+        style={{
+          maxWidth: readingMode ? 820 : 680,
+          width: '100%',
+          margin: '0 auto',
+          padding: isMobile ? '24px 20px 80px' : '48px 48px 80px',
+        }}
+      >
+        {/* Feed name */}
+        {article.feedName && (
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--accent)',
+              marginBottom: 12,
+            }}
+          >
+            {article.feedName}
           </div>
         )}
 
-        <div
+        {/* Title */}
+        <h1
           style={{
-            maxWidth: readingMode ? 820 : 680,
-            width: '100%',
-            margin: '0 auto',
-            padding: isMobile ? '24px 20px 80px' : '48px 48px 80px',
+            fontFamily: 'var(--font-serif)',
+            fontSize: isMobile ? 22 : 'clamp(22px, 3vw, 28px)',
+            fontWeight: 600,
+            lineHeight: 1.35,
+            color: 'var(--text-primary)',
+            marginBottom: 14,
+            letterSpacing: '-0.01em',
           }}
         >
-          {/* Feed name */}
-          {article.feedName && (
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: 'var(--accent)',
-                marginBottom: 12,
-              }}
-            >
-              {article.feedName}
-            </div>
-          )}
+          {article.title}
+        </h1>
 
-          {/* Title */}
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: isMobile ? 22 : 'clamp(22px, 3vw, 28px)',
-              fontWeight: 600,
-              lineHeight: 1.35,
-              color: 'var(--text-primary)',
-              marginBottom: 14,
-              letterSpacing: '-0.01em',
-            }}
-          >
-            {article.title}
-          </h1>
-
-          {/* Meta */}
+        {/* Meta */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: isMobile ? 10 : 16,
+            marginBottom: 32,
+            paddingBottom: 12,
+            borderBottom: '1px solid var(--border-light)',
+            flexWrap: 'wrap',
+          }}
+        >
+          {/* Byline + date — one wrapping group so actions stay aligned right */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: isMobile ? 10 : 16,
-              marginBottom: 32,
-              paddingBottom: 12,
-              borderBottom: '1px solid var(--border-light)',
               flexWrap: 'wrap',
+              gap: '4px 10px',
+              minWidth: 0,
+              flex: '1 1 auto',
             }}
           >
-            {/* Byline + date — one wrapping group so actions stay aligned right */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '4px 10px',
-                minWidth: 0,
-                flex: '1 1 auto',
-              }}
-            >
-              {article.author && (
-                <span
-                  title={formatAuthor(article.author)}
-                  style={{
-                    fontSize: 12.5,
-                    color: 'var(--text-secondary)',
-                    fontWeight: 500,
-                    letterSpacing: '0.01em',
-                    maxWidth: isMobile ? '100%' : 360,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {truncateAuthor(article.author)}
-                </span>
-              )}
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-                {formatFullDate(article.pubDate)}
+            {article.author && (
+              <span
+                title={formatAuthor(article.author)}
+                style={{
+                  fontSize: 12.5,
+                  color: 'var(--text-secondary)',
+                  fontWeight: 500,
+                  letterSpacing: '0.01em',
+                  maxWidth: isMobile ? '100%' : 360,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {truncateAuthor(article.author)}
               </span>
-            </div>
-            {/* Desktop-only actions */}
-            {!isMobile && (
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-                {onToggleReadingMode && (
-                  <button
-                    onClick={onToggleReadingMode}
-                    title={readingMode ? '退出专注阅读 (Esc)' : '专注阅读'}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: readingMode ? 'var(--accent)' : 'var(--text-tertiary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: 4,
-                      borderRadius: 5,
-                      transition: 'color 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!readingMode) e.currentTarget.style.color = 'var(--accent)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!readingMode) e.currentTarget.style.color = 'var(--text-tertiary)';
-                    }}
-                  >
-                    {readingMode ? (
-                      <Minimize2 size={15} strokeWidth={1.5} />
-                    ) : (
-                      <Maximize2 size={15} strokeWidth={1.5} />
-                    )}
-                  </button>
-                )}
+            )}
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+              {formatFullDate(article.pubDate)}
+            </span>
+          </div>
+          {/* Desktop-only actions */}
+          {!isMobile && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+              {onToggleReadingMode && (
                 <button
-                  onClick={() => onToggleStar(article)}
-                  title={article.isStarred ? '取消收藏' : '收藏'}
+                  onClick={onToggleReadingMode}
+                  title={readingMode ? '退出专注阅读 (Esc)' : '专注阅读'}
                   style={{
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
+                    color: readingMode ? 'var(--accent)' : 'var(--text-tertiary)',
                     display: 'flex',
                     alignItems: 'center',
                     padding: 4,
@@ -401,278 +339,185 @@ export default function ArticleReader({
                     transition: 'color 0.15s',
                   }}
                   onMouseEnter={(e) => {
-                    if (!article.isStarred) e.currentTarget.style.color = '#F5C518';
+                    if (!readingMode) e.currentTarget.style.color = 'var(--accent)';
                   }}
                   onMouseLeave={(e) => {
-                    if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)';
+                    if (!readingMode) e.currentTarget.style.color = 'var(--text-tertiary)';
                   }}
                 >
-                  <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
+                  {readingMode ? (
+                    <Minimize2 size={15} strokeWidth={1.5} />
+                  ) : (
+                    <Maximize2 size={15} strokeWidth={1.5} />
+                  )}
                 </button>
-
-                {article.link && !fullContent && (
-                  <button
-                    onClick={handleFetchFull}
-                    title="从原始网页提取全文"
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-tertiary)',
-                      background: 'none',
-                      border: '1px solid var(--border)',
-                      borderRadius: 5,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '3px 8px',
-                      transition: 'color 0.15s, border-color 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = 'var(--accent)';
-                      e.currentTarget.style.borderColor = 'var(--accent)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = 'var(--text-tertiary)';
-                      e.currentTarget.style.borderColor = 'var(--border)';
-                    }}
-                  >
-                    <AlignLeft size={11} />
-                    加载全文
-                  </button>
-                )}
-                {fullContent === 'loading' && (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-tertiary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 11,
-                        height: 11,
-                        border: '1.5px solid var(--border)',
-                        borderTopColor: 'var(--accent)',
-                        borderRadius: '50%',
-                        display: 'inline-block',
-                        animation: 'spin 0.8s linear infinite',
-                      }}
-                    />
-                    加载中…
-                  </span>
-                )}
-                {fullHtml && (
-                  <button
-                    onClick={() => setFullContent(null)}
-                    title="恢复 RSS 原文"
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--accent)',
-                      background: 'none',
-                      border: '1px solid var(--accent)',
-                      borderRadius: 5,
-                      cursor: 'pointer',
-                      padding: '3px 8px',
-                      opacity: 0.7,
-                      transition: 'opacity 0.15s',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
-                  >
-                    全文模式
-                  </button>
-                )}
-                {article.link && (
-                  <a
-                    href={article.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--accent)',
-                      textDecoration: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      opacity: 0.8,
-                      transition: 'opacity 0.15s',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
-                  >
-                    原文
-                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                      <path
-                        d="M2 10L10 2M10 2H5M10 2v5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </a>
-                )}
-              </div>
-            )}
-            {/* Mobile: load full content button */}
-            {isMobile && article.link && !fullContent && (
+              )}
               <button
-                onClick={handleFetchFull}
+                onClick={() => onToggleStar(article)}
+                title={article.isStarred ? '取消收藏' : '收藏'}
                 style={{
-                  fontSize: 12,
-                  color: 'var(--text-tertiary)',
-                  background: 'none',
-                  border: '1px solid var(--border)',
-                  borderRadius: 5,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '3px 8px',
-                }}
-              >
-                <AlignLeft size={11} />
-                加载全文
-              </button>
-            )}
-            {isMobile && fullContent === 'loading' && (
-              <span
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-tertiary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <span
-                  style={{
-                    width: 11,
-                    height: 11,
-                    border: '1.5px solid var(--border)',
-                    borderTopColor: 'var(--accent)',
-                    borderRadius: '50%',
-                    display: 'inline-block',
-                    animation: 'spin 0.8s linear infinite',
-                  }}
-                />
-                加载中…
-              </span>
-            )}
-            {isMobile && fullHtml && (
-              <button
-                onClick={() => setFullContent(null)}
-                style={{
-                  fontSize: 12,
-                  color: 'var(--accent)',
-                  background: 'none',
-                  border: '1px solid var(--accent)',
-                  borderRadius: 5,
-                  cursor: 'pointer',
-                  padding: '3px 8px',
-                }}
-              >
-                全文模式
-              </button>
-            )}
-          </div>
-
-          {/* Podcast play button */}
-          {article.audioUrl && (
-            <div
-              style={{
-                marginBottom: 32,
-                padding: '12px 16px',
-                background: 'var(--bg-panel)',
-                borderRadius: 8,
-                border: '1px solid var(--border-light)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <Mic
-                size={13}
-                strokeWidth={2}
-                style={{ color: 'var(--accent-light)', flexShrink: 0 }}
-              />
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
-                播客{article.audioDuration ? ` · ${article.audioDuration}` : ''}
-              </span>
-              <button
-                onClick={() => onPlay(article)}
-                style={{
-                  marginLeft: 'auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: 'var(--accent)',
-                  padding: '4px 10px',
-                  borderRadius: 5,
-                  border: '1px solid var(--accent)',
-                  background: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.12s',
-                  flexShrink: 0,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-              >
-                {currentEpisode?.id === article.id && isPlaying ? (
-                  <>
-                    <Pause size={11} strokeWidth={2} /> 暂停
-                  </>
-                ) : currentEpisode?.id === article.id ? (
-                  <>
-                    <Play size={11} strokeWidth={2} /> 继续
-                  </>
-                ) : (
-                  <>
-                    <Play size={11} strokeWidth={2} /> 播放
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* Content */}
-          {fullError ? (
-            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
-              加载失败：{fullError}。
-              <button
-                onClick={() => setFullContent(null)}
-                style={{
-                  marginLeft: 8,
-                  color: 'var(--accent)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: 13,
+                  color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 4,
+                  borderRadius: 5,
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!article.isStarred) e.currentTarget.style.color = '#F5C518';
+                }}
+                onMouseLeave={(e) => {
+                  if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)';
                 }}
               >
-                重置
+                <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
               </button>
+
+              {article.link && !fullContent && (
+                <button
+                  onClick={handleFetchFull}
+                  title="从原始网页提取全文"
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-tertiary)',
+                    background: 'none',
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    transition: 'color 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--accent)';
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--text-tertiary)';
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                  }}
+                >
+                  <AlignLeft size={11} />
+                  加载全文
+                </button>
+              )}
+              {fullContent === 'loading' && (
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-tertiary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 11,
+                      height: 11,
+                      border: '1.5px solid var(--border)',
+                      borderTopColor: 'var(--accent)',
+                      borderRadius: '50%',
+                      display: 'inline-block',
+                      animation: 'spin 0.8s linear infinite',
+                    }}
+                  />
+                  加载中…
+                </span>
+              )}
+              {fullHtml && (
+                <button
+                  onClick={() => setFullContent(null)}
+                  title="恢复 RSS 原文"
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--accent)',
+                    background: 'none',
+                    border: '1px solid var(--accent)',
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    padding: '3px 8px',
+                    opacity: 0.7,
+                    transition: 'opacity 0.15s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                >
+                  全文模式
+                </button>
+              )}
+              {article.link && (
+                <a
+                  href={article.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--accent)',
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    opacity: 0.8,
+                    transition: 'opacity 0.15s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+                >
+                  原文
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2 10L10 2M10 2H5M10 2v5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </a>
+              )}
             </div>
-          ) : isLoadingContent ? (
-            <div
+          )}
+          {/* Mobile: load full content button */}
+          {isMobile && article.link && !fullContent && (
+            <button
+              onClick={handleFetchFull}
               style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                background: 'none',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '20px 0',
+                gap: 4,
+                padding: '3px 8px',
+              }}
+            >
+              <AlignLeft size={11} />
+              加载全文
+            </button>
+          )}
+          {isMobile && fullContent === 'loading' && (
+            <span
+              style={{
+                fontSize: 12,
                 color: 'var(--text-tertiary)',
-                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
               }}
             >
               <span
                 style={{
-                  width: 12,
-                  height: 12,
+                  width: 11,
+                  height: 11,
                   border: '1.5px solid var(--border)',
                   borderTopColor: 'var(--accent)',
                   borderRadius: '50%',
@@ -681,61 +526,146 @@ export default function ArticleReader({
                 }}
               />
               加载中…
-            </div>
-          ) : hasHtml ? (
-            <div
-              ref={contentRef}
-              className="rss-article"
-              style={articleContentStyle}
-              onClick={(e) => {
-                const t = e.target as HTMLElement;
-                if (t.tagName === 'IMG')
-                  setZoomSrc((t as HTMLImageElement).currentSrc || (t as HTMLImageElement).src);
+            </span>
+          )}
+          {isMobile && fullHtml && (
+            <button
+              onClick={() => setFullContent(null)}
+              style={{
+                fontSize: 12,
+                color: 'var(--accent)',
+                background: 'none',
+                border: '1px solid var(--accent)',
+                borderRadius: 5,
+                cursor: 'pointer',
+                padding: '3px 8px',
               }}
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawContent) }}
-            />
-          ) : (
-            <div className="rss-article" style={articleContentStyle}>
-              {rawContent
-                .split('\n')
-                .filter(Boolean)
-                .map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-            </div>
+            >
+              全文模式
+            </button>
           )}
         </div>
-      </div>
-      {zoomSrc && (
-        <div
-          onClick={() => setZoomSrc(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: 'rgba(20, 18, 16, 0.85)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 32,
-            cursor: 'zoom-out',
-            animation: 'fadeIn 0.15s ease',
-          }}
-        >
-          <img
-            src={zoomSrc}
-            alt=""
+
+        {/* Podcast play button */}
+        {article.audioUrl && (
+          <div
             style={{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain',
-              borderRadius: 4,
-              boxShadow: '0 8px 40px rgba(0, 0, 0, 0.5)',
+              marginBottom: 32,
+              padding: '12px 16px',
+              background: 'var(--bg-panel)',
+              borderRadius: 8,
+              border: '1px solid var(--border-light)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
             }}
+          >
+            <Mic
+              size={13}
+              strokeWidth={2}
+              style={{ color: 'var(--accent-light)', flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+              播客{article.audioDuration ? ` · ${article.audioDuration}` : ''}
+            </span>
+            <button
+              onClick={() => onPlay(article)}
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--accent)',
+                padding: '4px 10px',
+                borderRadius: 5,
+                border: '1px solid var(--accent)',
+                background: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.12s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              {currentEpisode?.id === article.id && isPlaying ? (
+                <>
+                  <Pause size={11} strokeWidth={2} /> 暂停
+                </>
+              ) : currentEpisode?.id === article.id ? (
+                <>
+                  <Play size={11} strokeWidth={2} /> 继续
+                </>
+              ) : (
+                <>
+                  <Play size={11} strokeWidth={2} /> 播放
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Content */}
+        {fullError ? (
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
+            加载失败：{fullError}。
+            <button
+              onClick={() => setFullContent(null)}
+              style={{
+                marginLeft: 8,
+                color: 'var(--accent)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
+              重置
+            </button>
+          </div>
+        ) : isLoadingContent ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '20px 0',
+              color: 'var(--text-tertiary)',
+              fontSize: 13,
+            }}
+          >
+            <span
+              style={{
+                width: 12,
+                height: 12,
+                border: '1.5px solid var(--border)',
+                borderTopColor: 'var(--accent)',
+                borderRadius: '50%',
+                display: 'inline-block',
+                animation: 'spin 0.8s linear infinite',
+              }}
+            />
+            加载中…
+          </div>
+        ) : hasHtml ? (
+          <div
+            className="rss-article"
+            style={articleContentStyle}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawContent) }}
           />
-        </div>
-      )}
-    </>
+        ) : (
+          <div className="rss-article" style={articleContentStyle}>
+            {rawContent
+              .split('\n')
+              .filter(Boolean)
+              .map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
