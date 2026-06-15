@@ -226,7 +226,6 @@ function ArticleItem({
   'data-id': dataId,
 }: ArticleItemProps) {
   const [hovered, setHovered] = useState(false);
-  const summary = (article.summary || '').replace(/<[^>]+>/g, '').slice(0, 80);
 
   return (
     <div
@@ -248,73 +247,23 @@ function ArticleItem({
     >
       <div style={{ display: 'flex', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {article.feedName && (
-            <div
-              style={{
-                fontSize: 10.5,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--accent-light)',
-                marginBottom: 2,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {article.feedName}
-            </div>
-          )}
-          <div
-            style={{
-              fontSize: isMobile ? 14 : 13,
-              fontWeight: 400,
-              color: 'var(--text-primary)',
-              lineHeight: 1.45,
-              marginBottom: 4,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {article.title}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {article.audioUrl ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPlay?.(article);
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: episodePlaying ? 'var(--accent)' : 'var(--accent-light)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-              >
-                <Mic size={10} strokeWidth={episodePlaying ? 2.5 : 2} />
-                {episodePlaying ? '播放中' : article.audioDuration || '播客'}
-              </button>
-            ) : (
+          {/* Feed name + time on one row */}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+            {article.feedName && (
               <span
                 style={{
-                  fontSize: 11.5,
-                  color: 'var(--text-tertiary)',
-                  flex: 1,
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--accent-light)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  minWidth: 0,
                 }}
               >
-                {summary}
+                {article.feedName}
               </span>
             )}
             <span
@@ -328,6 +277,44 @@ function ArticleItem({
               {formatDate(article.pubDate)}
             </span>
           </div>
+          <div
+            style={{
+              fontSize: isMobile ? 14 : 13,
+              fontWeight: 400,
+              color: 'var(--text-primary)',
+              lineHeight: 1.45,
+              marginBottom: article.audioUrl ? 4 : 0,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {article.title}
+          </div>
+          {article.audioUrl && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay?.(article);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 11,
+                fontWeight: 500,
+                color: episodePlaying ? 'var(--accent)' : 'var(--accent-light)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              <Mic size={10} strokeWidth={episodePlaying ? 2.5 : 2} />
+              {episodePlaying ? '播放中' : article.audioDuration || '播客'}
+            </button>
+          )}
         </div>
       </div>
     </div>
