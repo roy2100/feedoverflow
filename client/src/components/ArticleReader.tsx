@@ -1,5 +1,5 @@
 import { Star, AlignLeft, Mic, Play, Pause, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import type { Article } from '../types';
 
@@ -70,6 +70,7 @@ export default function ArticleReader({
   // null = loading, string = done (may be empty)
   // Initialise with article.content so starred articles avoid a spinner flash on mount
   const [rssContent, setRssContent] = useState<string | null>(() => article?.content || null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setFullContent(null);
@@ -88,6 +89,23 @@ export default function ArticleReader({
         .catch(() => setRssContent(''));
     }
   }, [article?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Post-process rendered article images: lazy-load + decode off the main
+  // thread, and reserve vertical space ahead of load to avoid text reflow.
+  // When the source markup carries width/height, we pin the intrinsic
+  // aspect-ratio so the browser lays out the (still responsive) box before
+  // the bytes arrive — no jump when the image finally paints.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!root) return;
+    root.querySelectorAll('img').forEach((img) => {
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      const w = Number(img.getAttribute('width'));
+      const h = Number(img.getAttribute('height'));
+      if (w > 0 && h > 0) img.style.aspectRatio = `${w} / ${h}`;
+    });
+  }, [article?.id, rssContent, fullContent]);
 
   const handleFetchFull = async () => {
     if (!article?.link) return;
@@ -650,6 +668,7 @@ export default function ArticleReader({
           </div>
         ) : hasHtml ? (
           <div
+            ref={contentRef}
             className="rss-article"
             style={articleContentStyle}
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawContent) }}
