@@ -29,6 +29,7 @@ interface ArticleListProps {
   isPlaying: boolean;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  hideFeedName?: boolean;
 }
 
 export default function ArticleList({
@@ -45,6 +46,7 @@ export default function ArticleList({
   isPlaying,
   sidebarCollapsed,
   onToggleSidebar,
+  hideFeedName,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -177,6 +179,7 @@ export default function ArticleList({
               onPlay={onPlay}
               episodePlaying={currentEpisode?.id === article.id && isPlaying}
               isMobile={isMobile}
+              hideFeedName={hideFeedName}
               style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
               data-id={article.id}
             />
@@ -211,6 +214,7 @@ interface ArticleItemProps {
   onPlay?: (article: Article) => void;
   episodePlaying: boolean;
   isMobile?: boolean;
+  hideFeedName?: boolean;
   style?: React.CSSProperties;
   'data-id'?: string;
 }
@@ -222,10 +226,27 @@ function ArticleItem({
   onPlay,
   episodePlaying,
   isMobile,
+  hideFeedName,
   style,
   'data-id': dataId,
 }: ArticleItemProps) {
   const [hovered, setHovered] = useState(false);
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: isMobile ? 14 : 13,
+    fontWeight: 400,
+    color: 'var(--text-primary)',
+    lineHeight: 1.45,
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+  };
+  const timeStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: 'var(--text-tertiary)',
+    flexShrink: 0,
+  };
 
   return (
     <div
@@ -247,51 +268,49 @@ function ArticleItem({
     >
       <div style={{ display: 'flex', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Feed name + time on one row */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-            {article.feedName && (
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--accent-light)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  minWidth: 0,
-                }}
-              >
-                {article.feedName}
-              </span>
-            )}
-            <span
+          {hideFeedName ? (
+            /* No feed name: title and time share one row to avoid an empty meta line */
+            <div
               style={{
-                fontSize: 11,
-                color: 'var(--text-tertiary)',
-                flexShrink: 0,
-                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                marginBottom: article.audioUrl ? 4 : 0,
               }}
             >
-              {formatDate(article.pubDate)}
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: isMobile ? 14 : 13,
-              fontWeight: 400,
-              color: 'var(--text-primary)',
-              lineHeight: 1.45,
-              marginBottom: article.audioUrl ? 4 : 0,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {article.title}
-          </div>
+              <div style={{ ...titleStyle, flex: 1, minWidth: 0 }}>{article.title}</div>
+              <span style={{ ...timeStyle, marginTop: 1 }}>{formatDate(article.pubDate)}</span>
+            </div>
+          ) : (
+            <>
+              {/* Feed name + time on one row */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                {article.feedName && (
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--accent-light)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      minWidth: 0,
+                    }}
+                  >
+                    {article.feedName}
+                  </span>
+                )}
+                <span style={{ ...timeStyle, marginLeft: 'auto' }}>
+                  {formatDate(article.pubDate)}
+                </span>
+              </div>
+              <div style={{ ...titleStyle, marginBottom: article.audioUrl ? 4 : 0 }}>
+                {article.title}
+              </div>
+            </>
+          )}
           {article.audioUrl && (
             <button
               onClick={(e) => {

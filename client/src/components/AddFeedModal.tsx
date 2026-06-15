@@ -182,7 +182,7 @@ function ManualTab({ onAdd, onClose }: ManualTabProps) {
     <form onSubmit={handleSubmit} style={{ padding: '18px 20px 20px' }}>
       <Field
         ref={urlRef}
-        label="Feed URL"
+        label="订阅地址"
         placeholder="https://example.com/feed.xml 或 rsshub://路由/路径"
         value={url}
         onChange={setUrl}

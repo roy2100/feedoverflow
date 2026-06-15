@@ -115,6 +115,11 @@ TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `np
 
 **Styling:** CSS variables in `index.css`, inline `style={{}}` in components, icons from `lucide-react`.
 
+**UI signal-to-noise:** prioritize signal-to-noise ratio in everything the UI shows. Don't repeat
+information the current context already makes obvious (e.g. hide the per-row feed name when a single
+feed is selected — the header already names it), keep labels in one consistent language, and drop
+stale or redundant chrome. Every pixel should carry information the user doesn't already have.
+
 ### Server (`server/`)
 
 - Split into focused modules (see tree above); `app.ts` owns the Express app and routes, `index.ts` is the thin entrypoint. Tests import `app`, `db`, and helpers (`makeId`, `persistItems`) from `articles.ts`.

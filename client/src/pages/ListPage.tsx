@@ -14,11 +14,11 @@ export default function ListPage({ onNavigate }: ListPageProps) {
 
   const viewTitle =
     selectedView.type === 'all'
-      ? '全部未读'
+      ? '全部'
       : selectedView.type === 'today'
         ? '今日'
         : selectedView.type === 'starred'
-          ? '已收藏'
+          ? '收藏'
           : selectedView.type === 'search'
             ? `搜索：${selectedView.query ?? ''}`
             : selectedView.feed?.name;
@@ -41,6 +41,7 @@ export default function ListPage({ onNavigate }: ListPageProps) {
       onPlay={onPlay}
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
+      hideFeedName={selectedView.type === 'feed'}
     />
   );
 }

@@ -262,7 +262,7 @@ export default function FeedSidebar({
 
         <NavItem
           isMobile={isMobile}
-          label="Today"
+          label="今日"
           icon={<Sun size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5A623"
           selected={hlType === 'today'}
@@ -278,7 +278,7 @@ export default function FeedSidebar({
         />
         <NavItem
           isMobile={isMobile}
-          label="Starred"
+          label="收藏"
           icon={<Star size={isMobile ? 16 : 13} strokeWidth={2} />}
           iconColor="#F5C518"
           selected={hlType === 'starred'}

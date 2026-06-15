@@ -196,7 +196,7 @@ export default function App() {
       : selectedView.type === 'today'
         ? '今日'
         : selectedView.type === 'starred'
-          ? '已收藏'
+          ? '收藏'
           : selectedView.type === 'search'
             ? `搜索：${selectedView.query ?? ''}`
             : selectedView.feed?.name;
@@ -326,6 +326,7 @@ export default function App() {
             isPlaying={isPlaying}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
+            hideFeedName={selectedView.type === 'feed'}
           />
         )}
         <div
