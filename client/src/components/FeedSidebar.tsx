@@ -4,6 +4,7 @@ import {
   Sun,
   Star,
   List,
+  Podcast,
   Rss,
   Settings,
   SlidersHorizontal,
@@ -283,6 +284,14 @@ export default function FeedSidebar({
           iconColor="#F5C518"
           selected={hlType === 'starred'}
           onClick={() => onSelectView({ type: 'starred' })}
+        />
+        <NavItem
+          isMobile={isMobile}
+          label="播客"
+          icon={<Podcast size={isMobile ? 16 : 13} strokeWidth={2} />}
+          iconColor="#8E5BD9"
+          selected={hlType === 'podcast'}
+          onClick={() => onSelectView({ type: 'podcast' })}
         />
 
         {/* Feed list */}

@@ -297,6 +297,38 @@ app.get('/api/starred', (_req, res) => {
   });
 });
 
+// Recently-updated podcasts across all feeds: every fetched item carrying an audio
+// enclosure is persisted in article_states with a non-empty audio_url, so a single SQL
+// scan covers it. (pub_date is an RFC-822 string, so the SQL ORDER BY is only a coarse
+// text sort — re-sort by parsed date in JS before slicing, like the other list endpoints.)
+app.get('/api/podcasts', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT * FROM article_states
+       WHERE audio_url IS NOT NULL AND audio_url != ''
+       ORDER BY pub_date DESC LIMIT 200`,
+    )
+    .all() as ArticleStateRow[];
+  const articles: Article[] = rows
+    .map((r) => ({
+      id: r.article_id,
+      feedId: r.feed_id,
+      feedName: r.feed_name,
+      title: r.title,
+      summary: (r.summary || '').slice(0, 300),
+      content: '',
+      link: r.link,
+      pubDate: r.pub_date,
+      author: r.author || '',
+      audioUrl: r.audio_url || '',
+      audioDuration: r.audio_duration || '',
+      isStarred: !!r.is_starred,
+    }))
+    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+    .slice(0, 100);
+  res.json({ articles });
+});
+
 app.get('/api/starred/count', (_req, res) => {
   res.set('Cache-Control', 'private, max-age=10');
   const { n } = db

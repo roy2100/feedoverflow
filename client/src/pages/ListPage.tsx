@@ -19,9 +19,11 @@ export default function ListPage({ onNavigate }: ListPageProps) {
         ? '今日'
         : selectedView.type === 'starred'
           ? '收藏'
-          : selectedView.type === 'search'
-            ? `搜索：${selectedView.query ?? ''}`
-            : selectedView.feed?.name;
+          : selectedView.type === 'podcast'
+            ? '播客'
+            : selectedView.type === 'search'
+              ? `搜索：${selectedView.query ?? ''}`
+              : selectedView.feed?.name;
 
   const handleSelectArticle = (article: Article) => {
     selectArticle(article);

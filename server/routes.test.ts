@@ -175,6 +175,65 @@ describe('current-article (in-memory)', () => {
   });
 });
 
+describe('podcasts list', () => {
+  test('GET /api/podcasts lists only articles with an audio_url, newest first', async () => {
+    const ins = db.prepare(`
+      INSERT OR IGNORE INTO article_states
+        (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_starred)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,0)
+    `);
+    ins.run(
+      'pod-old',
+      'f-pod',
+      'Pod Feed',
+      'Old Episode',
+      'https://ex.com/old',
+      'Mon, 01 Jan 2024 00:00:00 GMT',
+      's',
+      '',
+      'host',
+      'https://ex.com/old.mp3',
+      '12:00',
+    );
+    ins.run(
+      'pod-new',
+      'f-pod',
+      'Pod Feed',
+      'New Episode',
+      'https://ex.com/new',
+      'Wed, 01 Jan 2025 00:00:00 GMT',
+      's',
+      '',
+      'host',
+      'https://ex.com/new.mp3',
+      '34:00',
+    );
+    ins.run(
+      'not-pod',
+      'f-pod',
+      'Pod Feed',
+      'Text Post',
+      'https://ex.com/text',
+      'Thu, 01 Jan 2026 00:00:00 GMT',
+      's',
+      '',
+      'author',
+      null,
+      null,
+    );
+
+    const res = await request(app).get('/api/podcasts');
+    assert.equal(res.status, 200);
+    const ids = res.body.articles.map((a: { id: string }) => a.id);
+    assert.ok(ids.includes('pod-new'));
+    assert.ok(ids.includes('pod-old'));
+    assert.ok(!ids.includes('not-pod'), 'non-audio article must be excluded');
+    // Newest by parsed pub_date first
+    assert.ok(ids.indexOf('pod-new') < ids.indexOf('pod-old'));
+    assert.equal(res.body.articles[ids.indexOf('pod-new')].audioUrl, 'https://ex.com/new.mp3');
+  });
+});
+
 describe('search input guard', () => {
   test('queries shorter than 2 chars short-circuit to an empty list', async () => {
     const res = await request(app).get('/api/search?q=a');

@@ -81,6 +81,7 @@ export const useStore = create<StoreState>((set, get) => ({
         all: `${API}/all-articles`,
         today: `${API}/today`,
         starred: `${API}/starred`,
+        podcast: `${API}/podcasts`,
       };
       let url: string;
       if (view.type === 'search') {

@@ -33,7 +33,7 @@ export interface SearchScope {
 // Which list is shown in the middle panel. `feed` is present only for `type: 'feed'`,
 // `query` / `scope` only for `type: 'search'`.
 export interface View {
-  type: 'all' | 'today' | 'starred' | 'feed' | 'search';
+  type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'search';
   feed?: Feed;
   query?: string;
   scope?: SearchScope;

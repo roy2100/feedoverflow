@@ -152,6 +152,7 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 | GET | `/api/all-articles` | 5 items/feed, merged + sorted |
 | GET | `/api/today` | all-articles filtered to today |
 | GET | `/api/starred` | starred articles |
+| GET | `/api/podcasts` | recently-updated podcast episodes (articles with a non-empty `audio_url`), newest first |
 | GET | `/api/starred/count` | badge count |
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id/content` | cached full content for an article |

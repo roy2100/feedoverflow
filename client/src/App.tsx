@@ -197,9 +197,11 @@ export default function App() {
         ? '今日'
         : selectedView.type === 'starred'
           ? '收藏'
-          : selectedView.type === 'search'
-            ? `搜索：${selectedView.query ?? ''}`
-            : selectedView.feed?.name;
+          : selectedView.type === 'podcast'
+            ? '播客'
+            : selectedView.type === 'search'
+              ? `搜索：${selectedView.query ?? ''}`
+              : selectedView.feed?.name;
 
   const addModal = showAddModal && (
     <Suspense fallback={null}>
