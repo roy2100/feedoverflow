@@ -108,7 +108,7 @@ export default function FeedSidebar({
   return (
     <aside
       style={{
-        width: isMobile ? '100%' : 220,
+        width: isMobile ? '100%' : 260,
         flexShrink: 0,
         background: 'var(--bg-panel)',
         borderRight: isMobile ? 'none' : '1px solid var(--border)',

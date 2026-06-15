@@ -57,7 +57,7 @@ export default function ArticleList({
   return (
     <div
       style={{
-        width: isMobile ? '100%' : 300,
+        width: isMobile ? '100%' : 380,
         flexShrink: 0,
         background: 'var(--bg)',
         borderRight: isMobile ? 'none' : '1px solid var(--border)',
