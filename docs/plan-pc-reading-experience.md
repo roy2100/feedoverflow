@@ -44,4 +44,10 @@
 Low–Medium —单项均为局部改动，集中在 `ArticleReader.tsx`（#6 在 `App.tsx`）；无后端/数据层影响。
 
 ## Outcome
-（实现后补充）
+- **2026-06-15 实现 #5（正文图片 点击放大 + 懒加载 + 链接新标签页）。** 全部集中在 `ArticleReader.tsx`：
+  - 新增 `zoomSrc` 状态 + `contentRef`；一个 post-process `useEffect` 在内容渲染后遍历 `.rss-article` 内的 `img`（设 `loading=lazy`、`decoding=async`、`cursor=zoom-in`）与 `a`（设 `target=_blank`、`rel=noopener noreferrer`）。
+  - HTML 正文 div 上用事件委托 onClick：点击 `IMG` 即以 `currentSrc || src` 打开全屏 lightbox 遮罩；点遮罩或 Esc 关闭。
+  - Esc 关闭用 **capture 阶段** 监听，优先于 App 的全局 Esc（避免误退出专注阅读）。
+  - return 包进 fragment 以将 fixed 遮罩作为 reader 容器的兄弟节点渲染，规避 fadeIn transform 造成的 containing-block 问题。
+  - 与原计划无偏差。typecheck / lint / fmt / 79 个前端测试全通过。
+- 其余候选项（#1 粘性操作栏、#2 进度条、#3 阅读时长、#4 排版、#6–8）仍待决策。
