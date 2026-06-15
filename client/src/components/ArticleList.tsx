@@ -49,11 +49,31 @@ export default function ArticleList({
   hideFeedName,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  // Set when selection originates from a mouse click — suppresses the auto-recenter so a
+  // click only highlights the row in place. Keyboard navigation leaves it false.
+  const clickSelectRef = useRef(false);
 
   useEffect(() => {
+    if (isMobile) return; // PC-only behavior — mobile is a single pane, no list paging
+    if (clickSelectRef.current) {
+      clickSelectRef.current = false;
+      return;
+    }
     if (!selectedArticle || !listRef.current) return;
-    const el = listRef.current.querySelector(`[data-id="${selectedArticle.id}"]`);
-    el?.scrollIntoView({ block: 'nearest' });
+    const container = listRef.current;
+    const el = container.querySelector<HTMLElement>(`[data-id="${selectedArticle.id}"]`);
+    if (!el) return;
+    // Keep a margin band at top/bottom. Once the selected row crosses into it, recenter
+    // the row in one scroll so upcoming articles stay visible in either direction.
+    const margin = Math.min(el.offsetHeight * 1.5, container.clientHeight / 3);
+    const top = el.offsetTop;
+    const bottom = top + el.offsetHeight;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+    if (top < viewTop + margin || bottom > viewBottom - margin) {
+      const center = top + el.offsetHeight / 2 - container.clientHeight / 2;
+      container.scrollTo({ top: Math.max(0, center) });
+    }
   }, [selectedArticle?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -175,7 +195,10 @@ export default function ArticleList({
               key={article.id}
               article={article}
               selected={selectedArticle?.id === article.id}
-              onClick={() => onSelectArticle(article)}
+              onClick={() => {
+                clickSelectRef.current = true;
+                onSelectArticle(article);
+              }}
               onPlay={onPlay}
               episodePlaying={currentEpisode?.id === article.id && isPlaying}
               isMobile={isMobile}
