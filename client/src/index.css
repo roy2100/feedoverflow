@@ -65,6 +65,19 @@ input {
   font-family: var(--font-ui);
 }
 
+/*
+ * iOS Safari auto-zooms on focus when an input's font-size is < 16px.
+ * On touch devices force every form control to >= 16px to suppress it.
+ * !important is required because all inputs set font-size via inline styles.
+ */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
