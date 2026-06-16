@@ -35,17 +35,12 @@ interface StoreState {
   lastListView: View;
   // Whether scoped search is enabled (desktop toggle). Only effective when lastListView is scopable.
   scopedSearch: boolean;
-  // Whether the Today view auto-refreshes on an interval. User toggle, persisted, default off.
-  liveRefresh: boolean;
 
   init: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
-  // Non-destructive background refresh of the Today view (no blanking, no loading flash).
-  refreshToday: () => Promise<void>;
   selectView: (view: View) => void;
   search: (query: string) => void;
   toggleSearchScope: () => void;
-  toggleLiveRefresh: () => void;
   selectArticle: (article: Article) => void;
   toggleStar: (article: Article) => void;
   addFeed: (input: { url: string }) => Promise<void>;
@@ -63,7 +58,6 @@ export const useStore = create<StoreState>((set, get) => ({
   starredCount: 0,
   lastListView: { type: 'today' },
   scopedSearch: false,
-  liveRefresh: localStorage.getItem('live-refresh') === '1', // default off
 
   init: async () => {
     try {
@@ -108,32 +102,6 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  refreshToday: async () => {
-    // Only the Today view auto-refreshes; never disturb other views.
-    if (get().selectedView.type !== 'today') return;
-    try {
-      const data = await apiFetch(`${API}/today`).then((r) => r.json());
-      const fresh: Article[] = data.articles || [];
-      const state = get();
-      // Bail if the view was navigated away from mid-fetch.
-      if (state.selectedView.type !== 'today') return;
-      const selected = state.selectedArticle;
-      // Pin the open article even if it aged out of "today" (e.g. across midnight) so it
-      // never vanishes under the user.
-      const next =
-        selected && !fresh.some((a) => a.id === selected.id) ? [...fresh, selected] : fresh;
-      // No-op when the id sequence is unchanged — avoids a pointless re-render every tick
-      // (the common case within the server's 5-min cache window).
-      const unchanged =
-        next.length === state.articles.length &&
-        next.every((a, i) => a.id === state.articles[i]?.id);
-      if (unchanged) return;
-      set({ articles: next });
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') console.error(e);
-    }
-  },
-
   selectView: (view) => {
     // Remember the last real list view so search can scope to it later.
     if (view.type !== 'search') set({ lastListView: view });
@@ -161,14 +129,6 @@ export const useStore = create<StoreState>((set, get) => ({
     if (view.type === 'search' && (view.query?.trim().length ?? 0) >= 2) {
       get().search(view.query ?? '');
     }
-  },
-
-  toggleLiveRefresh: () => {
-    const next = !get().liveRefresh;
-    localStorage.setItem('live-refresh', next ? '1' : '0');
-    set({ liveRefresh: next });
-    // Pull immediately on enable so the user sees fresh content without waiting a full interval.
-    if (next) get().refreshToday();
   },
 
   selectArticle: (article) => {

@@ -50,9 +50,6 @@ export default function App() {
     deleteFeed,
     updateFeed,
     loadArticles,
-    refreshToday,
-    liveRefresh,
-    toggleLiveRefresh,
     lastListView,
     scopedSearch,
     toggleSearchScope,
@@ -137,24 +134,6 @@ export default function App() {
         loadArticles({ type: 'today' });
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-refresh the Today view every minute while the tab is in the foreground — only when the
-  // user has turned the live toggle on. Paused when hidden; catches up when the tab is shown again.
-  // (The server's 5-min feed_cache TTL is the real freshness ceiling; in-window ticks no-op cheaply.)
-  useEffect(() => {
-    if (!liveRefresh || selectedView.type !== 'today') return;
-    const id = setInterval(() => {
-      if (!document.hidden) refreshToday();
-    }, 60 * 1000);
-    const onVisible = () => {
-      if (!document.hidden) refreshToday();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [liveRefresh, selectedView.type, refreshToday]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -350,9 +329,6 @@ export default function App() {
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
             hideFeedName={selectedView.type === 'feed'}
-            live={selectedView.type === 'today'}
-            liveOn={liveRefresh}
-            onToggleLive={toggleLiveRefresh}
           />
         )}
         <div

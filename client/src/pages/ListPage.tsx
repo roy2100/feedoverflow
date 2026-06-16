@@ -8,16 +8,8 @@ interface ListPageProps {
 }
 
 export default function ListPage({ onNavigate }: ListPageProps) {
-  const {
-    articles,
-    selectedView,
-    selectedArticle,
-    loadingArticles,
-    selectArticle,
-    loadArticles,
-    liveRefresh,
-    toggleLiveRefresh,
-  } = useStore();
+  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } =
+    useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
 
   const viewTitle =
@@ -52,9 +44,6 @@ export default function ListPage({ onNavigate }: ListPageProps) {
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
       hideFeedName={selectedView.type === 'feed'}
-      live={selectedView.type === 'today'}
-      liveOn={liveRefresh}
-      onToggleLive={toggleLiveRefresh}
     />
   );
 }

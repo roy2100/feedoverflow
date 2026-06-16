@@ -1,5 +1,5 @@
 import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import type { Article } from '../types';
 
@@ -30,11 +30,6 @@ interface ArticleListProps {
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   hideFeedName?: boolean;
-  // live: whether this view supports auto-refresh (Today) and should show the toggle.
-  // liveOn: current toggle state. onToggleLive: flip it.
-  live?: boolean;
-  liveOn?: boolean;
-  onToggleLive?: () => void;
 }
 
 export default function ArticleList({
@@ -52,31 +47,11 @@ export default function ArticleList({
   sidebarCollapsed,
   onToggleSidebar,
   hideFeedName,
-  live,
-  liveOn,
-  onToggleLive,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   // Set when selection originates from a mouse click — suppresses the auto-recenter so a
   // click only highlights the row in place. Keyboard navigation leaves it false.
   const clickSelectRef = useRef(false);
-  // Tracks whether the user is scrolled to the top, captured on every scroll so it reflects the
-  // position *before* a refresh mutates the list (browser scroll-anchoring may shift scrollTop
-  // afterward). The current head id detects when new items were prepended.
-  const atTopRef = useRef(true);
-  const headIdRef = useRef<string | null>(null);
-
-  // When a live refresh prepends new items and the user is already at the top, snap back to the
-  // top so the new entries are revealed — otherwise scroll-anchoring keeps the old row in place
-  // and the new items stay hidden above the viewport. A scrolled-down reader is left undisturbed.
-  useLayoutEffect(() => {
-    const container = listRef.current;
-    const headId = articles[0]?.id ?? null;
-    const prevHead = headIdRef.current;
-    headIdRef.current = headId;
-    if (!container || !prevHead || !headId || headId === prevHead) return;
-    if (atTopRef.current) container.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [articles]);
 
   useEffect(() => {
     if (isMobile) return; // PC-only behavior — mobile is a single pane, no list paging
@@ -167,62 +142,22 @@ export default function ArticleList({
             <PanelLeft size={14} />
           </button>
         )}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h2
-            style={{
-              fontSize: isMobile ? 16 : 14,
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-            }}
-          >
-            {viewTitle}
-          </h2>
-          {live && (
-            <button
-              onClick={onToggleLive}
-              title={liveOn ? '实时刷新：开（点击关闭）' : '实时刷新：关（点击开启）'}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                flexShrink: 0,
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                color: liveOn ? 'var(--accent)' : 'var(--text-tertiary)',
-                background: 'none',
-                border: 'none',
-                padding: '2px 4px',
-                cursor: 'pointer',
-                opacity: liveOn ? 1 : 0.7,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: liveOn ? 'var(--accent)' : 'var(--text-tertiary)',
-                  animation: liveOn ? 'livePulse 1.8s ease-in-out infinite' : 'none',
-                }}
-              />
-              LIVE
-            </button>
-          )}
-        </div>
+        <h2
+          style={{
+            fontSize: isMobile ? 16 : 14,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}
+        >
+          {viewTitle}
+        </h2>
       </div>
 
-      <div
-        ref={listRef}
-        onScroll={(e) => {
-          atTopRef.current = e.currentTarget.scrollTop <= 4;
-        }}
-        style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}
-      >
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {loading ? (
           Array.from({ length: 7 }, (_, i) => <SkeletonItem key={i} isMobile={isMobile} />)
         ) : articles.length === 0 ? (
