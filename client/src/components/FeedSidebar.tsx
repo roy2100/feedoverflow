@@ -427,12 +427,6 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
         transition: 'background 0.1s, color 0.1s',
         borderBottom: isMobile ? '1px solid var(--border-light)' : 'none',
       }}
-      onMouseEnter={(e) => {
-        if (!selected) e.currentTarget.style.background = 'var(--bg-hover)';
-      }}
-      onMouseLeave={(e) => {
-        if (!selected) e.currentTarget.style.background = 'transparent';
-      }}
     >
       {icon && (
         <span style={{ color: iconColor, display: 'flex', alignItems: 'center', flexShrink: 0 }}>

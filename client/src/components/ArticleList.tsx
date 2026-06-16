@@ -1,5 +1,5 @@
 import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import type { Article } from '../types';
 
@@ -253,8 +253,6 @@ function ArticleItem({
   style,
   'data-id': dataId,
 }: ArticleItemProps) {
-  const [hovered, setHovered] = useState(false);
-
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? 14 : 13,
     fontWeight: 400,
@@ -276,12 +274,10 @@ function ArticleItem({
       role="button"
       data-id={dataId}
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
         position: 'relative',
         padding: isMobile ? '14px 16px' : '12px 16px',
-        background: selected ? 'var(--bg-selected)' : hovered ? 'var(--bg-hover)' : 'transparent',
+        background: selected ? 'var(--bg-selected)' : 'transparent',
         borderBottom: '1px solid var(--border-light)',
         cursor: 'pointer',
         transition: 'background 0.1s',
