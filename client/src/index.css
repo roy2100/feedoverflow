@@ -130,6 +130,22 @@ input {
   }
 }
 
+/* Live-refresh indicator dot */
+@keyframes livePulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .skeleton-bar {
   border-radius: 4px;
   background: linear-gradient(
