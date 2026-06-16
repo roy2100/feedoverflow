@@ -9,6 +9,7 @@ import {
   Minimize2,
   Image,
   ImageOff,
+  Check,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
@@ -229,6 +230,22 @@ export default function ArticleReader({
           </button>
           <div style={{ flex: 1 }} />
           <button
+            onClick={() => onToggleStar(article)}
+            aria-label={article.isStarred ? '取消收藏' : '收藏'}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: 6,
+              borderRadius: 5,
+            }}
+          >
+            <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
+          </button>
+          <button
             onClick={() => setTextOnly((v) => !v)}
             aria-label={textOnly ? '显示图片' : '无图模式'}
             style={{
@@ -247,21 +264,6 @@ export default function ArticleReader({
             ) : (
               <Image size={18} strokeWidth={1.5} />
             )}
-          </button>
-          <button
-            onClick={() => onToggleStar(article)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              padding: 6,
-              borderRadius: 5,
-            }}
-          >
-            <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
           </button>
           {article.link && (
             <a
@@ -380,6 +382,29 @@ export default function ArticleReader({
           {!isMobile && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
+                onClick={() => onToggleStar(article)}
+                title={article.isStarred ? '取消收藏' : '收藏'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 4,
+                  borderRadius: 5,
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!article.isStarred) e.currentTarget.style.color = '#F5C518';
+                }}
+                onMouseLeave={(e) => {
+                  if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)';
+                }}
+              >
+                <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
+              </button>
+              <button
                 onClick={() => setTextOnly((v) => !v)}
                 title={textOnly ? '显示图片' : '无图模式'}
                 style={{
@@ -435,30 +460,6 @@ export default function ArticleReader({
                   )}
                 </button>
               )}
-              <button
-                onClick={() => onToggleStar(article)}
-                title={article.isStarred ? '取消收藏' : '收藏'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: article.isStarred ? '#F5C518' : 'var(--text-tertiary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: 4,
-                  borderRadius: 5,
-                  transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!article.isStarred) e.currentTarget.style.color = '#F5C518';
-                }}
-                onMouseLeave={(e) => {
-                  if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)';
-                }}
-              >
-                <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
-              </button>
-
               {article.link && !fullContent && (
                 <button
                   onClick={handleFetchFull}
@@ -486,7 +487,7 @@ export default function ArticleReader({
                   }}
                 >
                   <AlignLeft size={11} />
-                  加载全文
+                  全文
                 </button>
               )}
               {fullContent === 'loading' && (
@@ -527,11 +528,15 @@ export default function ArticleReader({
                     padding: '3px 8px',
                     opacity: 0.7,
                     transition: 'opacity 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
                 >
-                  全文模式
+                  <Check size={11} />
+                  全文
                 </button>
               )}
               {article.link && (
@@ -584,7 +589,7 @@ export default function ArticleReader({
               }}
             >
               <AlignLeft size={11} />
-              加载全文
+              全文
             </button>
           )}
           {isMobile && fullContent === 'loading' && (
@@ -614,6 +619,7 @@ export default function ArticleReader({
           {isMobile && fullHtml && (
             <button
               onClick={() => setFullContent(null)}
+              title="恢复 RSS 原文"
               style={{
                 fontSize: 12,
                 color: 'var(--accent)',
@@ -622,9 +628,13 @@ export default function ArticleReader({
                 borderRadius: 5,
                 cursor: 'pointer',
                 padding: '3px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
               }}
             >
-              全文模式
+              <Check size={11} />
+              全文
             </button>
           )}
         </div>
