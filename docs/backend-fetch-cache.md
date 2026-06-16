@@ -175,23 +175,34 @@ try/catch so a bad pass never crashes the process.
 
 ## End-to-end flow
 
-```
-                         ┌──────────────────────────────────────────┐
-                         │ upstream RSS  (parseURL, 10s timeout)      │
-                         └──────────────┬─────────────────────────────┘
-                                        │ refreshFeed()
-              ┌─────────────────────────┴───────────────────────────┐
-              │                                                      │
-   on-demand (getCachedFeed)                          background poller (15 min)
-   from read endpoints                                + startup warming
-              │                                                      │
-              ▼                                                      ▼
-        ┌───────────┐  persistItems(): INSERT OR IGNORE (all items, bodies)  ┌──────────────┐
-        │ feed_cache │◀── one txn ──────────────────────────────────────────▶│ article_states│
-        │ (5min,meta)│                                                        │  (durable)    │
-        └─────┬─────┘                                                         └──────┬───────┘
-              │ list metadata                                      history / bodies  │
-              └───────────────┬────────────────────────────────────────────┘
-                              ▼  enrich() + dedupById + sort
-                     read endpoints → client
+Triggers don't write the stores directly — they call `refreshFeed`, which fetches upstream and
+then does both writes in one transaction. Bodies only go to `article_states`; `feed_cache` holds
+slim list metadata. Only the three cache-backed endpoints go through `getCachedFeed` + `enrich`;
+`/starred`, `/podcasts`, `/search`, and `/:id/content` read `article_states` directly by SQL.
+
+```mermaid
+flowchart TB
+    upstream["upstream RSS<br/>parseURL() · 10s timeout"]
+
+    ondemand["on-demand: getCachedFeed()<br/>cold miss → await refreshFeed<br/>stale (&gt;5min) → fire-and-forget refreshFeed"]
+    poller["background poller (15 min)<br/>+ startup cache warming"]
+
+    ondemand -->|refreshFeed| upstream
+    poller -->|refreshFeed| upstream
+
+    upstream --> txn{{"refreshFeed(): one db.transaction()"}}
+
+    txn -->|"persistItems(): INSERT OR IGNORE<br/>all items WITH bodies"| states[("article_states<br/>durable: history + bodies + starred")]
+    txn -->|"setCacheRow(): slim items<br/>bodies stripped"| cache[("feed_cache<br/>5 min TTL · list metadata")]
+
+    endpoints["cache-backed reads<br/>/feeds/:id/articles · /all-articles · /today"]
+    endpoints --> ondemand
+    ondemand -->|"returns cached items"| enrich
+
+    cache -.->|list metadata| ondemand
+    states -->|"join: starred + (bodies if withContent)"| enrich
+    enrich["enrich() + dedupById + sort"] --> client["client"]
+
+    direct["direct reads<br/>/starred · /podcasts · /search · /:id/content"]
+    states -->|SQL only, no cache| direct --> client
 ```
