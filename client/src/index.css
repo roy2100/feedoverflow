@@ -53,6 +53,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Disable text selection across the UI chrome (sidebar, list, headers);
+ * re-enable inside the reader pane and form controls so article text and
+ * input values can still be selected/copied. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.reader-selectable,
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 button {
   font-family: var(--font-ui);
   cursor: pointer;

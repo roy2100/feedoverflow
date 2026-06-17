@@ -181,6 +181,7 @@ export default function ArticleReader({
       ref={scrollRef}
       key={article.id}
       tabIndex={-1}
+      className="reader-selectable"
       style={{
         flex: 1,
         background: 'var(--bg-reader)',

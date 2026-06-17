@@ -11,7 +11,11 @@ function formatDate(dateStr: string): string {
   const diff = (now.getTime() - d.getTime()) / 1000;
   if (diff < 60) return '刚刚';
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-  if (diff < 86400)
+  const isSameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (isSameDay)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
