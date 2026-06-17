@@ -1,3 +1,4 @@
+import { parsePubDate } from './articles.ts';
 import { DB_MAX_SIZE_BYTES } from './config.ts';
 import { db } from './db.ts';
 import { logger } from './logger.ts';
@@ -31,10 +32,11 @@ export function cleanupOrphans(): number {
 }
 
 // pub_date is an RFC-822 string ("Tue, 26 May 2026 10:59:16 +0800") and may be empty, so
-// it cannot be sorted as text. Parse it to epoch ms; fall back to updated_at, then 0.
+// it cannot be sorted as text. Parse it to epoch ms via the shared parser (handles the
+// non-standard formats some feeds emit); fall back to updated_at, then 0.
 function articleTs(row: { pub_date: string | null; updated_at: string | null }): number {
-  const fromPub = row.pub_date ? Date.parse(row.pub_date) : NaN;
-  if (!Number.isNaN(fromPub)) return fromPub;
+  const fromPub = parsePubDate(row.pub_date)?.getTime();
+  if (fromPub !== undefined) return fromPub;
   const fromUpdated = row.updated_at ? Date.parse(row.updated_at) : NaN;
   return Number.isNaN(fromUpdated) ? 0 : fromUpdated;
 }

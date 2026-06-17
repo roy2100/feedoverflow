@@ -7,7 +7,16 @@ import cors from 'cors';
 import express from 'express';
 import { parseStringPromise } from 'xml2js';
 
-import { dedupById, enrich, resolveUrl, lookupContent, saveState } from './articles.ts';
+import {
+  dedupById,
+  enrich,
+  resolveUrl,
+  lookupContent,
+  saveState,
+  parsePubDate,
+  byPubDateDesc,
+  normalizePubDates,
+} from './articles.ts';
 import { registerAuth } from './auth.ts';
 import { getCachedFeed, clearCache, cacheReady } from './cache.ts';
 import { db } from './db.ts';
@@ -221,8 +230,8 @@ app.get('/api/feeds/:id/articles', async (req, res) => {
         isStarred: !!r.is_starred,
       }));
     const articles = dedupById([...liveArticles, ...historicArticles]);
-    articles.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-    res.json({ feedName: cached.feedName, articles });
+    articles.sort(byPubDateDesc);
+    res.json({ feedName: cached.feedName, articles: normalizePubDates(articles) });
   } catch (err) {
     if (ac.signal.aborted) return;
     res.status(500).json({ error: 'Failed to fetch feed', detail: (err as Error).message });
@@ -244,9 +253,9 @@ app.get('/api/all-articles', async (req, res) => {
     results
       .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
       .flatMap((r) => r.value)
-      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()),
+      .sort(byPubDateDesc),
   );
-  res.json({ articles, cacheReady });
+  res.json({ articles: normalizePubDates(articles), cacheReady });
 });
 
 app.get('/api/today', async (req, res) => {
@@ -260,7 +269,8 @@ app.get('/api/today', async (req, res) => {
       const cached = await getCachedFeed(f, ac.signal);
       if (!cached) return [];
       const todayItems = cached.items.filter(
-        (item) => new Date(item.pubDate || item.isoDate || 0).getTime() >= todayStart.getTime(),
+        (item) =>
+          (parsePubDate(item.pubDate || item.isoDate)?.getTime() ?? 0) >= todayStart.getTime(),
       );
       return enrich(todayItems, f.id, f.name, { withContent: false });
     }),
@@ -270,9 +280,9 @@ app.get('/api/today', async (req, res) => {
     results
       .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
       .flatMap((r) => r.value)
-      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime()),
+      .sort(byPubDateDesc),
   );
-  res.json({ articles, cacheReady });
+  res.json({ articles: normalizePubDates(articles), cacheReady });
 });
 
 app.get('/api/starred', (_req, res) => {
@@ -280,20 +290,22 @@ app.get('/api/starred', (_req, res) => {
     .prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC')
     .all() as ArticleStateRow[];
   res.json({
-    articles: rows.map((r) => ({
-      id: r.article_id,
-      feedId: r.feed_id,
-      feedName: r.feed_name,
-      title: r.title,
-      summary: r.summary,
-      content: r.content,
-      link: r.link,
-      pubDate: r.pub_date,
-      author: r.author,
-      audioUrl: r.audio_url || '',
-      audioDuration: r.audio_duration || '',
-      isStarred: true,
-    })),
+    articles: normalizePubDates(
+      rows.map((r) => ({
+        id: r.article_id,
+        feedId: r.feed_id,
+        feedName: r.feed_name,
+        title: r.title,
+        summary: r.summary,
+        content: r.content,
+        link: r.link,
+        pubDate: r.pub_date,
+        author: r.author,
+        audioUrl: r.audio_url || '',
+        audioDuration: r.audio_duration || '',
+        isStarred: true,
+      })),
+    ),
   });
 });
 
@@ -324,8 +336,9 @@ app.get('/api/podcasts', (_req, res) => {
       audioDuration: r.audio_duration || '',
       isStarred: !!r.is_starred,
     }))
-    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+    .sort(byPubDateDesc)
     .slice(0, 100);
+  normalizePubDates(articles);
   res.json({ articles });
 });
 
@@ -382,8 +395,9 @@ app.get('/api/search', (req, res) => {
       audioDuration: r.audio_duration || '',
       isStarred: !!r.is_starred,
     }))
-    .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+    .sort(byPubDateDesc)
     .slice(0, 100);
+  normalizePubDates(articles);
   res.json({ articles, query: q });
 });
 

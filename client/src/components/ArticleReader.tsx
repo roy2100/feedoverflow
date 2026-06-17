@@ -13,15 +13,14 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
-import { parseDate } from '../parseDate';
 import type { Article } from '../types';
 
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
 type FullContent = null | 'loading' | { html: string } | { error: string };
 
 function formatFullDate(dateStr: string): string {
-  const d = parseDate(dateStr);
-  if (!d) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
   return d.toLocaleString('zh-CN', {
     year: 'numeric',
     month: 'long',

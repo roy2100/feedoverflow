@@ -12,6 +12,44 @@ export function makeId(link?: string, title?: string, pubDate?: string): string 
     .slice(0, 12);
 }
 
+// The single source of truth for turning an RSS pubDate string into a Date. Most feeds give
+// RFC822 / ISO-8601 dates that parse natively, but some (36氪 via RssHub) emit
+// `2026-06-17 14:14:08  +0800`: a space instead of `T`, doubled whitespace, and a colon-less
+// offset. Native `new Date()` returns Invalid Date for those, so we normalize and retry.
+// The server owns this parse: it sorts by it and emits ISO-8601 (normalizePubDates) so the
+// client never needs a second parser.
+export function parsePubDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+
+  const direct = new Date(dateStr);
+  if (!isNaN(direct.getTime())) return direct;
+
+  const normalized = dateStr
+    .trim()
+    .replace(/\s+/g, ' ') // collapse doubled whitespace
+    .replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T') // date<space>time → date T time
+    .replace(/ ?([+-]\d{2})(\d{2})$/, '$1:$2'); // +0800 → +08:00
+
+  const retry = new Date(normalized);
+  return isNaN(retry.getTime()) ? null : retry;
+}
+
+// Descending-by-publish-time comparator. Unparseable dates sort to epoch 0 (bottom) so the
+// order is always deterministic — never NaN.
+export function byPubDateDesc(a: { pubDate: string }, b: { pubDate: string }): number {
+  return (parsePubDate(b.pubDate)?.getTime() ?? 0) - (parsePubDate(a.pubDate)?.getTime() ?? 0);
+}
+
+// Rewrite each article's pubDate to canonical ISO-8601 so the client can use native
+// `new Date()`. Leaves the raw string untouched when unparseable (client then shows blank).
+export function normalizePubDates<T extends { pubDate: string }>(articles: T[]): T[] {
+  for (const a of articles) {
+    const d = parsePubDate(a.pubDate);
+    if (d) a.pubDate = d.toISOString();
+  }
+  return articles;
+}
+
 export function dedupById(articles: Article[]): Article[] {
   const seen = new Set<string>();
   return articles.filter((a) => {
