@@ -1,14 +1,15 @@
 import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { parseDate } from '../parseDate';
 import type { Article } from '../types';
 
 function formatDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '';
+  const d = parseDate(dateStr);
+  if (!d) return '';
   const now = new Date();
   const diff = (now.getTime() - d.getTime()) / 1000;
+  if (diff < 60) return '刚刚';
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
