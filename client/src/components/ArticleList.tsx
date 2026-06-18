@@ -285,7 +285,7 @@ function ArticleItem({
         padding: isMobile ? '14px 16px' : '12px 16px',
         background: selected ? 'var(--bg-selected)' : 'transparent',
         borderBottom: '1px solid var(--border-light)',
-        cursor: 'pointer',
+        cursor: 'default',
         transition: 'background 0.1s',
         animation: 'fadeIn 0.25s ease both',
         ...style,

@@ -423,7 +423,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
         fontWeight: selected ? 500 : 400,
         textAlign: 'left',
         border: 'none',
-        cursor: 'pointer',
+        cursor: 'default',
         transition: 'background 0.1s, color 0.1s',
         borderBottom: isMobile ? '1px solid var(--border-light)' : 'none',
       }}

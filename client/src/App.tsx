@@ -79,12 +79,12 @@ export default function App() {
         }
         return;
       }
-      if (e.key === 'ArrowRight') {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         const idx = articles.findIndex((a) => a.id === selectedArticle?.id);
         const next = idx === -1 ? articles[0] : articles[idx + 1];
         if (next) selectArticle(next);
-      } else if (e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         const idx = articles.findIndex((a) => a.id === selectedArticle?.id);
         if (idx > 0) selectArticle(articles[idx - 1]);

@@ -76,6 +76,15 @@ button {
   outline: none;
 }
 
+/* Visible keyboard focus indicator (WCAG 2.4.7). box-shadow is used instead of
+ * outline because controls set `outline: none` via inline styles, which would
+ * override an outline-based ring. :focus-visible keeps it off for mouse clicks. */
+:where(button, input, textarea, select, a, [role='button'], [tabindex]):focus-visible {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-light);
+}
+
 input {
   font-family: var(--font-ui);
 }
