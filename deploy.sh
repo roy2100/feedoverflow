@@ -17,8 +17,8 @@ fi
 
 # 1. 构建前端
 echo "==> 构建前端"
-bun install --cwd "$DEV_ROOT/client"
-bun run --cwd "$DEV_ROOT/client" build
+npm install --prefix "$DEV_ROOT/client"
+npm run --prefix "$DEV_ROOT/client" build
 
 # 2. 同步代码 + 构建产物
 echo "==> 同步代码"
@@ -29,7 +29,7 @@ rsync -a --delete \
 
 # 3. 安装生产依赖
 echo "==> 安装服务端依赖"
-bun install --cwd "$DEPLOY_ROOT/server" --production
+npm install --prefix "$DEPLOY_ROOT/server" --omit=dev
 
 # 4. 重启服务
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
