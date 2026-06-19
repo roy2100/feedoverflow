@@ -1,5 +1,5 @@
 import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import type { Article } from '../types';
 
@@ -55,6 +55,20 @@ export default function ArticleList({
   hideFeedName,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  // Mobile: pin the list to its first row whenever a fresh list finishes loading.
+  // Keyed on the `loading` false-edge, which fires only on a real (re)load — entering a
+  // view from the sidebar, searching, or pull-to-refresh — and never on optimistic
+  // mutations like starring (which replace the `articles` array but leave `loading`
+  // untouched) or on returning from the reader (no reload, so scroll is preserved).
+  // Resetting scrollTop forces iOS Safari to re-sync the scroll layer, repairing the
+  // stale upward offset left behind when the pane slides back in via the ancestor
+  // transform. We set scrollTop directly rather than scrollIntoView: the latter walks
+  // up and scrolls every ancestor (and the root) to reveal the row, which on first
+  // load would drag the off-screen `translateX(100%)` list pane into the viewport.
+  useLayoutEffect(() => {
+    if (!isMobile || loading || !listRef.current) return;
+    listRef.current.scrollTop = 0;
+  }, [isMobile, loading]);
   // Set when selection originates from a mouse click — suppresses the auto-recenter so a
   // click only highlights the row in place. Keyboard navigation leaves it false.
   const clickSelectRef = useRef(false);
@@ -163,7 +177,14 @@ export default function ArticleList({
         </h2>
       </div>
 
-      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/*
+        No `-webkit-overflow-scrolling: touch`: it promotes this list into a separate
+        composited momentum-scroll layer. When the mobile pane slides off-screen via the
+        ancestor's `transform: translateX(...)` and back, iOS Safari fails to re-sync that
+        layer with the real scrollTop, painting the content at a stale upward offset.
+        Momentum scrolling is the default on iOS 13+, so the property is unneeded.
+      */}
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto' }}>
         {loading ? (
           Array.from({ length: 7 }, (_, i) => <SkeletonItem key={i} isMobile={isMobile} />)
         ) : articles.length === 0 ? (
