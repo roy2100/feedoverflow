@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, type ReactNode } from 'react';
 
 import { AudioContext } from './AudioContext';
 import ArticleList from './components/ArticleList';
@@ -222,13 +222,42 @@ export default function App() {
     );
 
   if (isMobile) {
-    const positions: Record<MobilePage, { feeds: string; list: string; article: string }> = {
-      feeds: { feeds: 'translateX(0)', list: 'translateX(100%)', article: 'translateX(100%)' },
-      list: { feeds: 'translateX(-100%)', list: 'translateX(0)', article: 'translateX(100%)' },
-      article: { feeds: 'translateX(-100%)', list: 'translateX(0)', article: 'translateX(0)' },
+    const depthByPage: Record<MobilePage, number> = { feeds: 0, list: 1, article: 2 };
+    const depth = depthByPage[mobilePage];
+    const transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
+
+    // Every panel stays mounted; translateX drives visibility. A parent panel
+    // (rel < 0) parallax-shifts left and dims behind the active panel, adding
+    // depth during the slide without extra DOM layers. z-index = idx + 1 keeps
+    // deeper panels above shallower ones so both push and pop read correctly.
+    const panel = (idx: number, content: ReactNode) => {
+      const rel = idx - depth;
+      const tx = rel < 0 ? 'translateX(-25%)' : rel === 0 ? 'translateX(0)' : 'translateX(100%)';
+      return (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            transform: tx,
+            transition,
+            willChange: 'transform',
+            zIndex: idx + 1,
+          }}
+        >
+          {content}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(28, 25, 23, 0.28)',
+              pointerEvents: 'none',
+              opacity: rel < 0 ? 1 : 0,
+              transition: 'opacity 0.28s ease',
+            }}
+          />
+        </div>
+      );
     };
-    const tx = positions[mobilePage];
-    const transition = 'transform 0.28s ease';
 
     return (
       <AudioContext.Provider value={audioCtx}>
@@ -242,40 +271,12 @@ export default function App() {
           }}
         >
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                transform: tx.feeds,
-                transition,
-                willChange: 'transform',
-              }}
-            >
-              <FeedsPage onOpenAddModal={() => setShowAddModal(true)} onNavigate={setMobilePage} />
-            </div>
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                transform: tx.list,
-                transition,
-                willChange: 'transform',
-              }}
-            >
-              <ListPage onNavigate={setMobilePage} />
-            </div>
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                transform: tx.article,
-                transition,
-                willChange: 'transform',
-                zIndex: 10,
-              }}
-            >
-              <ReaderPage onNavigate={setMobilePage} />
-            </div>
+            {panel(
+              0,
+              <FeedsPage onOpenAddModal={() => setShowAddModal(true)} onNavigate={setMobilePage} />,
+            )}
+            {panel(1, <ListPage onNavigate={setMobilePage} />)}
+            {panel(2, <ReaderPage onNavigate={setMobilePage} />)}
           </div>
           {currentEpisode && (
             <Suspense fallback={null}>
