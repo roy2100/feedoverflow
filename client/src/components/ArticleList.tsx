@@ -55,18 +55,20 @@ export default function ArticleList({
   hideFeedName,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
-  // Mobile: pin the list to its first row whenever a fresh list finishes loading.
-  // Keyed on the `loading` false-edge, which fires only on a real (re)load — entering a
-  // view from the sidebar, searching, or pull-to-refresh — and never on optimistic
-  // mutations like starring (which replace the `articles` array but leave `loading`
-  // untouched) or on returning from the reader (no reload, so scroll is preserved).
-  // Resetting scrollTop forces iOS Safari to re-sync the scroll layer, repairing the
-  // stale upward offset left behind when the pane slides back in via the ancestor
-  // transform. We set scrollTop directly rather than scrollIntoView: the latter walks
-  // up and scrolls every ancestor (and the root) to reveal the row, which on first
-  // load would drag the off-screen `translateX(100%)` list pane into the viewport.
+  // Mobile: pin the list to its first row on every fresh (re)load — on BOTH the
+  // `loading` rising edge (skeleton appears) and falling edge (real rows arrive).
+  // `loading` flips only on a genuine (re)load — entering a view from the sidebar,
+  // searching, or pull-to-refresh — and never on optimistic mutations like starring
+  // (which replace the `articles` array but leave `loading` untouched) or on returning
+  // from the reader (no reload, so scroll is preserved). The rising-edge reset matters
+  // because the skeleton would otherwise paint at the stale upward offset iOS Safari
+  // leaves behind when the pane slides back in via the ancestor transform; the
+  // falling-edge reset re-pins once real rows replace the skeleton. We set scrollTop
+  // directly rather than scrollIntoView: the latter walks up and scrolls every ancestor
+  // (and the root) to reveal the row, which on first load would drag the off-screen
+  // `translateX(100%)` list pane into the viewport.
   useLayoutEffect(() => {
-    if (!isMobile || loading || !listRef.current) return;
+    if (!isMobile || !listRef.current) return;
     listRef.current.scrollTop = 0;
   }, [isMobile, loading]);
   // Set when selection originates from a mouse click — suppresses the auto-recenter so a
