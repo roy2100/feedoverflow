@@ -91,8 +91,12 @@ export function registerAuth(app: Express): void {
       if (token) {
         const row = stmtFindSession.get(token) as { created_at: number } | undefined;
         if (row && Date.now() - row.created_at < SESSION_TTL) return next();
+        // Had a session but it's invalid/expired → 401 so the client reloads to re-login.
+        return res.status(401).json({ error: 'Unauthorized' });
       }
-      res.status(401).json({ error: 'Unauthorized' });
+      // No session: anonymous read-only public demo — GET passes, writes are blocked.
+      if (req.method === 'GET') return next();
+      res.status(403).json({ error: '只读演示模式，登录后可写' });
     });
   }
 

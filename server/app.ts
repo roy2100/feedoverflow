@@ -23,6 +23,7 @@ import { db } from './db.ts';
 import { getFavicon, DEFAULT_FAVICON, DEFAULT_CONTENT_TYPE } from './favicon.ts';
 import { registerMcp } from './mcp.ts';
 import { parseURL } from './parse-url.ts';
+import { assertSafeUrl } from './ssrf.ts';
 import type { Feed, Article, ArticleStateRow } from './types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -149,6 +150,13 @@ app.patch('/api/settings', (req, res) => {
 app.get('/api/fetch-content', async (req, res) => {
   const url = req.query.url as string | undefined;
   if (!url) return res.status(400).json({ error: 'url required' });
+  // This endpoint fetches a client-supplied URL and is reachable anonymously on the
+  // public read-only demo, so block private/loopback/metadata targets (SSRF).
+  try {
+    await assertSafeUrl(url);
+  } catch (err) {
+    return res.status(400).json({ error: 'Blocked URL', detail: (err as Error).message });
+  }
   const fetchHeaders = {
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
