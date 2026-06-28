@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # 日常部署：构建前端，同步到 ~/Deploy/rss-reader/，重启服务。
-# 用法：./deploy.sh        （默认端口 3002）
-#       PORT=8080 ./deploy.sh
+# 用法：./scripts/deploy-mac.sh        （默认端口 3002）
+#       PORT=8080 ./scripts/deploy-mac.sh
 
-DEV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_ROOT="$HOME/Deploy/rss-reader"
 LABEL="com.rss-reader.app"
 PORT="${PORT:-3002}"

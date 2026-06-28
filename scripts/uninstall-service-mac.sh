@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # 卸载 launchd 开机自启服务（停止运行 + 取消自启 + 删除 plist）。
-# 用法：./uninstall-service.sh
+# 用法：./scripts/uninstall-service-mac.sh
 
 LABEL="com.rss-reader.app"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"

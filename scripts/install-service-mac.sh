@@ -3,9 +3,9 @@ set -euo pipefail
 
 # 安装 launchd 开机自启（LaunchAgent）。
 # 登录后自动启动，崩溃自动拉起（KeepAlive）。
-# 用法：./install-service.sh           （默认端口 3002）
-#       PORT=8080 ./install-service.sh
-# 卸载：./uninstall-service.sh
+# 用法：./scripts/install-service-mac.sh           （默认端口 3002）
+#       PORT=8080 ./scripts/install-service-mac.sh
+# 卸载：./scripts/uninstall-service-mac.sh
 
 ROOT="$HOME/Deploy/rss-reader"
 LABEL="com.rss-reader.app"

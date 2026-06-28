@@ -16,7 +16,7 @@ cd client && npm test           # vitest suites (jsdom)
 cd client && npm run test:coverage  # vitest with V8 coverage report (text + html, excludes tests/types/entry)
 
 # Production deploy
-./deploy.sh              # install deps, build frontend, restart backend service
+./scripts/deploy-mac.sh  # install deps, build frontend, restart backend service
 
 # Service management
 launchctl start com.rss-reader.app
@@ -61,7 +61,7 @@ Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.roy
 - Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 24 — `util.styleText` used by the vendored slog logger)
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
 - Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
-- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `deploy.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip` reflects the real client via cloudflared's `X-Forwarded-For` — without it every tunnel request looks like localhost and bypasses auth
+- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `scripts/deploy-mac.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip` reflects the real client via cloudflared's `X-Forwarded-For` — without it every tunnel request looks like localhost and bypasses auth
 - Ports: networth.local → 3001, rss.royl.uk → 3002, dev client → 3000
 
 ## Architecture

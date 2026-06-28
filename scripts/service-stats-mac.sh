@@ -6,11 +6,11 @@ set -euo pipefail
 # uptime.
 #
 # Usage:
-#   ./service-stats.sh            # active log only
-#   ./service-stats.sh --all      # also include gzipped rotated archives (chronological)
-#   LOG_DIR=/some/path ./service-stats.sh
+#   ./scripts/service-stats-mac.sh            # active log only
+#   ./scripts/service-stats-mac.sh --all      # also include gzipped rotated archives (chronological)
+#   LOG_DIR=/some/path ./scripts/service-stats-mac.sh
 #
-# Log dir mirrors logger.ts / the deploy layout (install-service.sh, deploy.sh):
+# Log dir mirrors logger.ts / the deploy layout (install-service-mac.sh, deploy-mac.sh):
 # $HOME/Deploy/rss-reader/logs. Override with LOG_DIR.
 
 LOG_DIR="${LOG_DIR:-$HOME/Deploy/rss-reader/logs}"
