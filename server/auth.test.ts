@@ -65,10 +65,27 @@ describe('auth — gate on /api/*', () => {
     assert.equal(res.status, 200);
   });
 
-  test('remote request without a cookie is rejected with 401', async () => {
+  test('remote GET without a cookie is allowed (public read-only mode)', async () => {
     const res = await request(app).get('/api/feeds').set('X-Forwarded-For', REMOTE);
-    assert.equal(res.status, 401);
-    assert.equal(res.body.error, 'Unauthorized');
+    assert.equal(res.status, 200);
+  });
+
+  test('remote write without a cookie is rejected with 403', async () => {
+    const res = await request(app)
+      .post('/api/feeds')
+      .set('X-Forwarded-For', REMOTE)
+      .send({ url: 'https://example.com/feed.xml' });
+    assert.equal(res.status, 403);
+  });
+
+  test('remote write with a valid cookie is allowed past the gate', async () => {
+    // DELETE on a missing feed is a pure DB op (no network) — only asserting the
+    // gate lets it through (not 403), not the handler's specific result.
+    const res = await request(app)
+      .delete('/api/feeds/does-not-exist')
+      .set('X-Forwarded-For', REMOTE)
+      .set('Cookie', cookie);
+    assert.notEqual(res.status, 403);
   });
 
   test('remote request with a valid cookie passes', async () => {
