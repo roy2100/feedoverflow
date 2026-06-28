@@ -30,9 +30,49 @@ function isPrivateIPv4(ip: string): boolean {
   );
 }
 
+// Expand any valid IPv6 string to its 8 numeric groups (handles `::` compression and a
+// trailing embedded IPv4, e.g. `::ffff:1.2.3.4`). Returns null for non-IPv6 input.
+function ipv6Groups(ip: string): number[] | null {
+  if (!net.isIPv6(ip)) return null;
+  let str = ip.toLowerCase();
+  const v4 = str.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4) {
+    const p = v4[1].split('.').map(Number);
+    str =
+      str.slice(0, v4.index) +
+      ((p[0] << 8) | p[1]).toString(16) +
+      ':' +
+      ((p[2] << 8) | p[3]).toString(16);
+  }
+  const [head, tail] = str.split('::');
+  const headGroups = head ? head.split(':') : [];
+  const tailGroups = tail === undefined ? null : tail ? tail.split(':') : [];
+  const groups =
+    tailGroups === null
+      ? headGroups
+      : [
+          ...headGroups,
+          ...Array(8 - headGroups.length - tailGroups.length).fill('0'),
+          ...tailGroups,
+        ];
+  if (groups.length !== 8) return null;
+  return groups.map((g) => parseInt(g || '0', 16));
+}
+
+// Return the dotted IPv4 of an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`, in any
+// notation the URL parser / DNS may hand us), else null. Catches the hex-compressed
+// form (`::ffff:7f00:1`) that a plain dotted-decimal regex would miss.
+function mappedIPv4(ip: string): string | null {
+  const g = ipv6Groups(ip);
+  if (!g) return null;
+  const highBitsZero = g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0;
+  if (!highBitsZero || g[5] !== 0xffff) return null;
+  return `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+}
+
 function isPrivateIP(ip: string): boolean {
-  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i); // IPv4-mapped IPv6
-  if (mapped) return isPrivateIPv4(mapped[1]);
+  const mapped = mappedIPv4(ip); // IPv4-mapped IPv6
+  if (mapped) return isPrivateIPv4(mapped);
   if (net.isIPv4(ip)) return isPrivateIPv4(ip);
   const lower = ip.toLowerCase();
   if (lower === '::1' || lower === '::') return true; // loopback / unspecified
