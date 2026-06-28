@@ -3,13 +3,17 @@ set -euo pipefail
 
 # 安装 systemd 系统服务（开机自启，崩溃自动重启）。
 # 部署根目录即当前仓库目录（原地运行，不复制到别处）。
-# 用法：sudo ./scripts/install-service-linux.sh           （默认端口 3002）
-#       sudo PORT=8080 ./scripts/install-service-linux.sh
+# 用法：sudo ./scripts/install-service-linux.sh
+# 端口在 server/.env 的 PORT 设置（默认 3002），unit 不再写死——改端口只需改 .env 再重启。
 # 卸载：sudo ./scripts/uninstall-service-linux.sh
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="rss-reader"
 UNIT="/etc/systemd/system/$LABEL.service"
+# 端口由 server/.env 的 PORT 决定（app 的 load-env.ts 在启动时读取）；unit 不写死 PORT，
+# 这里仅解析展示用端口供最后的提示信息使用。
+ENV_FILE="$ROOT/server/.env"
+PORT="$([ -f "$ENV_FILE" ] && grep -E '^PORT=' "$ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
 PORT="${PORT:-3002}"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -47,7 +51,6 @@ User=$RUN_USER
 Group=$RUN_GROUP
 WorkingDirectory=$ROOT
 ExecStart=$NODE_BIN $ROOT/server/index.ts
-Environment=PORT=$PORT
 Environment=NODE_ENV=production
 Environment=PATH=$(dirname "$NODE_BIN"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Restart=always
