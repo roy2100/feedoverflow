@@ -13,8 +13,8 @@ const { app } = await import('./app.ts');
 const { db } = await import('./db.ts');
 const { SESSION_TTL } = await import('./auth.ts');
 
-// A non-loopback X-Forwarded-For makes req.ip non-local (trust proxy = loopback),
-// so the auth gate actually engages instead of being bypassed by isLocalhost().
+// The gate now engages for every request, local or remote. REMOTE simply
+// simulates an external client (trust proxy = loopback reads X-Forwarded-For).
 const REMOTE = '203.0.113.7';
 const sessionFromSetCookie = (header: string[] | undefined) => {
   const cookie = (header ?? []).find((c) => c.startsWith('session='));
@@ -60,32 +60,16 @@ describe('auth — gate on /api/*', () => {
     cookie = sessionFromSetCookie(res.headers['set-cookie'] as unknown as string[]);
   });
 
-  test('localhost requests bypass the gate (no cookie needed)', async () => {
+  test('localhost requests are gated too (no cookie → 401)', async () => {
     const res = await request(app).get('/api/feeds'); // supertest connects from 127.0.0.1
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 401);
+    assert.equal(res.body.error, 'Unauthorized');
   });
 
-  test('remote GET without a cookie is allowed (public read-only mode)', async () => {
+  test('remote request without a cookie is rejected with 401', async () => {
     const res = await request(app).get('/api/feeds').set('X-Forwarded-For', REMOTE);
-    assert.equal(res.status, 200);
-  });
-
-  test('remote write without a cookie is rejected with 403', async () => {
-    const res = await request(app)
-      .post('/api/feeds')
-      .set('X-Forwarded-For', REMOTE)
-      .send({ url: 'https://example.com/feed.xml' });
-    assert.equal(res.status, 403);
-  });
-
-  test('remote write with a valid cookie is allowed past the gate', async () => {
-    // DELETE on a missing feed is a pure DB op (no network) — only asserting the
-    // gate lets it through (not 403), not the handler's specific result.
-    const res = await request(app)
-      .delete('/api/feeds/does-not-exist')
-      .set('X-Forwarded-For', REMOTE)
-      .set('Cookie', cookie);
-    assert.notEqual(res.status, 403);
+    assert.equal(res.status, 401);
+    assert.equal(res.body.error, 'Unauthorized');
   });
 
   test('remote request with a valid cookie passes', async () => {
@@ -119,9 +103,9 @@ describe('auth — gate on /api/*', () => {
 });
 
 describe('auth — auth-check & logout', () => {
-  test('auth-check reports authed:true for localhost', async () => {
+  test('auth-check reports authed:false for localhost without cookie (no bypass)', async () => {
     const res = await request(app).get('/api/auth-check');
-    assert.deepEqual(res.body, { authed: true });
+    assert.deepEqual(res.body, { authed: false });
   });
 
   test('auth-check reports authed:false for remote without cookie', async () => {

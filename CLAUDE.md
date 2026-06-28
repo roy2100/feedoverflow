@@ -61,7 +61,7 @@ Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.roy
 - Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 24 — `util.styleText` used by the vendored slog logger)
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
 - Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
-- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `scripts/deploy-mac.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip` reflects the real client via cloudflared's `X-Forwarded-For` — without it every tunnel request looks like localhost and bypasses auth
+- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `scripts/deploy-mac.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip`/`req.secure` reflect the real client via cloudflared's `X-Forwarded-Proto`/`X-Forwarded-For` — needed for the `Secure` cookie flag and the MCP localhost-only block (the auth gate itself no longer keys off IP)
 - Ports: networth.local → 3001, rss.royl.uk → 3002, dev client → 3000
 
 ## Architecture
@@ -131,7 +131,7 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 - Logging: shared `logger` (`logger.ts`, vendored slog in `vendor/slog.ts`) writes NDJSON to `logs/app.log` (size rotation + gzip + retention) and pretty colorized output to a dev TTY. Use `logger.info|warn|error(...)` with a fields object; pass an Error as the `err` field to auto-serialize its stack/cause. Disabled under `TEST_DB`. Tune via `LOG_LEVEL` / `LOG_DIR`
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`
 - `enrich()` joins live RSS items with persisted `article_states` rows
-- Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, non-localhost `/api/*` requests require a valid `session` cookie; disabled otherwise. `isLocalhost()` (exported) keys off `req.ip`, which is only trustworthy because of `trust proxy = loopback` (see Deployment). The login route is rate-limited (`express-rate-limit`)
+- Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, **every** `/api/*` request requires a valid `session` cookie — no localhost bypass, local and remote are gated identically; disabled otherwise (`/api/login` `/api/logout` `/api/auth-check` are registered before the gate and stay reachable). `isLocalhost()` is still exported but only the MCP transport uses it now (localhost-only block). The login route is rate-limited (`express-rate-limit`)
 
 **SQLite tables:**
 - `feeds(id, name, url)`
@@ -166,4 +166,4 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 
 ### MCP server (`server/mcp.ts`)
 
-Mounted into the same Express app via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405). Registered in `app.ts` before the SPA `*` fallback. **Localhost-only**: non-local requests (i.e. via the tunnel) get `404` — MCP clients connect over loopback, so there is no public MCP surface. Exposes 13 tools (feed CRUD, OPML import, article lists, star, current article, full-content fetch) that call the API above over loopback (`http://localhost:3002`). Configure clients with `{ "type": "http", "url": "http://localhost:3002/mcp" }`.
+Mounted into the same Express app via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405). Registered in `app.ts` before the SPA `*` fallback. **Localhost-only**: non-local requests (i.e. via the tunnel) get `404` — MCP clients connect over loopback, so there is no public MCP surface. Exposes 13 tools (feed CRUD, OPML import, article lists, star, current article, full-content fetch) that call the API above over loopback (`http://localhost:3002`). Configure clients with `{ "type": "http", "url": "http://localhost:3002/mcp" }`. **Caveat:** those internal loopback calls carry no session cookie, so when `AUTH_USER`/`AUTH_PASS` are set the auth gate returns `401` and the MCP tools stop working — MCP is only functional with auth disabled.

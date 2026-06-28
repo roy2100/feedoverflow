@@ -75,7 +75,6 @@ export function registerAuth(app: Express): void {
     });
 
     app.get('/api/auth-check', (req, res) => {
-      if (isLocalhost(req)) return res.json({ authed: true });
       const token = parseCookies(req).session;
       if (token) {
         const row = stmtFindSession.get(token) as { created_at: number } | undefined;
@@ -84,19 +83,17 @@ export function registerAuth(app: Express): void {
       res.json({ authed: false });
     });
 
+    // Every /api/* request must carry a valid session — no localhost bypass.
+    // (`/api/login`, `/api/logout`, `/api/auth-check` are registered above and
+    // short-circuit before reaching this gate.)
     app.use((req, res, next) => {
       if (!req.path.startsWith('/api/')) return next();
-      if (isLocalhost(req)) return next();
       const token = parseCookies(req).session;
       if (token) {
         const row = stmtFindSession.get(token) as { created_at: number } | undefined;
         if (row && Date.now() - row.created_at < SESSION_TTL) return next();
-        // Had a session but it's invalid/expired → 401 so the client reloads to re-login.
-        return res.status(401).json({ error: 'Unauthorized' });
       }
-      // No session: anonymous read-only public demo — GET passes, writes are blocked.
-      if (req.method === 'GET') return next();
-      res.status(403).json({ error: '只读演示模式，登录后可写' });
+      res.status(401).json({ error: 'Unauthorized' });
     });
   }
 

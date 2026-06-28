@@ -150,8 +150,8 @@ app.patch('/api/settings', (req, res) => {
 app.get('/api/fetch-content', async (req, res) => {
   const url = req.query.url as string | undefined;
   if (!url) return res.status(400).json({ error: 'url required' });
-  // This endpoint fetches a client-supplied URL and is reachable anonymously on the
-  // public read-only demo, so block private/loopback/metadata targets (SSRF).
+  // This endpoint fetches a client-supplied URL, so block private/loopback/metadata
+  // targets (SSRF defense-in-depth).
   try {
     await assertSafeUrl(url);
   } catch (err) {
