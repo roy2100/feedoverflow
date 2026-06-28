@@ -19,6 +19,14 @@ the server (runs `.ts` directly on Node 24's native type-stripping).
 
 - **Reading-first UI** — three-pane feed / list / reader layout on desktop, with a
   mobile-adapted PWA (installable, offline shell, parallax panel transitions).
+- **No read/unread state — by design** — deliberately drops unread counts and
+  "mark as read" mechanics, so there's no inbox-zero guilt. Browse by recency and
+  star what's worth keeping instead.
+- **Text-only mode (无图模式)** — a toggle that strips images, video, iframes and
+  embeds from the article body for distraction-free reading; the preference persists.
+- **RSSHub support** — subscribe with short `rsshub://path` URLs (e.g.
+  `rsshub://anthropic/research`) that resolve at fetch time to your own RSSHub instance,
+  configurable in Settings (default `http://localhost:1200`).
 - **Full-text extraction** — when a feed only ships a truncated summary, fetch the
   original page and extract clean readable content with Mozilla Readability.
 - **Podcast support** — feeds with audio enclosures get an inline player.
