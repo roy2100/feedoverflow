@@ -9,7 +9,8 @@ npm run server / client  # individual processes
 npm install && cd server && npm install && cd ../client && npm install
 
 # Tests
-cd server && npm test           # typecheck + node:test suites
+cd server && npm test           # typecheck + offline node:test suites (*.test.ts)
+cd server && npm run test:integration  # live-network suites (*.itest.ts — real feeds: coindesk, sspai, reddit)
 cd server && npm run test:coverage  # node:test with V8 coverage report (excludes *.test.ts, vendor/)
 cd client && npm test           # vitest suites (jsdom)
 cd client && npm run test:coverage  # vitest with V8 coverage report (text + html, excludes tests/types/entry)
