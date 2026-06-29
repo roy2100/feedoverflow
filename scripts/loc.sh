@@ -13,10 +13,11 @@ count() {
   echo "$total"
 }
 
-# Backend: TypeScript run natively by Node. Tests are inline *.test.ts; slog is vendored.
+# Backend: TypeScript run natively by Node. Tests (*.test.ts + *.itest.ts) live in server/test/;
+# slog is vendored.
 backend_src=$(find "$REPO/server" -name "*.ts" \
-              ! -name "*.test.ts" ! -path "*/node_modules/*" ! -path "*/vendor/*" -print0 | count)
-backend_test=$(find "$REPO/server" -name "*.test.ts" ! -path "*/node_modules/*" -print0 | count)
+              ! -path "*/test/*" ! -path "*/node_modules/*" ! -path "*/vendor/*" -print0 | count)
+backend_test=$(find "$REPO/server/test" -name "*.ts" -print0 | count)
 backend_vendor=$(find "$REPO/server/vendor" -name "*.ts" -print0 | count)
 
 # Frontend: Vite + React (.tsx/.ts) plus CSS.
