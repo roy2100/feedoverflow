@@ -2,34 +2,36 @@ import express from 'express';
 
 import {
   dedupById,
-  enrich,
   lookupContent,
+  rowToArticle,
   saveState,
-  parsePubDate,
   byPubDateDesc,
   normalizePubDates,
 } from '../articles.ts';
-import { getCachedFeed, cacheReady } from '../cache.ts';
+import { ensureFresh, cacheReady } from '../cache.ts';
 import { db } from '../db.ts';
-import type { Feed, Article, ArticleStateRow } from '../types.ts';
+import type { Feed, ArticleStateRow } from '../types.ts';
 
 export const router = express.Router();
+
+// Newest N persisted rows for a feed (pub_ts is the sortable publish time).
+const newestByFeed = db.prepare(
+  'SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT ?',
+);
+// A feed's rows published since a cutoff (epoch ms), newest first.
+const sinceByFeed = db.prepare(
+  'SELECT * FROM article_states WHERE feed_id = ? AND pub_ts >= ? ORDER BY pub_ts DESC',
+);
 
 router.get('/api/all-articles', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const ac = new AbortController();
   req.on('close', () => ac.abort());
-  const results = await Promise.allSettled(
-    feeds.map(async (f) => {
-      const cached = await getCachedFeed(f, ac.signal);
-      return cached ? enrich(cached.items.slice(0, 5), f.id, f.name, { withContent: false }) : [];
-    }),
-  );
+  await Promise.allSettled(feeds.map((f) => ensureFresh(f, ac.signal)));
   if (ac.signal.aborted) return;
   const articles = dedupById(
-    results
-      .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
-      .flatMap((r) => r.value)
+    feeds
+      .flatMap((f) => (newestByFeed.all(f.id, 5) as ArticleStateRow[]).map((r) => rowToArticle(r)))
       .sort(byPubDateDesc),
   );
   res.json({ articles: normalizePubDates(articles), cacheReady });
@@ -41,22 +43,15 @@ router.get('/api/today', async (req, res) => {
   todayStart.setHours(0, 0, 0, 0);
   const ac = new AbortController();
   req.on('close', () => ac.abort());
-  const results = await Promise.allSettled(
-    feeds.map(async (f) => {
-      const cached = await getCachedFeed(f, ac.signal);
-      if (!cached) return [];
-      const todayItems = cached.items.filter(
-        (item) =>
-          (parsePubDate(item.pubDate || item.isoDate)?.getTime() ?? 0) >= todayStart.getTime(),
-      );
-      return enrich(todayItems, f.id, f.name, { withContent: false });
-    }),
-  );
+  await Promise.allSettled(feeds.map((f) => ensureFresh(f, ac.signal)));
   if (ac.signal.aborted) return;
   const articles = dedupById(
-    results
-      .filter((r): r is PromiseFulfilledResult<Article[]> => r.status === 'fulfilled')
-      .flatMap((r) => r.value)
+    feeds
+      .flatMap((f) =>
+        (sinceByFeed.all(f.id, todayStart.getTime()) as ArticleStateRow[]).map((r) =>
+          rowToArticle(r),
+        ),
+      )
       .sort(byPubDateDesc),
   );
   res.json({ articles: normalizePubDates(articles), cacheReady });
@@ -67,22 +62,7 @@ router.get('/api/starred', (_req, res) => {
     .prepare('SELECT * FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC')
     .all() as ArticleStateRow[];
   res.json({
-    articles: normalizePubDates(
-      rows.map((r) => ({
-        id: r.article_id,
-        feedId: r.feed_id,
-        feedName: r.feed_name,
-        title: r.title,
-        summary: r.summary,
-        content: r.content,
-        link: r.link,
-        pubDate: r.pub_date,
-        author: r.author,
-        audioUrl: r.audio_url || '',
-        audioDuration: r.audio_duration || '',
-        isStarred: true,
-      })),
-    ),
+    articles: normalizePubDates(rows.map((r) => rowToArticle(r, { withContent: true }))),
   });
 });
 
@@ -98,21 +78,8 @@ router.get('/api/podcasts', (_req, res) => {
        ORDER BY pub_date DESC LIMIT 200`,
     )
     .all() as ArticleStateRow[];
-  const articles: Article[] = rows
-    .map((r) => ({
-      id: r.article_id,
-      feedId: r.feed_id,
-      feedName: r.feed_name,
-      title: r.title,
-      summary: (r.summary || '').slice(0, 300),
-      content: '',
-      link: r.link,
-      pubDate: r.pub_date,
-      author: r.author || '',
-      audioUrl: r.audio_url || '',
-      audioDuration: r.audio_duration || '',
-      isStarred: !!r.is_starred,
-    }))
+  const articles = rows
+    .map((r) => rowToArticle(r))
     .sort(byPubDateDesc)
     .slice(0, 100);
   normalizePubDates(articles);

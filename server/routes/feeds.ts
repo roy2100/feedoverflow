@@ -3,11 +3,11 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { parseStringPromise } from 'xml2js';
 
-import { dedupById, enrich, resolveUrl, byPubDateDesc, normalizePubDates } from '../articles.ts';
-import { getCachedFeed } from '../cache.ts';
+import { resolveUrl, rowToArticle, normalizePubDates } from '../articles.ts';
+import { ensureFresh } from '../cache.ts';
 import { db } from '../db.ts';
 import { parseURL } from '../parse-url.ts';
-import type { Feed, Article, ArticleStateRow } from '../types.ts';
+import type { Feed, ArticleStateRow } from '../types.ts';
 
 export const router = express.Router();
 
@@ -95,34 +95,16 @@ router.get('/api/feeds/:id/articles', async (req, res) => {
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   try {
-    const cached = await getCachedFeed(feed, ac.signal);
-    if (ac.signal.aborted || !cached) return;
-    const liveArticles = enrich(cached.items.slice(0, 50), feed.id, feed.name, {
-      withContent: false,
-    });
-    const liveIds = new Set(liveArticles.map((a) => a.id));
-    const persisted = db
-      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_date DESC')
+    await ensureFresh(feed, ac.signal);
+    if (ac.signal.aborted) return;
+    // article_states is the durable record of every fetched item; read the feed's newest 50
+    // straight from it (pub_ts is the sortable publish time). No live/historic merge needed —
+    // refreshFeed already persisted the latest fetch into the same table.
+    const rows = db
+      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT 50')
       .all(feed.id) as ArticleStateRow[];
-    const historicArticles: Article[] = persisted
-      .filter((r) => !liveIds.has(r.article_id))
-      .map((r) => ({
-        id: r.article_id,
-        feedId: r.feed_id,
-        feedName: r.feed_name,
-        title: r.title,
-        summary: (r.summary || '').slice(0, 300),
-        content: '',
-        link: r.link,
-        pubDate: r.pub_date,
-        author: r.author || '',
-        audioUrl: r.audio_url || '',
-        audioDuration: r.audio_duration || '',
-        isStarred: !!r.is_starred,
-      }));
-    const articles = dedupById([...liveArticles, ...historicArticles]);
-    articles.sort(byPubDateDesc);
-    res.json({ feedName: cached.feedName, articles: normalizePubDates(articles) });
+    const articles = rows.map((r) => rowToArticle(r));
+    res.json({ feedName: feed.name, articles: normalizePubDates(articles) });
   } catch (err) {
     if (ac.signal.aborted) return;
     res.status(500).json({ error: 'Failed to fetch feed', detail: (err as Error).message });

@@ -1,6 +1,5 @@
 import express from 'express';
 
-import { clearCache } from '../cache.ts';
 import { db } from '../db.ts';
 
 export const router = express.Router();
@@ -19,6 +18,8 @@ router.patch('/api/settings', (req, res) => {
   for (const key of allowed) {
     if (key in req.body) upsert.run(key, String(req.body[key]).trim());
   }
-  clearCache.run();
+  // Clear freshness stamps so the next read re-fetches with the new settings (e.g. a changed
+  // rsshub_base_url resolves to different upstream URLs).
+  db.prepare('UPDATE feeds SET last_fetched_at = NULL').run();
   res.json({ ok: true });
 });

@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 import Database from 'better-sqlite3';
 
+import { pubTs } from './dates.ts';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const dbPath = process.env.TEST_DB || path.join(__dirname, 'rss.db');
@@ -32,12 +34,6 @@ db.exec(`
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
-  CREATE TABLE IF NOT EXISTS feed_cache (
-    feed_id    TEXT PRIMARY KEY,
-    feed_name  TEXT,
-    items_json TEXT,
-    fetched_at INTEGER
-  );
   CREATE TABLE IF NOT EXISTS sessions (
     token      TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL
@@ -64,6 +60,43 @@ try {
 try {
   db.exec(`ALTER TABLE article_states DROP COLUMN is_read`);
 } catch {}
+
+// Migrate: per-feed last-fetch timestamp (epoch ms). Replaces feed_cache.fetched_at as the
+// freshness signal that drives refresh scheduling.
+try {
+  db.exec(`ALTER TABLE feeds ADD COLUMN last_fetched_at INTEGER`);
+} catch {}
+
+// Migrate: sortable publish time (epoch ms) on article_states. pub_date is RFC-822 text and
+// not orderable as a string, so list endpoints sort/filter on pub_ts instead. Backfill any
+// pre-existing rows (NULL pub_ts) from pub_date, falling back to updated_at then 0.
+try {
+  db.exec(`ALTER TABLE article_states ADD COLUMN pub_ts INTEGER`);
+} catch {}
+db.exec(
+  `CREATE INDEX IF NOT EXISTS idx_article_states_feed_pub ON article_states (feed_id, pub_ts)`,
+);
+{
+  const { n } = db
+    .prepare(`SELECT COUNT(*) AS n FROM article_states WHERE pub_ts IS NULL`)
+    .get() as { n: number };
+  if (n > 0) {
+    const rows = db
+      .prepare(`SELECT article_id, pub_date, updated_at FROM article_states WHERE pub_ts IS NULL`)
+      .all() as Array<{ article_id: string; pub_date: string | null; updated_at: string | null }>;
+    const upd = db.prepare(`UPDATE article_states SET pub_ts = ? WHERE article_id = ?`);
+    db.transaction(() => {
+      for (const r of rows) {
+        const fallback = r.updated_at ? Date.parse(r.updated_at) : NaN;
+        upd.run(pubTs(r.pub_date, Number.isNaN(fallback) ? 0 : fallback), r.article_id);
+      }
+    })();
+  }
+}
+
+// Migrate: drop the retired feed_cache table. Its items_json duplicated article_states list
+// metadata; freshness now lives in feeds.last_fetched_at and lists read from article_states.
+db.exec(`DROP TABLE IF EXISTS feed_cache`);
 
 // Seed default settings
 db.prepare(

@@ -2,6 +2,9 @@ export interface Feed {
   id: string;
   name: string;
   url: string;
+  // Epoch ms of the last successful upstream fetch; drives refresh scheduling. Null/absent
+  // until a feed has been fetched at least once (replaces the old feed_cache.fetched_at).
+  last_fetched_at?: number | null;
 }
 
 export interface Article {
@@ -33,13 +36,9 @@ export interface ArticleStateRow {
   audio_duration: string;
   is_starred: number;
   updated_at: string;
-}
-
-export interface FeedCacheRow {
-  feed_id: string;
-  feed_name: string;
-  items_json: string;
-  fetched_at: number;
+  // Publish time as epoch ms (parsed from pub_date, else fetch time). Sortable, unlike the
+  // RFC-822 pub_date text. Absent only on rows inserted by tests via raw SQL.
+  pub_ts?: number;
 }
 
 export interface StatePatch {

@@ -3,65 +3,62 @@ import { db } from './db.ts';
 import { logger } from './logger.ts';
 import { parseURL } from './parse-url.ts';
 import type { RssItem } from './parse-url.ts';
-import type { Feed, FeedCacheRow } from './types.ts';
+import type { Feed } from './types.ts';
 
 const log = logger.child({ mod: 'cache' });
 
 export const CACHE_TTL = 5 * 60 * 1000;
 
-const getCacheRow = db.prepare('SELECT * FROM feed_cache WHERE feed_id = ?');
-const setCacheRow = db.prepare(
-  'INSERT OR REPLACE INTO feed_cache (feed_id, feed_name, items_json, fetched_at) VALUES (?, ?, ?, ?)',
-);
-export const clearCache = db.prepare('DELETE FROM feed_cache');
+const setFetchedAt = db.prepare('UPDATE feeds SET last_fetched_at = ? WHERE id = ?');
+const feedHasRows = db.prepare('SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1');
 
-// The single fetch chain shared by every path: fetch upstream → write the feed_cache row →
-// persist all items into article_states. On-demand cold misses, background refresh, startup
-// warming and the poller all route through here, so every successful fetch persists.
+// The single fetch chain shared by every path: fetch upstream → persist all items into
+// article_states (the durable store the list endpoints read from) → stamp the feed's
+// last_fetched_at. On-demand reads, background refresh, startup warming and the poller all
+// route through here, so every successful fetch persists.
 export async function refreshFeed(
   feed: Feed,
   signal?: AbortSignal,
 ): Promise<{ items: RssItem[]; feedName: string }> {
   const parsed = await parseURL(resolveUrl(feed.url), signal);
   const feedName = parsed.title || feed.name;
-  // The cache row only needs the lightweight list fields; article bodies live in
-  // article_states (the content state), so strip them before caching — they are the bulk
-  // of items_json. summary/contentSnippet stay for the list snippet.
-  const slimItems = parsed.items.map((item) => {
-    const slim = { ...item };
-    delete slim.content;
-    delete slim.contentEncoded;
-    return slim;
-  });
-  // One transaction so a persistItems failure can't leave a body-less cache row whose
-  // body never reached article_states (the only place lookupContent now reads bodies).
   db.transaction(() => {
     persistItems(feed, parsed.items, feedName);
-    setCacheRow.run(feed.id, feedName, JSON.stringify(slimItems), Date.now());
+    setFetchedAt.run(Date.now(), feed.id);
   })();
   return { items: parsed.items, feedName };
 }
 
-export async function getCachedFeed(
-  feed: Feed,
-  signal?: AbortSignal,
-): Promise<{ items: RssItem[]; feedName: string } | null> {
-  const row = getCacheRow.get(feed.id) as FeedCacheRow | undefined;
-  if (!row) {
-    const result = await refreshFeed(feed, signal);
-    return signal?.aborted ? null : result;
-  }
-  if (Date.now() - row.fetched_at >= CACHE_TTL) {
+// Ensure a feed's data is reasonably fresh before its rows are served. Callers read articles
+// straight from article_states afterward — this only schedules upstream fetches:
+//   - fresh (fetched within TTL): no-op
+//   - stale but previously fetched: refresh in the background, serve current rows
+//   - never fetched and no rows yet (brand-new feed): await so the first load returns content
+//   - never fetched but rows exist (e.g. right after the feed_cache→pub_ts migration):
+//     treat as stale, refresh in the background
+export async function ensureFresh(feed: Feed, signal?: AbortSignal): Promise<void> {
+  const last = feed.last_fetched_at ?? 0;
+  if (last && Date.now() - last < CACHE_TTL) return;
+  const backgroundRefresh = () =>
     refreshFeed(feed).catch((err) =>
       log.debug('background refresh failed', { feedId: feed.id, feedUrl: feed.url, err }),
     );
+  if (last) {
+    backgroundRefresh();
+    return;
   }
-  return { items: JSON.parse(row.items_json) as RssItem[], feedName: row.feed_name };
+  if (feedHasRows.get(feed.id)) {
+    backgroundRefresh();
+  } else {
+    await refreshFeed(feed, signal);
+  }
 }
 
 export let cacheReady = false;
 
-// Warm cache on startup. Skipped in TEST_DB mode to avoid real network calls.
+// Warm feeds on startup. Skipped in TEST_DB mode to avoid real network calls. Feeds never
+// fetched are warmed up front (and gate cacheReady); already-fetched-but-stale feeds refresh
+// in the background.
 export function startCacheWarming(): void {
   if (process.env.TEST_DB) return;
   const allFeeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
@@ -69,14 +66,11 @@ export function startCacheWarming(): void {
     refreshFeed(f).catch((err) =>
       log.warn('cache warm failed', { feedId: f.id, feedUrl: f.url, err }),
     );
-  // Re-fetch stale entries in background
+  // Re-fetch stale (previously fetched) entries in the background.
   allFeeds
-    .filter((f) => {
-      const r = getCacheRow.get(f.id) as FeedCacheRow | undefined;
-      return r && Date.now() - r.fetched_at >= CACHE_TTL;
-    })
+    .filter((f) => f.last_fetched_at && Date.now() - f.last_fetched_at >= CACHE_TTL)
     .forEach(warm);
-  const uncached = allFeeds.filter((f) => !getCacheRow.get(f.id));
+  const uncached = allFeeds.filter((f) => !f.last_fetched_at);
   if (uncached.length === 0) {
     cacheReady = true;
   } else {

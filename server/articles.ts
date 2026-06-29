@@ -1,8 +1,13 @@
 import crypto from 'node:crypto';
 
+import { parsePubDate, pubTs } from './dates.ts';
 import { db } from './db.ts';
 import type { RssItem } from './parse-url.ts';
-import type { Article, Feed, StatePatch } from './types.ts';
+import type { Article, ArticleStateRow, Feed, StatePatch } from './types.ts';
+
+// Re-exported so existing call sites (maintenance, routes) keep importing it from here while
+// db.ts pulls the cycle-free copy straight from dates.ts.
+export { parsePubDate };
 
 export function makeId(link?: string, title?: string, pubDate?: string): string {
   return crypto
@@ -10,28 +15,6 @@ export function makeId(link?: string, title?: string, pubDate?: string): string 
     .update(link || `${title}${pubDate}`)
     .digest('hex')
     .slice(0, 12);
-}
-
-// The single source of truth for turning an RSS pubDate string into a Date. Most feeds give
-// RFC822 / ISO-8601 dates that parse natively, but some (36氪 via RssHub) emit
-// `2026-06-17 14:14:08  +0800`: a space instead of `T`, doubled whitespace, and a colon-less
-// offset. Native `new Date()` returns Invalid Date for those, so we normalize and retry.
-// The server owns this parse: it sorts by it and emits ISO-8601 (normalizePubDates) so the
-// client never needs a second parser.
-export function parsePubDate(dateStr: string | null | undefined): Date | null {
-  if (!dateStr) return null;
-
-  const direct = new Date(dateStr);
-  if (!isNaN(direct.getTime())) return direct;
-
-  const normalized = dateStr
-    .trim()
-    .replace(/\s+/g, ' ') // collapse doubled whitespace
-    .replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T') // date<space>time → date T time
-    .replace(/ ?([+-]\d{2})(\d{2})$/, '$1:$2'); // +0800 → +08:00
-
-  const retry = new Date(normalized);
-  return isNaN(retry.getTime()) ? null : retry;
 }
 
 // Descending-by-publish-time comparator. Unparseable dates sort to epoch 0 (bottom) so the
@@ -121,12 +104,13 @@ export function enrich(
 // so article_states is a durable, complete record for offline statistics/research.
 const insertPolledArticle = db.prepare(`
   INSERT OR IGNORE INTO article_states
-    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_starred)
-  VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@summary,@content,@author,@audioUrl,@audioDuration,0)
+    (article_id,feed_id,feed_name,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
+  VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@pubTs,@summary,@content,@author,@audioUrl,@audioDuration,0)
 `);
 
 export function persistItems(feed: Feed, items: RssItem[], feedName: string): void {
   const enriched = enrich(items, feed.id, feedName, { withContent: true });
+  const now = Date.now();
   db.transaction(() => {
     for (const a of enriched) {
       insertPolledArticle.run({
@@ -136,6 +120,7 @@ export function persistItems(feed: Feed, items: RssItem[], feedName: string): vo
         title: a.title,
         link: a.link,
         pubDate: a.pubDate,
+        pubTs: pubTs(a.pubDate, now),
         summary: a.summary,
         content: a.content,
         author: a.author,
@@ -144,6 +129,27 @@ export function persistItems(feed: Feed, items: RssItem[], feedName: string): vo
       });
     }
   })();
+}
+
+// Map a persisted row to the API Article shape. List endpoints pass withContent:false to
+// strip the body (and cap the summary) the way enrich() does for live items; starred reads
+// keep the full body.
+export function rowToArticle(r: ArticleStateRow, { withContent = false } = {}): Article {
+  const summary = r.summary || '';
+  return {
+    id: r.article_id,
+    feedId: r.feed_id,
+    feedName: r.feed_name,
+    title: r.title,
+    summary: withContent ? summary : summary.slice(0, 300),
+    content: withContent ? r.content || '' : '',
+    link: r.link,
+    pubDate: r.pub_date,
+    author: r.author || '',
+    audioUrl: r.audio_url || '',
+    audioDuration: r.audio_duration || '',
+    isStarred: !!r.is_starred,
+  };
 }
 
 export function resolveUrl(url: string): string {
@@ -157,9 +163,8 @@ export function resolveUrl(url: string): string {
   return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
 }
 
-// Body lives only in article_states.content (the content state) — every fetched item is
-// persisted there with its body (persistItems, withContent: true), so no feed_cache fallback
-// is needed.
+// Body lives only in article_states.content — every fetched item is persisted there with its
+// body (persistItems, withContent: true), so this single lookup covers every article.
 export function lookupContent(articleId: string): string {
   const saved = db
     .prepare('SELECT content FROM article_states WHERE article_id = ?')
@@ -169,8 +174,8 @@ export function lookupContent(articleId: string): string {
 
 const upsertState = db.prepare(`
   INSERT INTO article_states
-    (article_id,feed_id,feed_name,title,link,pub_date,summary,content,author,audio_url,audio_duration,is_starred)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    (article_id,feed_id,feed_name,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(article_id) DO UPDATE SET
     audio_url      = COALESCE(excluded.audio_url, audio_url),
     audio_duration = COALESCE(excluded.audio_duration, audio_duration),
@@ -186,6 +191,7 @@ export function saveState(article: Article, patch: StatePatch): void {
     article.title,
     article.link,
     article.pubDate,
+    pubTs(article.pubDate, Date.now()),
     article.summary,
     article.content,
     article.author,

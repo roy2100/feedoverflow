@@ -85,7 +85,7 @@ server/             (ESM + TS, run natively by Node, port 3002)
   db.ts             SQLite setup, schema, migrations, seed data
   auth.ts           session login/logout + per-request gate
   articles.ts       id/enrich/dedup helpers + article_states upserts
-  cache.ts          feed_cache read-through + startup warming
+  cache.ts          refreshFeed fetch chain + ensureFresh (TTL via feeds.last_fetched_at) + startup warming
   favicon.ts        favicon_cache read-through (fetches from Google s2, stores BLOB)
   poller.ts         background feed polling (also kicks off the maintenance pass)
   maintenance.ts    orphan cleanup + DB size-cap enforcement (oldest non-starred deleted, then VACUUM)
@@ -128,7 +128,7 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
   - **Route registration order is load-bearing**: routers mount after `registerAuth(app)` (so the `/api` auth gate covers them) and before `registerMcp` + the `*` SPA fallback. Each router carries full `/api/...` paths and is mounted bare (`app.use(router)`); `:id` paths for one domain (e.g. feeds) stay in one router to keep Express matching intact.
 - TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
-- RSS fetched via `rss-parser` through `refreshFeed` (`cache.ts`): fetch upstream → write the read-through `feed_cache` (5 min TTL, **list metadata only — bodies stripped**) → `persistItems` all items into `article_states`. Both writes run in one transaction. Every fetch path routes through it — on-demand reads (`getCachedFeed` cold-miss + stale background refresh), startup warming, and the background poller (`poller.ts`, every 15 min). `INSERT OR IGNORE`, so re-persists never clobber existing rows or the starred flag. Article bodies live only in `article_states.content`; `lookupContent` reads from there (no feed_cache fallback), and `/api/search` is a single `article_states` `LIKE` query (no live-cache scan)
+- RSS fetched via `rss-parser` through `refreshFeed` (`cache.ts`): fetch upstream → `persistItems` all items into `article_states` → stamp `feeds.last_fetched_at` (epoch ms). Both writes run in one transaction. There is **no separate items cache** — the list endpoints read straight from `article_states`; `feeds.last_fetched_at` is only a 5-min TTL freshness signal. `ensureFresh(feed)` decides per request: fresh → serve as-is; stale-but-fetched-before → background refresh; brand-new feed with no rows → await one fetch. Every fetch path routes through `refreshFeed` — on-demand reads (`ensureFresh`), startup warming, and the background poller (`poller.ts`, every 15 min). `INSERT OR IGNORE`, so re-persists never clobber existing rows or the starred flag (list metadata is therefore frozen at first-seen — RSS rarely mutates). Article bodies live only in `article_states.content`; `lookupContent` reads from there, and `/api/search` is a single `article_states` `LIKE` query. Each row also carries `pub_ts` (sortable publish epoch-ms, parsed from `pub_date`) so list reads use `ORDER BY pub_ts DESC` over an `(feed_id, pub_ts)` index
 - Maintenance (`maintenance.ts`): runs at poller startup + every 24h. `cleanupOrphans()` deletes non-starred rows whose feed is gone (starred orphans kept). `enforceSizeCap()` caps the logical DB size at `DB_MAX_SIZE_MB` (default 2GB) — when over, deletes the oldest non-starred articles (publish time parsed from RFC-822 `pub_date`, falling back to `updated_at`) down to 90% of the cap, then `VACUUM`s. Starred articles are never deleted
 - Logging: shared `logger` (`logger.ts`, vendored slog in `vendor/slog.ts`) writes NDJSON to `logs/app.log` (size rotation + gzip + retention) and pretty colorized output to a dev TTY. Use `logger.info|warn|error(...)` with a fields object; pass an Error as the `err` field to auto-serialize its stack/cause. Disabled under `TEST_DB`. Tune via `LOG_LEVEL` / `LOG_DIR`
 - Article IDs: `md5(link || title+pubDate).slice(0,12)`
@@ -136,10 +136,10 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 - Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, **every** `/api/*` request requires a valid `session` cookie — no localhost bypass, local and remote are gated identically; disabled otherwise (`/api/login` `/api/logout` `/api/auth-check` are registered before the gate and stay reachable). `isLocalhost()` is still exported but only the MCP transport uses it now (localhost-only block). The login route is rate-limited (`express-rate-limit`)
 
 **SQLite tables:**
-- `feeds(id, name, url)`
-- `article_states(article_id, feed_id, feed_name, title, link, pub_date, summary, content, author, audio_url, audio_duration, is_starred, updated_at)` — durable record of every fetched article (caches content so starred articles survive feed removal). `audio_*` added via migration for podcasts; `is_read` dropped via migration when the read/unread feature was removed
+- `feeds(id, name, url, last_fetched_at)` — `last_fetched_at` (epoch ms) is the per-feed refresh freshness stamp
+- `article_states(article_id, feed_id, feed_name, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at)` — durable record of every fetched article (caches content so starred articles survive feed removal). `audio_*` and `pub_ts` (sortable publish epoch-ms, indexed with `feed_id`) added via migration; `is_read` dropped via migration when the read/unread feature was removed
 - `settings(key, value)` — e.g. `rsshub_base_url`
-- `feed_cache(feed_id, feed_name, items_json, fetched_at)` — read-through RSS cache (5 min TTL); `items_json` holds list metadata only (article bodies stripped — they live in `article_states.content`)
+- `feeds.last_fetched_at` (epoch ms) — per-feed freshness stamp driving the 5-min refresh TTL (replaced the old `feed_cache` table, which duplicated `article_states` list metadata)
 - `sessions(token, created_at)` — auth session tokens (30-day TTL)
 - `favicon_cache(domain, image, content_type, fetched_at)` — feed favicon BLOBs (positive 30-day TTL, negative 1-day; NULL `image` = upstream fetch failed)
 

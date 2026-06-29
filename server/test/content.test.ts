@@ -46,13 +46,12 @@ before(() => {
     feed.name,
     feed.url,
   );
-  // feed_cache feeds only the list endpoints (which strip bodies via enrich); the article
-  // body is read from article_states, so what the cache row carries here is immaterial.
-  db.prepare(
-    'INSERT OR REPLACE INTO feed_cache (feed_id, feed_name, items_json, fetched_at) VALUES (?, ?, ?, ?)',
-  ).run(FEED_ID, 'Test Feed', JSON.stringify(TEST_ITEMS), Date.now());
-  // article_states is the content state — it holds every item's body.
+  // article_states is the durable store the list endpoints read from — it holds every item's
+  // body and list metadata.
   persistItems(feed, TEST_ITEMS, 'Test Feed');
+  // Mark the feed freshly fetched so the list endpoints serve persisted rows without firing a
+  // real upstream refresh during the test.
+  db.prepare('UPDATE feeds SET last_fetched_at = ? WHERE id = ?').run(Date.now(), FEED_ID);
 });
 
 // ── enrich() strips content in list endpoints ─────────────────────────────────
