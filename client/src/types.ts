@@ -42,6 +42,10 @@ export interface View {
 // Mobile single-pane navigation.
 export type MobilePage = 'feeds' | 'list' | 'article';
 
+// Ordering for the merged multi-feed lists (全部 / 今日):
+// `latest` = strict global newest-first; `digest` = per-feed quota so every feed is represented.
+export type ListMode = 'latest' | 'digest';
+
 // Value carried by AudioContext (audio player wiring owned by App).
 export interface AudioCtxValue {
   audioRef: React.RefObject<HTMLAudioElement>;

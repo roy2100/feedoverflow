@@ -1,7 +1,6 @@
 import express from 'express';
 
 import {
-  dedupById,
   lookupContent,
   rowToArticle,
   saveState,
@@ -15,15 +14,26 @@ import type { Feed, ArticleStateRow } from '../types.ts';
 
 export const router = express.Router();
 
-// Newest N persisted rows for a feed (pub_ts is the sortable publish time).
+// ── latest: a single global newest-N read, served straight from the (pub_ts) index ──────
+// article_id is the PRIMARY KEY, so every article_states row is globally unique — no dedup or
+// per-feed merge is needed. These walk idx_article_states_pub backward and stop at LIMIT.
+const newestGlobal = db.prepare('SELECT * FROM article_states ORDER BY pub_ts DESC LIMIT ?');
+const sinceGlobal = db.prepare(
+  'SELECT * FROM article_states WHERE pub_ts >= ? ORDER BY pub_ts DESC LIMIT ?',
+);
+
+// ── digest: per-feed newest, capped by an even quota so one firehose feed can't dominate ──
 const newestByFeed = db.prepare(
   'SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT ?',
 );
-// A feed's newest rows published since a cutoff (epoch ms). LIMIT-capped per feed so one
-// firehose feed can't dominate, and so /api/today never materializes thousands of rows.
 const sinceByFeed = db.prepare(
   'SELECT * FROM article_states WHERE feed_id = ? AND pub_ts >= ? ORDER BY pub_ts DESC LIMIT ?',
 );
+
+// Split LIST_LIMIT evenly across feeds so every feed gets a fair share of the final list.
+function digestQuota(feedCount: number): number {
+  return Math.max(1, Math.ceil(LIST_LIMIT / feedCount));
+}
 
 router.get('/api/all-articles', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
@@ -31,13 +41,18 @@ router.get('/api/all-articles', async (req, res) => {
   req.on('close', () => ac.abort());
   await Promise.allSettled(feeds.map((f) => ensureFresh(f, ac.signal)));
   if (ac.signal.aborted) return;
-  const articles = dedupById(
-    feeds
+  let articles;
+  if (req.query.mode === 'digest' && feeds.length > 0) {
+    const quota = digestQuota(feeds.length);
+    articles = feeds
       .flatMap((f) =>
-        (newestByFeed.all(f.id, LIST_LIMIT) as ArticleStateRow[]).map((r) => rowToArticle(r)),
+        (newestByFeed.all(f.id, quota) as ArticleStateRow[]).map((r) => rowToArticle(r)),
       )
-      .sort(byPubDateDesc),
-  ).slice(0, LIST_LIMIT);
+      .sort(byPubDateDesc)
+      .slice(0, LIST_LIMIT);
+  } else {
+    articles = (newestGlobal.all(LIST_LIMIT) as ArticleStateRow[]).map((r) => rowToArticle(r));
+  }
   res.json({ articles: normalizePubDates(articles), cacheReady });
 });
 
@@ -49,15 +64,22 @@ router.get('/api/today', async (req, res) => {
   req.on('close', () => ac.abort());
   await Promise.allSettled(feeds.map((f) => ensureFresh(f, ac.signal)));
   if (ac.signal.aborted) return;
-  const articles = dedupById(
-    feeds
+  let articles;
+  if (req.query.mode === 'digest' && feeds.length > 0) {
+    const quota = digestQuota(feeds.length);
+    articles = feeds
       .flatMap((f) =>
-        (sinceByFeed.all(f.id, todayStart.getTime(), LIST_LIMIT) as ArticleStateRow[]).map((r) =>
+        (sinceByFeed.all(f.id, todayStart.getTime(), quota) as ArticleStateRow[]).map((r) =>
           rowToArticle(r),
         ),
       )
-      .sort(byPubDateDesc),
-  ).slice(0, LIST_LIMIT);
+      .sort(byPubDateDesc)
+      .slice(0, LIST_LIMIT);
+  } else {
+    articles = (sinceGlobal.all(todayStart.getTime(), LIST_LIMIT) as ArticleStateRow[]).map((r) =>
+      rowToArticle(r),
+    );
+  }
   res.json({ articles: normalizePubDates(articles), cacheReady });
 });
 

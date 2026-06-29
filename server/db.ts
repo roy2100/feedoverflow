@@ -76,6 +76,11 @@ try {
 db.exec(
   `CREATE INDEX IF NOT EXISTS idx_article_states_feed_pub ON article_states (feed_id, pub_ts)`,
 );
+// Standalone pub_ts index for the merged-list "latest" path: a global ORDER BY pub_ts DESC
+// LIMIT N walks this backward and stops at N, avoiding a full-table scan + sort. The composite
+// (feed_id, pub_ts) index can't serve a global ordering (feed_id is the leading column), and is
+// used instead by the per-feed "digest" path.
+db.exec(`CREATE INDEX IF NOT EXISTS idx_article_states_pub ON article_states (pub_ts)`);
 {
   const { n } = db
     .prepare(`SELECT COUNT(*) AS n FROM article_states WHERE pub_ts IS NULL`)

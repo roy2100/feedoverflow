@@ -53,6 +53,8 @@ export default function App() {
     lastListView,
     scopedSearch,
     toggleSearchScope,
+    listMode,
+    setListMode,
   } = useStore();
 
   // Label for the scopable base view (Starred / a feed). Null ⇒ not scopable ⇒ no toggle.
@@ -330,6 +332,9 @@ export default function App() {
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
             hideFeedName={selectedView.type === 'feed'}
+            showModeToggle={selectedView.type === 'all' || selectedView.type === 'today'}
+            listMode={listMode}
+            onSetListMode={setListMode}
           />
         )}
         <div

@@ -8,8 +8,16 @@ interface ListPageProps {
 }
 
 export default function ListPage({ onNavigate }: ListPageProps) {
-  const { articles, selectedView, selectedArticle, loadingArticles, selectArticle, loadArticles } =
-    useStore();
+  const {
+    articles,
+    selectedView,
+    selectedArticle,
+    loadingArticles,
+    selectArticle,
+    loadArticles,
+    listMode,
+    setListMode,
+  } = useStore();
   const { currentEpisode, isPlaying, onPlay } = useAudio();
 
   const viewTitle =
@@ -44,6 +52,9 @@ export default function ListPage({ onNavigate }: ListPageProps) {
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
       hideFeedName={selectedView.type === 'feed'}
+      showModeToggle={selectedView.type === 'all' || selectedView.type === 'today'}
+      listMode={listMode}
+      onSetListMode={setListMode}
     />
   );
 }

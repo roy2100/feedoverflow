@@ -1,7 +1,7 @@
 import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import type { Article } from '../types';
+import type { Article, ListMode } from '../types';
 
 // pubDate is canonical ISO-8601 from the server (it owns date parsing), so native
 // `new Date()` is reliable here.
@@ -36,6 +36,10 @@ interface ArticleListProps {
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   hideFeedName?: boolean;
+  // Latest/digest ordering toggle — shown only for the merged 全部/今日 lists.
+  showModeToggle?: boolean;
+  listMode?: ListMode;
+  onSetListMode?: (mode: ListMode) => void;
 }
 
 export default function ArticleList({
@@ -53,6 +57,9 @@ export default function ArticleList({
   sidebarCollapsed,
   onToggleSidebar,
   hideFeedName,
+  showModeToggle,
+  listMode,
+  onSetListMode,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   // Mobile: pin the list to its first row on every fresh (re)load — on BOTH the
@@ -177,6 +184,9 @@ export default function ArticleList({
         >
           {viewTitle}
         </h2>
+        {showModeToggle && onSetListMode && (
+          <ModeToggle mode={listMode ?? 'latest'} onSet={onSetListMode} />
+        )}
       </div>
 
       {/*
@@ -238,6 +248,53 @@ export default function ArticleList({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+// Segmented control: 最新 (strict global newest) vs 摘要 (per-feed quota, every feed represented).
+function ModeToggle({ mode, onSet }: { mode: ListMode; onSet: (mode: ListMode) => void }) {
+  const options: { value: ListMode; label: string; title: string }[] = [
+    { value: 'latest', label: '最新', title: '严格按时间显示最新文章' },
+    { value: 'digest', label: '摘要', title: '每个订阅源公平展示其最新文章' },
+  ];
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexShrink: 0,
+        marginLeft: 8,
+        gap: 2,
+        padding: 2,
+        borderRadius: 7,
+        background: 'var(--bg-selected)',
+      }}
+    >
+      {options.map((o) => {
+        const active = mode === o.value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onSet(o.value)}
+            title={o.title}
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              lineHeight: 1.4,
+              padding: '2px 9px',
+              borderRadius: 5,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'color 0.15s, background 0.15s',
+              background: active ? 'var(--bg)' : 'transparent',
+              color: active ? 'var(--accent)' : 'var(--text-tertiary)',
+              boxShadow: active ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

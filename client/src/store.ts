@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { Article, Feed, SearchScope, View } from './types';
+import type { Article, Feed, ListMode, SearchScope, View } from './types';
 
 const API = '/api';
 let loadAbortController: AbortController | null = null;
@@ -35,12 +35,15 @@ interface StoreState {
   lastListView: View;
   // Whether scoped search is enabled (desktop toggle). Only effective when lastListView is scopable.
   scopedSearch: boolean;
+  // Ordering for the merged 全部/今日 lists. Only those two views send it to the server.
+  listMode: ListMode;
 
   init: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
   selectView: (view: View) => void;
   search: (query: string) => void;
   toggleSearchScope: () => void;
+  setListMode: (mode: ListMode) => void;
   selectArticle: (article: Article) => void;
   toggleStar: (article: Article) => void;
   addFeed: (input: { url: string }) => Promise<void>;
@@ -58,6 +61,7 @@ export const useStore = create<StoreState>((set, get) => ({
   starredCount: 0,
   lastListView: { type: 'today' },
   scopedSearch: false,
+  listMode: 'latest',
 
   init: async () => {
     try {
@@ -92,6 +96,10 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       } else {
         url = urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`;
+        // 全部/今日 honor the latest/digest ordering toggle; other views ignore it.
+        if (view.type === 'all' || view.type === 'today') {
+          url += `?mode=${get().listMode}`;
+        }
       }
       const data = await apiFetch(url, { signal: controller.signal }).then((r) => r.json());
       set({ articles: data.articles || [] });
@@ -129,6 +137,14 @@ export const useStore = create<StoreState>((set, get) => ({
     if (view.type === 'search' && (view.query?.trim().length ?? 0) >= 2) {
       get().search(view.query ?? '');
     }
+  },
+
+  setListMode: (mode) => {
+    if (get().listMode === mode) return;
+    set({ listMode: mode });
+    // Re-fetch only when the active list actually honors the mode.
+    const view = get().selectedView;
+    if (view.type === 'all' || view.type === 'today') get().loadArticles(view);
   },
 
   selectArticle: (article) => {

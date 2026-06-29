@@ -39,15 +39,6 @@ export function normalizePubDates<T extends { pubDate: string }>(articles: T[]):
   return articles;
 }
 
-export function dedupById(articles: Article[]): Article[] {
-  const seen = new Set<string>();
-  return articles.filter((a) => {
-    if (seen.has(a.id)) return false;
-    seen.add(a.id);
-    return true;
-  });
-}
-
 export function normalizeDuration(dur?: string): string {
   if (!dur) return '';
   if (/^\d+:\d{2}(:\d{2})?$/.test(dur)) return dur;
