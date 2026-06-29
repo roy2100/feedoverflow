@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { parseURL } from './parse-url.ts';
+import { parseURL } from '../parse-url.ts';
 
 const SSPAI_URL = 'https://sspai.com/feed';
 

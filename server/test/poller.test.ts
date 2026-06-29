@@ -8,8 +8,8 @@ import { test, after } from 'node:test';
 const TEST_DB_PATH = join(tmpdir(), `rss-poller-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { db } = await import('./db.ts');
-const { persistItems, makeId } = await import('./articles.ts');
+const { db } = await import('../db.ts');
+const { persistItems, makeId } = await import('../articles.ts');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -9,9 +9,9 @@ process.env.AUTH_USER = 'admin';
 process.env.AUTH_PASS = 's3cret';
 process.env.TEST_DB = ':memory:';
 
-const { app } = await import('./app.ts');
-const { db } = await import('./db.ts');
-const { SESSION_TTL } = await import('./auth.ts');
+const { app } = await import('../app.ts');
+const { db } = await import('../db.ts');
+const { SESSION_TTL } = await import('../auth.ts');
 
 // The gate now engages for every request, local or remote. REMOTE simply
 // simulates an external client (trust proxy = loopback reads X-Forwarded-For).

@@ -10,9 +10,9 @@ import { test, before, after, beforeEach } from 'node:test';
 const TEST_DB_PATH = join(tmpdir(), `rss-favicon-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { app } = await import('./app.ts');
-const { db } = await import('./db.ts');
-const { getFavicon, DEFAULT_FAVICON } = await import('./favicon.ts');
+const { app } = await import('../app.ts');
+const { db } = await import('../db.ts');
+const { getFavicon, DEFAULT_FAVICON } = await import('../favicon.ts');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

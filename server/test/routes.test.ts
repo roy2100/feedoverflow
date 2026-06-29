@@ -5,8 +5,8 @@ import request from 'supertest';
 
 process.env.TEST_DB = ':memory:';
 
-const { app } = await import('./app.ts');
-const { db } = await import('./db.ts');
+const { app } = await import('../app.ts');
+const { db } = await import('../db.ts');
 
 describe('feeds CRUD', () => {
   test('POST /api/feeds without a url returns 400', async () => {

@@ -94,7 +94,7 @@ server/             (ESM + TS, run natively by Node, port 3002)
   parse-url.ts      rss-parser wrapper + feed types
   mcp.ts            MCP server (Streamable HTTP) mounted at POST /mcp
   types.ts          shared interfaces
-  *.test.ts         node:test suites (import app from app.ts)
+  test/             node:test suites (*.test.ts offline, *.itest.ts live-network); import app/db/helpers from ../
   tsconfig.json     typecheck config (tsc --noEmit; node strips types, does not check)
   rss.db            SQLite database (gitignored)
 client/             Vite + React + TypeScript (port 3000)

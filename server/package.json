@@ -5,9 +5,9 @@
   "main": "index.ts",
   "scripts": {
     "start": "node index.ts",
-    "test": "npm run typecheck && node --test *.test.ts",
-    "test:integration": "node --test *.itest.ts",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude='*.test.ts' --test-coverage-exclude='vendor/**' --test-coverage-exclude='mcp.ts' *.test.ts",
+    "test": "npm run typecheck && node --test test/*.test.ts",
+    "test:integration": "node --test test/*.itest.ts",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/*.test.ts' --test-coverage-exclude='vendor/**' --test-coverage-exclude='mcp.ts' test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

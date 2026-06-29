@@ -8,7 +8,7 @@ import { test, after } from 'node:test';
 const TEST_DB_PATH = join(tmpdir(), `rss-pubdate-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { parsePubDate, byPubDateDesc, normalizePubDates } = await import('./articles.ts');
+const { parsePubDate, byPubDateDesc, normalizePubDates } = await import('../articles.ts');
 
 after(() => {
   try {

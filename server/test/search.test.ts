@@ -10,9 +10,9 @@ import { test, before, after } from 'node:test';
 const TEST_DB_PATH = join(tmpdir(), `rss-search-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { app } = await import('./app.ts');
-const { db } = await import('./db.ts');
-const { persistItems } = await import('./articles.ts');
+const { app } = await import('../app.ts');
+const { db } = await import('../db.ts');
+const { persistItems } = await import('../articles.ts');
 
 let server: Server;
 let baseUrl: string;

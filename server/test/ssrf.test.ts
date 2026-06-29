@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import dns from 'node:dns/promises';
 import { afterEach, mock, test } from 'node:test';
 
-import { assertSafeUrl } from './ssrf.ts';
+import { assertSafeUrl } from '../ssrf.ts';
 
 afterEach(() => {
   mock.restoreAll();

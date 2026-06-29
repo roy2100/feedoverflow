@@ -8,8 +8,8 @@ import { test, before, after } from 'node:test';
 const TEST_DB_PATH = join(tmpdir(), `rss-maintenance-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
-const { db } = await import('./db.ts');
-const { cleanupOrphans, enforceSizeCap } = await import('./maintenance.ts');
+const { db } = await import('../db.ts');
+const { cleanupOrphans, enforceSizeCap } = await import('../maintenance.ts');
 
 const insert = db.prepare(`
   INSERT OR REPLACE INTO article_states
