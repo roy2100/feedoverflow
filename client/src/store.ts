@@ -61,7 +61,7 @@ export const useStore = create<StoreState>((set, get) => ({
   starredCount: 0,
   lastListView: { type: 'today' },
   scopedSearch: false,
-  listMode: 'latest',
+  listMode: localStorage.getItem('list-mode') === 'digest' ? 'digest' : 'latest',
 
   init: async () => {
     try {
@@ -141,6 +141,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
   setListMode: (mode) => {
     if (get().listMode === mode) return;
+    localStorage.setItem('list-mode', mode);
     set({ listMode: mode });
     // Re-fetch only when the active list actually honors the mode.
     const view = get().selectedView;
