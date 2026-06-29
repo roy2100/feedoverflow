@@ -67,12 +67,11 @@ describe('GET /api/all-articles — content stripped', () => {
     }
   });
 
-  test('summary field is still present', async () => {
+  test('summary field is stripped (list UI never renders it)', async () => {
     const res = await request(app).get('/api/all-articles');
-    assert.ok(
-      res.body.articles.some((a: { summary: string }) => a.summary.length > 0),
-      'at least one article should have summary',
-    );
+    for (const article of res.body.articles) {
+      assert.equal(article.summary, '', `expected empty summary for "${article.title}"`);
+    }
   });
 });
 
@@ -134,6 +133,29 @@ describe('GET /api/articles/:id/content', () => {
     const res = await request(app).get(`/api/articles/${SAVED_ID}/content?feedId=${FEED_ID}`);
     assert.equal(res.status, 200);
     assert.equal(res.body.content, '<p>Persisted content</p>');
+  });
+
+  test('falls back to summary when content is empty', async () => {
+    const FALLBACK_ID = 'summary-fallback';
+    db.prepare(`
+      INSERT OR REPLACE INTO article_states
+        (article_id, feed_id, feed_name, title, link, pub_date, summary, content, author, is_starred)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    `).run(
+      FALLBACK_ID,
+      FEED_ID,
+      'Test Feed',
+      'No Body',
+      'https://example.com/no-body',
+      todayISO,
+      'Summary stands in as the body',
+      '',
+      '',
+    );
+
+    const res = await request(app).get(`/api/articles/${FALLBACK_ID}/content`);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.content, 'Summary stands in as the body');
   });
 
   test('returns empty string for unknown article and feed', async () => {

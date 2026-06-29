@@ -132,8 +132,11 @@ export function persistItems(feed: Feed, items: RssItem[], feedName: string): vo
 }
 
 // Map a persisted row to the API Article shape. List endpoints pass withContent:false to
-// strip the body (and cap the summary) the way enrich() does for live items; starred reads
-// keep the full body.
+// strip both the body and the summary: the article list UI renders neither (only feed name,
+// title, date, audio), so shipping them just bloats the response — a big win for list payload
+// size over slow/metered links. The reader recovers the body on open via
+// /api/articles/:id/content (which falls back to summary, see lookupContent). Starred reads
+// keep the full body + summary so the reader can render without a follow-up fetch.
 export function rowToArticle(r: ArticleStateRow, { withContent = false } = {}): Article {
   const summary = r.summary || '';
   return {
@@ -141,7 +144,7 @@ export function rowToArticle(r: ArticleStateRow, { withContent = false } = {}): 
     feedId: r.feed_id,
     feedName: r.feed_name,
     title: r.title,
-    summary: withContent ? summary : summary.slice(0, 300),
+    summary: withContent ? summary : '',
     content: withContent ? r.content || '' : '',
     link: r.link,
     pubDate: r.pub_date,
@@ -163,13 +166,15 @@ export function resolveUrl(url: string): string {
   return base.replace(/\/$/, '') + '/' + url.slice('rsshub://'.length);
 }
 
-// Body lives only in article_states.content — every fetched item is persisted there with its
-// body (persistItems, withContent: true), so this single lookup covers every article.
+// The reader's body source. Body lives in article_states.content (persistItems stores every
+// fetched item with withContent: true), so this single lookup covers every article. Falls back
+// to summary when content is empty: list endpoints no longer ship summary (see rowToArticle),
+// so this is how a content-less feed's item still shows text when opened.
 export function lookupContent(articleId: string): string {
   const saved = db
-    .prepare('SELECT content FROM article_states WHERE article_id = ?')
-    .get(articleId) as { content?: string } | undefined;
-  return saved?.content || '';
+    .prepare('SELECT content, summary FROM article_states WHERE article_id = ?')
+    .get(articleId) as { content?: string; summary?: string } | undefined;
+  return saved?.content || saved?.summary || '';
 }
 
 const upsertState = db.prepare(`
