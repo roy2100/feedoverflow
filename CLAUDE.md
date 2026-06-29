@@ -80,7 +80,8 @@ root/               concurrently orchestrator
 server/             (ESM + TS, run natively by Node, port 3002)
   index.ts          entrypoint — loads .env, sets process.title, imports app, listens, then starts background services (cache warming, poller, maintenance) only after a successful bind
   load-env.ts       loads server/.env (if present) — imported before app.ts
-  app.ts            Express app + all API routes
+  app.ts            Express app assembly — middleware, auth, mounts routes/, MCP, SPA fallback (no handlers)
+  routes/           per-domain express.Router() modules — feeds, settings, content, articles, search (full /api/... paths)
   db.ts             SQLite setup, schema, migrations, seed data
   auth.ts           session login/logout + per-request gate
   articles.ts       id/enrich/dedup helpers + article_states upserts
@@ -123,7 +124,8 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 
 ### Server (`server/`)
 
-- Split into focused modules (see tree above); `app.ts` owns the Express app and routes, `index.ts` is the thin entrypoint. Tests import `app`, `db`, and helpers (`makeId`, `persistItems`) from `articles.ts`.
+- Split into focused modules (see tree above); `app.ts` is assembly only (middleware → `registerAuth` → mount the `routes/` routers → `registerMcp` → SPA `*` fallback), with the API handlers living in per-domain `express.Router()` modules under `routes/`. `index.ts` is the thin entrypoint. Tests import `app`, `db`, and helpers (`makeId`, `persistItems`) from `articles.ts`.
+  - **Route registration order is load-bearing**: routers mount after `registerAuth(app)` (so the `/api` auth gate covers them) and before `registerMcp` + the `*` SPA fallback. Each router carries full `/api/...` paths and is mounted bare (`app.use(router)`); `:id` paths for one domain (e.g. feeds) stay in one router to keep Express matching intact.
 - TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
 - `better-sqlite3` (synchronous, WAL mode)
 - RSS fetched via `rss-parser` through `refreshFeed` (`cache.ts`): fetch upstream → write the read-through `feed_cache` (5 min TTL, **list metadata only — bodies stripped**) → `persistItems` all items into `article_states`. Both writes run in one transaction. Every fetch path routes through it — on-demand reads (`getCachedFeed` cold-miss + stale background refresh), startup warming, and the background poller (`poller.ts`, every 15 min). `INSERT OR IGNORE`, so re-persists never clobber existing rows or the starred flag. Article bodies live only in `article_states.content`; `lookupContent` reads from there (no feed_cache fallback), and `/api/search` is a single `article_states` `LIKE` query (no live-cache scan)
