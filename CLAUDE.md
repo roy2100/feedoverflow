@@ -151,7 +151,7 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 | POST | `/api/feeds/import-opml` | bulk import from OPML, skips dupes |
 | PATCH | `/api/feeds/:id` | rename feed |
 | DELETE | `/api/feeds/:id` | remove feed |
-| GET | `/api/feeds/:id/articles` | cached fetch + persisted history, up to 50 |
+| GET | `/api/feeds/:id/articles` | cached fetch + persisted history, up to 500 |
 | GET | `/api/all-articles` | 5 items/feed, merged + sorted |
 | GET | `/api/today` | all-articles filtered to today |
 | GET | `/api/starred` | starred articles |

@@ -97,11 +97,12 @@ router.get('/api/feeds/:id/articles', async (req, res) => {
   try {
     await ensureFresh(feed, ac.signal);
     if (ac.signal.aborted) return;
-    // article_states is the durable record of every fetched item; read the feed's newest 50
+    // article_states is the durable record of every fetched item; read the feed's newest 500
     // straight from it (pub_ts is the sortable publish time). No live/historic merge needed —
-    // refreshFeed already persisted the latest fetch into the same table.
+    // refreshFeed already persisted the latest fetch into the same table. Rows are small now
+    // (list mode strips summary + content), so a deep per-feed history stays a cheap response.
     const rows = db
-      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT 50')
+      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT 500')
       .all(feed.id) as ArticleStateRow[];
     const articles = rows.map((r) => rowToArticle(r));
     res.json({ feedName: feed.name, articles: normalizePubDates(articles) });
