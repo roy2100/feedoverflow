@@ -56,13 +56,13 @@ rule flags real intent, surface it rather than auto-suppressing.
 
 ## Deployment
 
-Single-user macOS app exposed publicly via Cloudflare Tunnel at `https://rss.royl.uk`. Session-cookie auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files.
+Single-user macOS app exposed publicly at `https://rss.royl.uk:8443` via a **rathole** reverse tunnel to an **Aliyun VPS** that terminates TLS with **Caddy** (Let's Encrypt, DNS-01). The app still runs on the Mac; the VPS only fronts it. Session-cookie auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files. Full setup/runbook: `docs/rathole-vps-tunnel.md`.
 
 - Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 24 — `util.styleText` used by the vendored slog logger)
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
-- Cloudflare Tunnel: `cloudflared` routes `rss.royl.uk` → `localhost:3002`
-- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `scripts/deploy-mac.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip`/`req.secure` reflect the real client via cloudflared's `X-Forwarded-Proto`/`X-Forwarded-For` — needed for the `Secure` cookie flag and the MCP localhost-only block (the auth gate itself no longer keys off IP)
-- Ports: networth.local → 3001, rss.royl.uk → 3002, dev client → 3000
+- Public path: browser → Caddy `:8443` (Aliyun VPS, TLS) → rathole server (VPS `:2333`, noise) → tunnel → rathole client (Mac, launchd `com.rss-reader.rathole`) → `localhost:3002`. Cloudflare is **DNS-only** (grey-cloud A record → VPS IP); the old Cloudflare Tunnel / `cloudflared` is retired. `:8443` is non-standard on purpose — avoids Aliyun mainland ICP filing (备案) for ports 80/443
+- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `scripts/deploy-mac.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip`/`req.secure` reflect the real client: Caddy sets `X-Forwarded-Proto`/`X-Forwarded-For`, which travel through the rathole raw-TCP tunnel; the immediate peer at the app is the loopback rathole client — needed for the `Secure` cookie flag and the MCP localhost-only block (the auth gate itself no longer keys off IP)
+- Ports: networth.local → 3001, rss.royl.uk:8443 (public) → VPS → tunnel → 3002, dev client → 3000
 
 ## Architecture
 
