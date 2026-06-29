@@ -9,6 +9,12 @@ import type { Article, ArticleStateRow, Feed, StatePatch } from './types.ts';
 // db.ts pulls the cycle-free copy straight from dates.ts.
 export { parsePubDate };
 
+// Shared cap for the article-list endpoints (all-articles, today, feeds/:id/articles): at most
+// this many rows per feed at the SQL level, and at most this many overall after the cross-feed
+// merge. One knob so the three list views stay consistent. Rows are small (list mode strips
+// summary + content), so 500 stays a cheap response.
+export const LIST_LIMIT = 500;
+
 export function makeId(link?: string, title?: string, pubDate?: string): string {
   return crypto
     .createHash('md5')

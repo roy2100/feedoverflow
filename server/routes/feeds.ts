@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { parseStringPromise } from 'xml2js';
 
-import { resolveUrl, rowToArticle, normalizePubDates } from '../articles.ts';
+import { resolveUrl, rowToArticle, normalizePubDates, LIST_LIMIT } from '../articles.ts';
 import { ensureFresh } from '../cache.ts';
 import { db } from '../db.ts';
 import { parseURL } from '../parse-url.ts';
@@ -97,13 +97,12 @@ router.get('/api/feeds/:id/articles', async (req, res) => {
   try {
     await ensureFresh(feed, ac.signal);
     if (ac.signal.aborted) return;
-    // article_states is the durable record of every fetched item; read the feed's newest 500
-    // straight from it (pub_ts is the sortable publish time). No live/historic merge needed —
-    // refreshFeed already persisted the latest fetch into the same table. Rows are small now
-    // (list mode strips summary + content), so a deep per-feed history stays a cheap response.
+    // article_states is the durable record of every fetched item; read the feed's newest
+    // LIST_LIMIT rows straight from it (pub_ts is the sortable publish time). No live/historic
+    // merge needed — refreshFeed already persisted the latest fetch into the same table.
     const rows = db
-      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT 500')
-      .all(feed.id) as ArticleStateRow[];
+      .prepare('SELECT * FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT ?')
+      .all(feed.id, LIST_LIMIT) as ArticleStateRow[];
     const articles = rows.map((r) => rowToArticle(r));
     res.json({ feedName: feed.name, articles: normalizePubDates(articles) });
   } catch (err) {

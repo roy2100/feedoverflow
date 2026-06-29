@@ -152,8 +152,8 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 | PATCH | `/api/feeds/:id` | rename feed |
 | DELETE | `/api/feeds/:id` | remove feed |
 | GET | `/api/feeds/:id/articles` | cached fetch + persisted history, up to 500 |
-| GET | `/api/all-articles` | 5 items/feed, merged + sorted |
-| GET | `/api/today` | all-articles filtered to today |
+| GET | `/api/all-articles` | merged + sorted, up to 500 (shared `LIST_LIMIT`) |
+| GET | `/api/today` | all-articles filtered to today, up to 500 (shared `LIST_LIMIT`) |
 | GET | `/api/starred` | starred articles |
 | GET | `/api/podcasts` | recently-updated podcast episodes (articles with a non-empty `audio_url`), newest first |
 | GET | `/api/starred/count` | badge count |

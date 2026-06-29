@@ -7,6 +7,7 @@ import {
   saveState,
   byPubDateDesc,
   normalizePubDates,
+  LIST_LIMIT,
 } from '../articles.ts';
 import { ensureFresh, cacheReady } from '../cache.ts';
 import { db } from '../db.ts';
@@ -24,12 +25,6 @@ const sinceByFeed = db.prepare(
   'SELECT * FROM article_states WHERE feed_id = ? AND pub_ts >= ? ORDER BY pub_ts DESC LIMIT ?',
 );
 
-// /api/today caps: at most this many newest rows per feed, then this many overall after the
-// cross-feed merge. The list is a scroll view nobody reads to the end — returning every
-// article published today (often 1000+) just bloats the response with rows that never render.
-const TODAY_PER_FEED = 60;
-const TODAY_LIMIT = 200;
-
 router.get('/api/all-articles', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const ac = new AbortController();
@@ -38,9 +33,11 @@ router.get('/api/all-articles', async (req, res) => {
   if (ac.signal.aborted) return;
   const articles = dedupById(
     feeds
-      .flatMap((f) => (newestByFeed.all(f.id, 5) as ArticleStateRow[]).map((r) => rowToArticle(r)))
+      .flatMap((f) =>
+        (newestByFeed.all(f.id, LIST_LIMIT) as ArticleStateRow[]).map((r) => rowToArticle(r)),
+      )
       .sort(byPubDateDesc),
-  );
+  ).slice(0, LIST_LIMIT);
   res.json({ articles: normalizePubDates(articles), cacheReady });
 });
 
@@ -55,12 +52,12 @@ router.get('/api/today', async (req, res) => {
   const articles = dedupById(
     feeds
       .flatMap((f) =>
-        (sinceByFeed.all(f.id, todayStart.getTime(), TODAY_PER_FEED) as ArticleStateRow[]).map(
-          (r) => rowToArticle(r),
+        (sinceByFeed.all(f.id, todayStart.getTime(), LIST_LIMIT) as ArticleStateRow[]).map((r) =>
+          rowToArticle(r),
         ),
       )
       .sort(byPubDateDesc),
-  ).slice(0, TODAY_LIMIT);
+  ).slice(0, LIST_LIMIT);
   res.json({ articles: normalizePubDates(articles), cacheReady });
 });
 
