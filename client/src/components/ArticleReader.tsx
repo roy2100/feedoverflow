@@ -323,6 +323,7 @@ export default function ArticleReader({
         <h1
           style={{
             fontFamily: 'var(--font-serif)',
+            fontFeatureSettings: 'var(--serif-features)',
             fontSize: isMobile ? 22 : 'clamp(22px, 3vw, 28px)',
             fontWeight: 600,
             lineHeight: 1.35,
@@ -789,6 +790,7 @@ function sanitizeHtml(html: string): string {
 
 const articleContentStyle: React.CSSProperties = {
   fontFamily: 'var(--font-serif)',
+  fontFeatureSettings: 'var(--serif-features)',
   fontSize: 16,
   lineHeight: 1.85,
   color: 'var(--text-primary)',
