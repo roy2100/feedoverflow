@@ -21,19 +21,24 @@
   --accent-light: #3a7a7a;
   --red: #c0392b;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
-  /* Letters render with Noto Serif SC (exactly as before). Only the curly
-     punctuation, which Noto Serif SC draws full-width (a gap in English), is
-     overridden to a narrow Latin glyph via the 'PunctNarrow' face below. */
-  --font-serif: 'PunctNarrow', 'Noto Serif SC', serif;
+  /* Letters render with Noto Serif SC (exactly as before). The curly quotes,
+     which Noto Serif SC draws full-width (a gap in English), come instead from
+     'NotoPunct' — a ~2KB self-hosted subset of Noto Serif CJK SC with that
+     font's OWN proportional-width punctuation glyphs baked in. */
+  --font-serif: 'NotoPunct', 'Noto Serif SC', serif;
 }
 
-/* Carve just the ambiguous-width punctuation out to a narrow local Latin serif,
-   leaving every letter to Noto Serif SC: curly quotes/apostrophes U+2018–U+201D,
-   en/em dash U+2013–U+2014, ellipsis U+2026. */
+/* Self-hosted subset: only the curly quotes/apostrophes (U+2018–U+201D) and
+   ellipsis (U+2026), pre-mapped to Noto Serif CJK SC's proportional glyphs.
+   Weight range spans all weights so the single (400) glyph is reused without
+   synthetic bolding. En/em dashes are already proportional in Noto, so they
+   stay with the base Noto Serif SC. */
 @font-face {
-  font-family: 'PunctNarrow';
-  src: local('Georgia'), local('Times New Roman');
-  unicode-range: U+2018-201D, U+2013-2014, U+2026;
+  font-family: 'NotoPunct';
+  src: url('/fonts/noto-serif-sc-punct.woff2') format('woff2');
+  unicode-range: U+2018-201D, U+2026;
+  font-weight: 100 900;
+  font-display: swap;
 }
 
 html,
