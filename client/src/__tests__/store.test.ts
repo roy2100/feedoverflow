@@ -121,8 +121,8 @@ describe('deleteFeed', () => {
 
 describe('loadArticles URL mapping', () => {
   it.each<[View, string]>([
-    [{ type: 'all' }, '/api/all-articles'],
-    [{ type: 'today' }, '/api/today'],
+    [{ type: 'all' }, '/api/all-articles?mode=latest'],
+    [{ type: 'today' }, '/api/today?mode=latest'],
     [{ type: 'starred' }, '/api/starred'],
     [{ type: 'feed', feed: { id: '5' } as Feed }, '/api/feeds/5/articles'],
   ])('view %o requests %s', async (view, expectedUrl) => {
