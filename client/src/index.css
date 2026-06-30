@@ -21,12 +21,19 @@
   --accent-light: #3a7a7a;
   --red: #c0392b;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
-  /* Pure Noto Serif SC for letters AND punctuation. The full-width gap in
-     English curly punctuation is fixed by the 'palt' OpenType feature
-     (proportional-alternate widths), applied wherever --font-serif is used;
-     'kern' refines mixed CJK/Latin spacing. See --serif-features. */
-  --font-serif: 'Noto Serif SC', serif;
-  --serif-features: 'palt' 1, 'kern' 1;
+  /* Letters render with Noto Serif SC (exactly as before). Only the curly
+     punctuation, which Noto Serif SC draws full-width (a gap in English), is
+     overridden to a narrow Latin glyph via the 'PunctNarrow' face below. */
+  --font-serif: 'PunctNarrow', 'Noto Serif SC', serif;
+}
+
+/* Carve just the ambiguous-width punctuation out to a narrow local Latin serif,
+   leaving every letter to Noto Serif SC: curly quotes/apostrophes U+2018–U+201D,
+   en/em dash U+2013–U+2014, ellipsis U+2026. */
+@font-face {
+  font-family: 'PunctNarrow';
+  src: local('Georgia'), local('Times New Roman');
+  unicode-range: U+2018-201D, U+2013-2014, U+2026;
 }
 
 html,
