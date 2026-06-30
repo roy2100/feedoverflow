@@ -211,7 +211,8 @@ export default function App() {
     </Suspense>
   );
 
-  if (authed === null) return <div style={{ height: '100dvh', background: 'var(--bg)' }} />;
+  if (authed === null)
+    return <div style={{ height: 'var(--app-height, 100dvh)', background: 'var(--bg)' }} />;
   if (authed === false)
     return (
       <LoginForm
@@ -267,7 +268,7 @@ export default function App() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            height: '100dvh',
+            height: 'var(--app-height, 100dvh)',
             overflow: 'hidden',
             background: 'var(--bg)',
           }}

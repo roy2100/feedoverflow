@@ -31,13 +31,21 @@ body,
   overflow: hidden;
 }
 
-/* Mobile viewport fix */
+/* Mobile viewport fix. --app-height is set from window.innerHeight in main.tsx
+ * and re-measured on return from external links (the iOS standalone-PWA blank-
+ * strip bug); 100dvh is the fallback before/without the JS hook. */
 @supports (height: 100dvh) {
   html,
   body,
   #root {
     height: 100dvh;
   }
+}
+
+html,
+body,
+#root {
+  height: var(--app-height, 100dvh);
 }
 
 /* Prevent pull-to-refresh and momentum scroll issues on iOS */
