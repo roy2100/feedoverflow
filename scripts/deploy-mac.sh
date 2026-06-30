@@ -17,7 +17,10 @@ fi
 
 # 1. 构建前端
 echo "==> 构建前端"
-npm install --prefix "$DEV_ROOT/client"
+# --legacy-peer-deps: npm reads .npmrc from cwd, not from --prefix, so the flag
+# must be explicit here to match client/.npmrc (plugin-react 6 peer conflict).
+# Keeps the lockfile's dev/devOptional classification stable across deploys.
+npm install --prefix "$DEV_ROOT/client" --legacy-peer-deps
 npm run --prefix "$DEV_ROOT/client" build
 
 # 2. 同步代码 + 构建产物
