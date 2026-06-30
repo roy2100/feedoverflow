@@ -21,9 +21,20 @@
   --accent-light: #3a7a7a;
   --red: #c0392b;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
-  /* Latin serif first so shared punctuation (e.g. U+2019 apostrophe) uses the
-     narrow Latin glyph; CJK characters fall through to Noto Serif SC. */
-  --font-serif: 'Georgia', 'Noto Serif SC', serif;
+  /* Noto Serif SC keeps the English (Latin) look, but it renders the curly
+     quotes/dashes/ellipsis as full-width CJK glyphs (a trailing gap in English,
+     e.g. "we' d"). The 'PunctFix' face below carves just those ambiguous-width
+     code points out to a Latin serif, so only the punctuation is narrowed. */
+  --font-serif: 'PunctFix', 'Noto Serif SC', 'Georgia', serif;
+}
+
+/* Override only ambiguous-width punctuation with a Latin serif (kept narrow),
+   leaving every letter to Noto Serif SC. Quotes/apostrophes U+2018–U+201D,
+   en/em dash U+2013–U+2014, ellipsis U+2026. */
+@font-face {
+  font-family: 'PunctFix';
+  src: local('Georgia'), local('Times New Roman');
+  unicode-range: U+2018-201D, U+2013-2014, U+2026;
 }
 
 html,
