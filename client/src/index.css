@@ -21,10 +21,10 @@
   --accent-light: #3a7a7a;
   --red: #c0392b;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
-  /* Noto Serif (Latin) first so English letters AND punctuation use proper
-     half-width glyphs; CJK characters fall through to its sibling Noto Serif SC,
-     whose Latin glyphs render ambiguous-width punctuation full-width. */
-  --font-serif: 'Noto Serif', 'Noto Serif SC', serif;
+  /* Source Serif 4 first: it's the Latin design that Noto Serif SC (= Source Han
+     Serif) embeds, so English keeps the same look but with proper half-width
+     punctuation. CJK characters fall through to Noto Serif SC. */
+  --font-serif: 'Source Serif 4', 'Noto Serif SC', serif;
 }
 
 html,
