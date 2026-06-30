@@ -30,14 +30,28 @@
 
 /* Self-hosted subset: only the curly quotes/apostrophes (U+2018–U+201D) and
    ellipsis (U+2026), pre-mapped to Noto Serif CJK SC's proportional glyphs.
-   Weight range spans all weights so the single (400) glyph is reused without
-   synthetic bolding. En/em dashes are already proportional in Noto, so they
-   stay with the base Noto Serif SC. */
+   One subset per used weight (400 body, 500/600 headings) so punctuation
+   matches the surrounding text weight without synthetic bolding. En/em dashes
+   are already proportional in Noto, so they stay with the base Noto Serif SC. */
 @font-face {
   font-family: 'NotoPunct';
-  src: url('/fonts/noto-serif-sc-punct.woff2') format('woff2');
+  src: url('/fonts/noto-serif-sc-punct-400.woff2') format('woff2');
   unicode-range: U+2018-201D, U+2026;
-  font-weight: 100 900;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoPunct';
+  src: url('/fonts/noto-serif-sc-punct-500.woff2') format('woff2');
+  unicode-range: U+2018-201D, U+2026;
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoPunct';
+  src: url('/fonts/noto-serif-sc-punct-600.woff2') format('woff2');
+  unicode-range: U+2018-201D, U+2026;
+  font-weight: 600;
   font-display: swap;
 }
 
