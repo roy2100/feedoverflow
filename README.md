@@ -89,7 +89,9 @@ npm run dev
 Open http://localhost:3000, then add a feed URL or import an OPML file.
 
 To enable the MCP endpoint for a client like Claude Desktop, point it at
-`http://localhost:3002/mcp` (Streamable HTTP transport).
+`http://localhost:4002/mcp` (Streamable HTTP transport). MCP is served on the
+loopback-only, no-auth companion listener (`LOCAL_API_PORT`, default 4002) — never
+the public port — so it works with or without `AUTH_USER`/`AUTH_PASS` set.
 
 ### Auth (optional)
 
