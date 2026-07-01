@@ -14,6 +14,8 @@ cd server && npm run test:integration  # live-network suites (*.itest.ts — rea
 cd server && npm run test:coverage  # node:test with V8 coverage report (excludes *.test.ts, vendor/)
 cd client && npm test           # vitest suites (jsdom)
 cd client && npm run test:coverage  # vitest with V8 coverage report (text + html, excludes tests/types/entry)
+./scripts/burst-latency.sh      # concurrent-burst latency smoke test vs a running server (loopback :4002)
+                                # ROUNDS=/BASE_URL=/FAIL_MS= env overrides; FAIL_MS gates a regression
 
 # Production deploy
 ./scripts/deploy-mac.sh  # install deps, build frontend, restart backend service
