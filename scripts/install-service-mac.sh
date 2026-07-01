@@ -41,6 +41,10 @@ cat > "$PLIST" <<EOF
   </dict>
   <key>RunAtLoad</key>         <true/>
   <key>KeepAlive</key>         <true/>
+  <!-- Interactive: exempt from launchd's default idle throttling (CPU/I/O light limits).
+       Without this the process is descheduled when idle, so the first request after a pause
+       pays a ~1s wake-up penalty. This is a user-facing web server — keep it responsive. -->
+  <key>ProcessType</key>       <string>Interactive</string>
   <key>StandardOutPath</key>   <string>$ROOT/logs/server.log</string>
   <key>StandardErrorPath</key> <string>$ROOT/logs/server.log</string>
 </dict>
