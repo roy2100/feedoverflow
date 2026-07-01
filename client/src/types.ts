@@ -19,6 +19,9 @@ export interface Article {
   audioUrl: string;
   audioDuration: string;
   isStarred: boolean;
+  // Epoch ms of the last genuine upstream content edit; null/absent when never edited since
+  // first fetch. The reader shows an "更新于" time only when this is set.
+  updatedAt?: number | null;
 }
 
 // Optional scope on a search view: restrict results to starred articles or one feed.

@@ -18,7 +18,7 @@ import type { Article } from '../types';
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
 type FullContent = null | 'loading' | { html: string } | { error: string };
 
-function formatFullDate(dateStr: string): string {
+function formatFullDate(dateStr: string | number): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleString('zh-CN', {
@@ -377,6 +377,14 @@ export default function ArticleReader({
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
               {formatFullDate(article.pubDate)}
             </span>
+            {article.updatedAt && (
+              <span
+                title={`内容更新于 ${formatFullDate(article.updatedAt)}`}
+                style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}
+              >
+                更新于 {formatFullDate(article.updatedAt)}
+              </span>
+            )}
           </div>
           {/* Desktop-only actions */}
           {!isMobile && (
