@@ -1,0 +1,8 @@
+# Built binaries (default `go build .` output names the binary after the dir)
+/server-go
+*.exe
+
+# Local parity/test DB copies (never commit rss.db copies)
+*.db
+*.db-wal
+*.db-shm
