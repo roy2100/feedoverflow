@@ -1,12 +1,17 @@
-// Package httpapi assembles the HTTP layer: the chi router, middleware, and the
-// /api/* handlers. Counterpart to server/app.ts + server/routes/*. Phase 3 wires
-// the pure-read endpoints (no writes, no network); writes/auth/network land later.
+// Package httpapi assembles the HTTP layer: the chi routers, middleware, and the
+// /api/* handlers. Counterpart to server/app.ts + server/routes/*.
+//
+// Two routers share the same API routes (mountAPIRoutes):
+//   - Public (NewPublicRouter): CORS + auth gate; served on all interfaces.
+//   - Loopback (NewLocalRouter): no auth; bound to 127.0.0.1 only. The socket, not
+//     a header, decides whether auth applies.
+//
+// Static/SPA serving and MCP are out of this phase (SPA is Phase 10; MCP is out of
+// scope for the migration).
 package httpapi
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"math"
 	"net/http"
 	"time"
@@ -15,30 +20,56 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"rss-reader/server-go/internal/articles"
+	"rss-reader/server-go/internal/auth"
+	"rss-reader/server-go/internal/httpx"
 	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/store"
 )
 
+var allowedOrigins = map[string]bool{
+	"http://localhost:3000": true,
+	"https://rss.royl.uk":   true,
+	"https://rss.lan":       true,
+}
+
 // Server carries the dependencies the handlers need.
 type Server struct {
 	DB *sql.DB
-	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope.
-	// Wired to real startup warming in Phase 9; false until then (matches a
-	// TEST_DB Node process, and is normalized out of the contract-diff anyway).
+	// AuthUser/AuthPass gate the public listener when both are set (auth disabled
+	// otherwise), matching registerAuth.
+	AuthUser string
+	AuthPass string
+	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope
+	// (wired to real warming in Phase 9; normalized out of the contract-diff).
 	CacheReady bool
 }
 
-// NewRouter builds the router with the read routes mounted.
-func (s *Server) NewRouter() http.Handler {
+// NewPublicRouter builds the public, auth-gated router (CORS enabled).
+func (s *Server) NewPublicRouter() http.Handler {
+	a := auth.New(s.DB, s.AuthUser, s.AuthPass)
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
+	r.Use(corsMiddleware)
+	r.Use(apiNoStore)
+	r.Use(a.Gate) // must precede any route (chi requirement)
+	r.Get("/healthz", healthz)
+	a.RegisterRoutes(r)
+	s.mountAPIRoutes(r)
+	return r
+}
 
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+// NewLocalRouter builds the loopback-only router: no auth, no CORS, no SPA.
+func (s *Server) NewLocalRouter() http.Handler {
+	r := chi.NewRouter()
+	r.Use(middleware.Recoverer)
+	r.Use(apiNoStore)
+	r.Get("/healthz", healthz)
+	s.mountAPIRoutes(r)
+	return r
+}
 
+// mountAPIRoutes registers the shared /api routes on r.
+func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/feeds", s.getFeeds)
 	r.Get("/api/all-articles", s.getAllArticles)
 	r.Get("/api/today", s.getToday)
@@ -47,8 +78,44 @@ func (s *Server) NewRouter() http.Handler {
 	r.Get("/api/starred/count", s.getStarredCount)
 	r.Get("/api/articles/{id}/content", s.getArticleContent)
 	r.Get("/api/settings", s.getSettings)
+}
 
-	return r
+func healthz(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+// apiNoStore sets Cache-Control: no-store on /api responses (app.use('/api',
+// noStore)). Handlers that set their own Cache-Control override it afterward.
+func apiNoStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// corsMiddleware mirrors cors({ origin: ALLOWED_ORIGINS, credentials: true }).
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Add("Vary", "Origin")
+			if r.Method == http.MethodOptions {
+				w.Header().Set("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE")
+				if h := r.Header.Get("Access-Control-Request-Headers"); h != "" {
+					w.Header().Set("Access-Control-Allow-Headers", h)
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) getFeeds(w http.ResponseWriter, _ *http.Request) {
@@ -58,7 +125,7 @@ func (s *Server) getFeeds(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "private, max-age=30")
-	writeJSON(w, http.StatusOK, feeds)
+	httpx.WriteJSON(w, http.StatusOK, feeds)
 }
 
 func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +134,7 @@ func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"articles":   articles.NormalizePubDates(arts),
 		"cacheReady": s.CacheReady,
 	})
@@ -81,7 +148,7 @@ func (s *Server) getToday(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"articles":   articles.NormalizePubDates(arts),
 		"cacheReady": s.CacheReady,
 	})
@@ -135,7 +202,7 @@ func (s *Server) getStarred(w http.ResponseWriter, _ *http.Request) {
 		serverError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"articles": articles.NormalizePubDates(toArticles(rows, true)),
 	})
 }
@@ -151,7 +218,7 @@ func (s *Server) getPodcasts(w http.ResponseWriter, _ *http.Request) {
 	if len(arts) > 100 {
 		arts = arts[:100]
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"articles": articles.NormalizePubDates(arts),
 	})
 }
@@ -163,7 +230,7 @@ func (s *Server) getStarredCount(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "private, max-age=10")
-	writeJSON(w, http.StatusOK, map[string]any{"count": n})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"count": n})
 }
 
 func (s *Server) getArticleContent(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +239,7 @@ func (s *Server) getArticleContent(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"content": content})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"content": content})
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, _ *http.Request) {
@@ -181,7 +248,7 @@ func (s *Server) getSettings(w http.ResponseWriter, _ *http.Request) {
 		serverError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, settings)
+	httpx.WriteJSON(w, http.StatusOK, settings)
 }
 
 // digestQuota splits LIST_LIMIT evenly across feeds (ceil), min 1.
@@ -203,21 +270,6 @@ func toArticles(rows []articles.Row, withContent bool) []model.Article {
 	return out
 }
 
-// writeJSON encodes v with HTML escaping disabled so &, <, > pass through raw,
-// matching Node's JSON.stringify / Express res.json.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		serverError(w, err)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = w.Write(buf.Bytes())
-}
-
 func serverError(w http.ResponseWriter, err error) {
-	writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+	httpx.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 }

@@ -19,7 +19,8 @@ SRC_DB="${SRC_DB:-$HOME/Deploy/rss-reader/server/rss.db}"
 WORK="${WORK:-/tmp/rss-parity/cdiff}"
 NODE_PORT=4991   # Node no-auth loopback listener (LOCAL_API_PORT)
 NODE_PUB=3991    # Node public listener (unused, kept off production ports)
-GO_PORT=3912
+GO_PORT=4912     # Go no-auth loopback listener (LOCAL_API_PORT)
+GO_PUB=3912      # Go public listener (unused here)
 NODE_URL="http://127.0.0.1:$NODE_PORT"
 GO_URL="http://127.0.0.1:$GO_PORT"
 
@@ -34,7 +35,7 @@ cp "$WORK/base.db" "$WORK/go.db"
 
 # Free the test ports from any zombie of a prior run (only these ports; production
 # on 3002/4002 is never touched).
-for p in $NODE_PORT $NODE_PUB $GO_PORT; do
+for p in $NODE_PORT $NODE_PUB $GO_PORT $GO_PUB; do
   lsof -ti tcp:$p 2>/dev/null | xargs -r kill 2>/dev/null
 done
 sleep 0.3
@@ -42,7 +43,7 @@ sleep 0.3
 ( cd "$REPO/server" && TEST_DB="$WORK/node.db" PORT=$NODE_PUB LOCAL_API_PORT=$NODE_PORT \
     exec node index.ts >"$WORK/node.log" 2>&1 ) &
 NODE_PID=$!
-RSS_DB="$WORK/go.db" GO_ADDR="127.0.0.1:$GO_PORT" "$WORK/server-go" >"$WORK/go.log" 2>&1 &
+RSS_DB="$WORK/go.db" PORT=$GO_PUB LOCAL_API_PORT=$GO_PORT "$WORK/server-go" >"$WORK/go.log" 2>&1 &
 GO_PID=$!
 cleanup() { kill $NODE_PID $GO_PID 2>/dev/null; }
 trap cleanup EXIT

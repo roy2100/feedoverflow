@@ -1,42 +1,48 @@
 // Command server-go is the Go port of the RSS reader backend (see
-// docs/plan-go-backend-migration.md). Through Phase 3 it opens the DB and serves
-// the pure-read /api/* endpoints on a single loopback listener for contract-diff.
+// docs/plan-go-backend-migration.md). Through Phase 4 it opens the DB and serves
+// the read API on two listeners: a public, auth-gated one on PORT and a
+// loopback-only, no-auth one on LOCAL_API_PORT.
 package main
 
 import (
 	"log"
 	"net/http"
-	"os"
+	"strconv"
 
+	"rss-reader/server-go/internal/config"
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/httpapi"
 )
 
 func main() {
-	dbPath := os.Getenv("RSS_DB")
-	if dbPath == "" {
-		dbPath = "rss.db"
-	}
-	sqldb, err := db.Open(dbPath)
+	cfg := config.Load()
+
+	sqldb, err := db.Open(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("open db %s: %v", dbPath, err)
+		log.Fatalf("open db %s: %v", cfg.DBPath, err)
 	}
 	defer sqldb.Close()
 	if err := db.InitSchema(sqldb); err != nil {
 		log.Fatalf("init schema: %v", err)
 	}
 
-	addr := os.Getenv("GO_ADDR")
-	if addr == "" {
-		addr = "127.0.0.1:3012"
-	}
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: (&httpapi.Server{DB: sqldb}).NewRouter(),
-	}
+	srv := &httpapi.Server{DB: sqldb, AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass}
 
-	log.Printf("server-go listening on %s (db=%s)", addr, dbPath)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server-go failed: %v", err)
+	localAddr := "127.0.0.1:" + strconv.Itoa(cfg.LocalAPIPort)
+	go func() {
+		log.Printf("server-go loopback listening on %s", localAddr)
+		if err := http.ListenAndServe(localAddr, srv.NewLocalRouter()); err != nil {
+			log.Fatalf("loopback listener failed: %v", err)
+		}
+	}()
+
+	publicAddr := ":" + strconv.Itoa(cfg.Port)
+	authState := "disabled"
+	if cfg.AuthUser != "" && cfg.AuthPass != "" {
+		authState = "enabled"
+	}
+	log.Printf("server-go public listening on %s (db=%s, auth=%s)", publicAddr, cfg.DBPath, authState)
+	if err := http.ListenAndServe(publicAddr, srv.NewPublicRouter()); err != nil {
+		log.Fatalf("public listener failed: %v", err)
 	}
 }
