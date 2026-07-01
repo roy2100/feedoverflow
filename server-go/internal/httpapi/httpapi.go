@@ -6,14 +6,17 @@
 //   - Loopback (NewLocalRouter): no auth; bound to 127.0.0.1 only. The socket, not
 //     a header, decides whether auth applies.
 //
-// Static/SPA serving and MCP are out of this phase (SPA is Phase 10; MCP is out of
-// scope for the migration).
+// Reads go through the DB read pool; writes through the single-writer pool.
+// Static/SPA serving and MCP are out of this phase (SPA is Phase 10; MCP is out).
 package httpapi
 
 import (
-	"database/sql"
+	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,6 +24,7 @@ import (
 
 	"rss-reader/server-go/internal/articles"
 	"rss-reader/server-go/internal/auth"
+	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/httpx"
 	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/store"
@@ -34,7 +38,7 @@ var allowedOrigins = map[string]bool{
 
 // Server carries the dependencies the handlers need.
 type Server struct {
-	DB *sql.DB
+	DB *db.DB
 	// AuthUser/AuthPass gate the public listener when both are set (auth disabled
 	// otherwise), matching registerAuth.
 	AuthUser string
@@ -42,6 +46,10 @@ type Server struct {
 	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope
 	// (wired to real warming in Phase 9; normalized out of the contract-diff).
 	CacheReady bool
+
+	// In-memory "currently open" article (GET|POST /api/current-article). nil = none.
+	curMu      sync.Mutex
+	curArticle json.RawMessage
 }
 
 // NewPublicRouter builds the public, auth-gated router (CORS enabled).
@@ -76,8 +84,12 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/starred", s.getStarred)
 	r.Get("/api/podcasts", s.getPodcasts)
 	r.Get("/api/starred/count", s.getStarredCount)
+	r.Post("/api/articles/star", s.postStar)
 	r.Get("/api/articles/{id}/content", s.getArticleContent)
 	r.Get("/api/settings", s.getSettings)
+	r.Patch("/api/settings", s.patchSettings)
+	r.Get("/api/current-article", s.getCurrentArticle)
+	r.Post("/api/current-article", s.postCurrentArticle)
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {
@@ -90,7 +102,7 @@ func healthz(w http.ResponseWriter, _ *http.Request) {
 // noStore)). Handlers that set their own Cache-Control override it afterward.
 func apiNoStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
+		if strings.HasPrefix(r.URL.Path, "/api") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
 		next.ServeHTTP(w, r)
@@ -119,7 +131,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) getFeeds(w http.ResponseWriter, _ *http.Request) {
-	feeds, err := store.ListFeeds(s.DB)
+	feeds, err := store.ListFeeds(s.DB.Reader())
 	if err != nil {
 		serverError(w, err)
 		return
@@ -157,7 +169,8 @@ func (s *Server) getToday(w http.ResponseWriter, r *http.Request) {
 // listArticles serves the shared all-articles/today body. since==0 means no time
 // filter (all-articles); since>0 filters to pub_ts >= since (today).
 func (s *Server) listArticles(mode string, since int64) ([]model.Article, error) {
-	feedIDs, err := store.FeedIDs(s.DB)
+	rdb := s.DB.Reader()
+	feedIDs, err := store.FeedIDs(rdb)
 	if err != nil {
 		return nil, err
 	}
@@ -167,9 +180,9 @@ func (s *Server) listArticles(mode string, since int64) ([]model.Article, error)
 		for _, fid := range feedIDs {
 			var rows []articles.Row
 			if since > 0 {
-				rows, err = store.SinceByFeed(s.DB, fid, since, quota)
+				rows, err = store.SinceByFeed(rdb, fid, since, quota)
 			} else {
-				rows, err = store.NewestByFeed(s.DB, fid, quota)
+				rows, err = store.NewestByFeed(rdb, fid, quota)
 			}
 			if err != nil {
 				return nil, err
@@ -186,9 +199,9 @@ func (s *Server) listArticles(mode string, since int64) ([]model.Article, error)
 	}
 	var rows []articles.Row
 	if since > 0 {
-		rows, err = store.SinceGlobal(s.DB, since, articles.ListLimit)
+		rows, err = store.SinceGlobal(rdb, since, articles.ListLimit)
 	} else {
-		rows, err = store.NewestGlobal(s.DB, articles.ListLimit)
+		rows, err = store.NewestGlobal(rdb, articles.ListLimit)
 	}
 	if err != nil {
 		return nil, err
@@ -197,7 +210,7 @@ func (s *Server) listArticles(mode string, since int64) ([]model.Article, error)
 }
 
 func (s *Server) getStarred(w http.ResponseWriter, _ *http.Request) {
-	rows, err := store.Starred(s.DB)
+	rows, err := store.Starred(s.DB.Reader())
 	if err != nil {
 		serverError(w, err)
 		return
@@ -208,7 +221,7 @@ func (s *Server) getStarred(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) getPodcasts(w http.ResponseWriter, _ *http.Request) {
-	rows, err := store.Podcasts(s.DB)
+	rows, err := store.Podcasts(s.DB.Reader())
 	if err != nil {
 		serverError(w, err)
 		return
@@ -224,7 +237,7 @@ func (s *Server) getPodcasts(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) getStarredCount(w http.ResponseWriter, _ *http.Request) {
-	n, err := store.StarredCount(s.DB)
+	n, err := store.StarredCount(s.DB.Reader())
 	if err != nil {
 		serverError(w, err)
 		return
@@ -234,7 +247,7 @@ func (s *Server) getStarredCount(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) getArticleContent(w http.ResponseWriter, r *http.Request) {
-	content, err := store.LookupContent(s.DB, chi.URLParam(r, "id"))
+	content, err := store.LookupContent(s.DB.Reader(), chi.URLParam(r, "id"))
 	if err != nil {
 		serverError(w, err)
 		return
@@ -242,13 +255,90 @@ func (s *Server) getArticleContent(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"content": content})
 }
 
+// postStar is the port of POST /api/articles/star: upsert is_starred, filling
+// content from the DB when the client omits it. Never clobbers title/summary/etc.
+func (s *Server) postStar(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Article model.Article `json:"article"`
+		Starred bool          `json:"starred"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Article.ID == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "article required"})
+		return
+	}
+	if body.Article.Content == "" {
+		if c, err := store.LookupContent(s.DB.Reader(), body.Article.ID); err == nil {
+			body.Article.Content = c
+		}
+	}
+	isStarred := 0
+	if body.Starred {
+		isStarred = 1
+	}
+	if err := store.SaveState(s.DB.Writer(), body.Article, isStarred, time.Now().UnixMilli()); err != nil {
+		serverError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "isStarred": body.Starred})
+}
+
 func (s *Server) getSettings(w http.ResponseWriter, _ *http.Request) {
-	settings, err := store.Settings(s.DB)
+	settings, err := store.Settings(s.DB.Reader())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, settings)
+}
+
+// patchSettings is the port of PATCH /api/settings: upsert the allowed keys, then
+// clear feed freshness so the next read re-fetches.
+func (s *Server) patchSettings(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		body = map[string]any{}
+	}
+	for _, key := range []string{"rsshub_base_url"} {
+		if v, ok := body[key]; ok {
+			if err := store.UpdateSetting(s.DB.Writer(), key, strings.TrimSpace(fmt.Sprint(v))); err != nil {
+				serverError(w, err)
+				return
+			}
+		}
+	}
+	if err := store.ClearFeedFreshness(s.DB.Writer()); err != nil {
+		serverError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) getCurrentArticle(w http.ResponseWriter, _ *http.Request) {
+	s.curMu.Lock()
+	cur := s.curArticle
+	s.curMu.Unlock()
+	if cur == nil {
+		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no article open"})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(cur)
+}
+
+func (s *Server) postCurrentArticle(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Article json.RawMessage `json:"article"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	s.curMu.Lock()
+	if len(body.Article) == 0 || string(body.Article) == "null" {
+		s.curArticle = nil
+	} else {
+		s.curArticle = body.Article
+	}
+	s.curMu.Unlock()
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // digestQuota splits LIST_LIMIT evenly across feeds (ceil), min 1.

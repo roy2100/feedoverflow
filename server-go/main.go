@@ -17,16 +17,16 @@ import (
 func main() {
 	cfg := config.Load()
 
-	sqldb, err := db.Open(cfg.DBPath)
+	handle, err := db.OpenHandle(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("open db %s: %v", cfg.DBPath, err)
 	}
-	defer sqldb.Close()
-	if err := db.InitSchema(sqldb); err != nil {
+	defer handle.Close()
+	if err := db.InitSchema(handle.Writer()); err != nil {
 		log.Fatalf("init schema: %v", err)
 	}
 
-	srv := &httpapi.Server{DB: sqldb, AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass}
+	srv := &httpapi.Server{DB: handle, AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass}
 
 	localAddr := "127.0.0.1:" + strconv.Itoa(cfg.LocalAPIPort)
 	go func() {

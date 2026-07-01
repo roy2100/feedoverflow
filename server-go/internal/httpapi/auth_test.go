@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,18 +9,18 @@ import (
 	"rss-reader/server-go/internal/db"
 )
 
-func testDB(t *testing.T) *sql.DB {
+func testDB(t *testing.T) *db.DB {
 	t.Helper()
 	path := t.TempDir() + "/t.db"
-	sqldb, err := db.Open(path)
+	handle, err := db.OpenHandle(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := db.InitSchema(sqldb); err != nil {
+	if err := db.InitSchema(handle.Writer()); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	t.Cleanup(func() { sqldb.Close() })
-	return sqldb
+	t.Cleanup(func() { handle.Close() })
+	return handle
 }
 
 // do runs a request against a handler with a loopback RemoteAddr (and optional

@@ -21,6 +21,45 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// DB is the server's handle: a read pool (concurrent readers) plus a single-conn
+// write pool. SQLite is single-writer; capping the write pool to one connection
+// serializes Go's writers so they queue instead of racing for the SQLite write
+// lock (the Go equivalent of the discipline that fixed the Node stall). Both
+// pools open the same WAL file — readers see committed writes.
+type DB struct {
+	read  *sql.DB
+	write *sql.DB
+}
+
+// OpenHandle opens the read and write pools for path.
+func OpenHandle(path string) (*DB, error) {
+	read, err := Open(path)
+	if err != nil {
+		return nil, err
+	}
+	write, err := Open(path)
+	if err != nil {
+		read.Close()
+		return nil, err
+	}
+	write.SetMaxOpenConns(1)
+	return &DB{read: read, write: write}, nil
+}
+
+// Reader returns the concurrent read pool. Writer returns the single-writer pool.
+func (d *DB) Reader() *sql.DB { return d.read }
+func (d *DB) Writer() *sql.DB { return d.write }
+
+// Close closes both pools.
+func (d *DB) Close() error {
+	we := d.write.Close()
+	re := d.read.Close()
+	if we != nil {
+		return we
+	}
+	return re
+}
+
 // Open opens (creating if absent) the SQLite database at path with the same
 // pragmas the Node build uses: WAL journal, synchronous=NORMAL, plus a
 // busy_timeout so concurrent readers/writers wait instead of erroring. The

@@ -7,7 +7,6 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/subtle"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"net"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/httpx"
 )
 
@@ -40,7 +40,7 @@ var exemptPaths = map[string]bool{
 // is enabled (gate + login/logout); otherwise it is disabled (open, auth-check
 // always true), matching registerAuth.
 type Authenticator struct {
-	db      *sql.DB
+	db      *db.DB
 	user    string
 	pass    string
 	limiter *rateLimiter
@@ -48,8 +48,8 @@ type Authenticator struct {
 
 // New builds an Authenticator. chi requires middleware before routes, so callers
 // add Gate via r.Use first, then RegisterRoutes.
-func New(db *sql.DB, user, pass string) *Authenticator {
-	a := &Authenticator{db: db, user: user, pass: pass}
+func New(handle *db.DB, user, pass string) *Authenticator {
+	a := &Authenticator{db: handle, user: user, pass: pass}
 	if a.enabled() {
 		a.limiter = newRateLimiter(15*time.Minute, 10)
 	}
@@ -121,19 +121,19 @@ func (a *authed) login(w http.ResponseWriter, r *http.Request) {
 	}
 	token := newToken()
 	now := time.Now().UnixMilli()
-	if _, err := a.db.Exec(
+	if _, err := a.db.Writer().Exec(
 		`INSERT OR REPLACE INTO sessions (token, created_at) VALUES (?, ?)`, token, now); err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
-	_, _ = a.db.Exec(`DELETE FROM sessions WHERE created_at < ?`, now-SessionTTL)
+	_, _ = a.db.Writer().Exec(`DELETE FROM sessions WHERE created_at < ?`, now-SessionTTL)
 	w.Header().Set("Set-Cookie", cookieString(isSecure(r), token, cookieMaxAge))
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *authed) logout(w http.ResponseWriter, r *http.Request) {
 	if token := parseCookies(r)["session"]; token != "" {
-		_, _ = a.db.Exec(`DELETE FROM sessions WHERE token = ?`, token)
+		_, _ = a.db.Writer().Exec(`DELETE FROM sessions WHERE token = ?`, token)
 	}
 	w.Header().Set("Set-Cookie", cookieString(isSecure(r), "", 0))
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -150,7 +150,7 @@ func (a *authed) validSession(token string) bool {
 		return false
 	}
 	var createdAt int64
-	err := a.db.QueryRow(`SELECT created_at FROM sessions WHERE token = ?`, token).Scan(&createdAt)
+	err := a.db.Reader().QueryRow(`SELECT created_at FROM sessions WHERE token = ?`, token).Scan(&createdAt)
 	if err != nil {
 		return false
 	}
