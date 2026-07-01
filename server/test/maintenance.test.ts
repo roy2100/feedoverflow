@@ -9,7 +9,7 @@ const TEST_DB_PATH = join(tmpdir(), `rss-maintenance-test-${process.pid}.db`);
 process.env.TEST_DB = TEST_DB_PATH;
 
 const { db } = await import('../db.ts');
-const { cleanupOrphans, enforceSizeCap } = await import('../maintenance.ts');
+const { cleanupOrphans, enforceSizeCap, runMaintenance } = await import('../maintenance.ts');
 
 const insert = db.prepare(`
   INSERT OR REPLACE INTO article_states
@@ -114,5 +114,78 @@ test('enforceSizeCap — when over the cap, deletes oldest-first while keeping s
     ids,
     ['new', 'star-oldest'],
     'oldest non-starred deleted; newest + starred kept',
+  );
+});
+
+test('enforceSizeCap — deletes more than one 500-id chunk when many rows must go', () => {
+  reset();
+  // 600 non-starred rows so the delete list spans two chunks (500 + 100), exercising both
+  // the reused full-chunk prepared statement and the tail remainder path.
+  const N = 600;
+  db.transaction(() => {
+    for (let i = 0; i < N; i++) {
+      addArticle(`bulk-${i}`, 'f', {
+        pubDate: `2026-01-01T00:00:${String(i % 60).padStart(2, '0')}Z`,
+        content: 'x'.repeat(200),
+      });
+    }
+  })();
+
+  // A 0-byte cap forces needFree past the total, so every non-starred row is deleted.
+  const deleted = enforceSizeCap(0);
+  assert.equal(deleted, N);
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM article_states').get() as { n: number };
+  assert.equal(n, 0);
+});
+
+test('enforceSizeCap — trims every non-starred row but stops (and stays over cap) when only starred remain', () => {
+  reset();
+  // A large starred row the cap can never reclaim, plus a couple of non-starred rows.
+  addArticle('star-big', 'f', { starred: 1, content: 'x'.repeat(200000) });
+  addArticle('drop-1', 'f', { pubDate: '2026-01-01T00:00:00Z', content: 'x'.repeat(1000) });
+  addArticle('drop-2', 'f', { pubDate: '2026-02-01T00:00:00Z', content: 'x'.repeat(1000) });
+
+  // Cap smaller than the surviving starred footprint: all non-starred go, size stays over cap.
+  const deleted = enforceSizeCap(4096);
+  assert.equal(deleted, 2, 'both non-starred rows deleted');
+  assert.ok(dbSize() > 4096, 'still over cap because the starred row cannot be reclaimed');
+
+  const ids = (
+    db.prepare('SELECT article_id FROM article_states').all() as Array<{ article_id: string }>
+  ).map((r) => r.article_id);
+  assert.deepEqual(ids, ['star-big'], 'only the starred row survives');
+});
+
+// ── runMaintenance ──────────────────────────────────────────────────────────────
+
+test('runMaintenance — clears non-starred orphans then enforces the size cap in one pass', () => {
+  reset();
+  db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run('live', 'Live', 'http://x');
+  addArticle('orphan', 'gone'); // non-starred orphan → cleanupOrphans deletes
+  addArticle('old', 'live', { pubDate: '2026-01-01T00:00:00Z', content: 'x'.repeat(50000) });
+  addArticle('new', 'live', { pubDate: '2026-06-01T00:00:00Z', content: 'x'.repeat(50000) });
+
+  // Cap that requires trimming the single oldest live-feed row after the orphan is gone.
+  const size = dbSize();
+  const cap = Math.floor((size - 40000) / 0.9); // needFree ~40000 → deletes just 'old'
+
+  runMaintenance(cap);
+
+  const ids = (
+    db.prepare('SELECT article_id FROM article_states').all() as Array<{ article_id: string }>
+  )
+    .map((r) => r.article_id)
+    .sort();
+  assert.deepEqual(ids, ['new'], 'orphan removed by cleanup, oldest removed by size cap');
+});
+
+// Must be the LAST test: it drops article_states to force the pass to fail, so no later
+// test in this file may touch that table afterwards.
+test('runMaintenance — swallows and logs a failure instead of throwing to its caller', () => {
+  reset();
+  db.exec('DROP TABLE article_states'); // the prepared cleanup/cap statements now throw
+  assert.doesNotThrow(
+    () => runMaintenance(1024),
+    'a maintenance failure must not crash the poller',
   );
 });
