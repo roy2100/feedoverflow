@@ -15,6 +15,22 @@ describe('feeds CRUD', () => {
     assert.equal(res.body.error, 'URL required');
   });
 
+  test('POST /api/feeds rejects a url that already exists with 409', async () => {
+    db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(
+      'dup-1',
+      'Existing',
+      'https://example.com/dup',
+    );
+    const res = await request(app).post('/api/feeds').send({ url: 'https://example.com/dup' });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error, '该 Feed 已存在');
+    // No second row was created (and no network parse was attempted).
+    const n = db
+      .prepare('SELECT COUNT(*) AS n FROM feeds WHERE url = ?')
+      .get('https://example.com/dup') as { n: number };
+    assert.equal(n.n, 1);
+  });
+
   test('PATCH /api/feeds/:id renames an existing feed', async () => {
     db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(
       'patch-1',

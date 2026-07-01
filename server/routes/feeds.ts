@@ -19,6 +19,11 @@ router.get('/api/feeds', (_req, res) => {
 router.post('/api/feeds', async (req, res) => {
   const { url, name } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
+  // Feed URLs are unique (idx_feeds_url). Reject a dupe up front with a clear message rather
+  // than parsing the feed and letting the INSERT throw a raw SQLite constraint error.
+  if (db.prepare('SELECT 1 FROM feeds WHERE url = ?').get(url)) {
+    return res.status(409).json({ error: '该 Feed 已存在' });
+  }
   let feedTitle: string;
   try {
     const parsed = await parseURL(resolveUrl(url));
@@ -30,7 +35,16 @@ router.post('/api/feeds', async (req, res) => {
     });
   }
   const id = crypto.randomUUID();
-  db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
+  try {
+    db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(id, feedTitle, url);
+  } catch (err) {
+    // Backstop for a race: two concurrent adds of the same new URL can both pass the SELECT
+    // above; the unique index makes the second INSERT throw. Surface it as a 409, not a 500.
+    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: '该 Feed 已存在' });
+    }
+    throw err;
+  }
   res.json({ id, name: feedTitle, url });
 });
 

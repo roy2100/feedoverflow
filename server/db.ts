@@ -111,6 +111,33 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_article_states_pub ON article_states (pu
 // metadata; freshness now lives in feeds.last_fetched_at and lists read from article_states.
 db.exec(`DROP TABLE IF EXISTS feed_cache`);
 
+// Migrate: enforce one feed row per URL. The add route historically inserted unconditionally,
+// so a URL could be added twice under different ids. Duplicates split article ownership
+// (article_states.feed_id is set only on insert), so first collapse any existing dupes —
+// keep the oldest row (min rowid) per URL, re-home the losers' articles onto it, delete the
+// loser feed rows — then add a UNIQUE index so it can't recur (a unique index, not ALTER TABLE
+// ADD CONSTRAINT, which SQLite doesn't support). The index creation must follow the collapse.
+db.transaction(() => {
+  const dupUrls = db
+    .prepare(`SELECT url FROM feeds GROUP BY url HAVING COUNT(*) > 1`)
+    .all() as Array<{ url: string }>;
+  const rehome = db.prepare(
+    `UPDATE article_states SET feed_id = ?, feed_name = ? WHERE feed_id = ?`,
+  );
+  const delFeed = db.prepare(`DELETE FROM feeds WHERE id = ?`);
+  for (const { url } of dupUrls) {
+    const rows = db
+      .prepare(`SELECT id, name FROM feeds WHERE url = ? ORDER BY rowid`)
+      .all(url) as Array<{ id: string; name: string }>;
+    const [winner, ...losers] = rows;
+    for (const loser of losers) {
+      rehome.run(winner.id, winner.name, loser.id);
+      delFeed.run(loser.id);
+    }
+  }
+})();
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_feeds_url ON feeds (url)`);
+
 // Seed default settings
 db.prepare(
   `INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`,
