@@ -10,6 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const dbPath = process.env.TEST_DB || path.join(__dirname, 'rss.db');
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
+// NORMAL is the recommended companion to WAL: crash-safe (no corruption; at worst the last
+// committed txn is lost on power loss, fine for an RSS cache) and it drops an fsync per commit,
+// so the persist transactions block the single Node thread for less time. The WAL is kept from
+// growing unbounded by a periodic TRUNCATE checkpoint — see checkpointWal() in maintenance.ts.
+db.pragma('synchronous = NORMAL');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS feeds (

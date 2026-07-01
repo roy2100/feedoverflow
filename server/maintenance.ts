@@ -110,6 +110,25 @@ export function enforceSizeCap(capBytes: number = DB_MAX_SIZE_BYTES): number {
   return toDelete.length;
 }
 
+// Reclaim the WAL. SQLite's automatic checkpoint is always PASSIVE: it copies committed pages
+// back into the main .db but reuses the WAL file in place and never shrinks it, so the -wal
+// sidecar stays at its high-water mark (write bursts push it up; a reader blocking a checkpoint
+// reset grows it further) — it reached 426 MB here. TRUNCATE checkpoints everything and shrinks
+// the file to 0, so a periodic call keeps it bounded. If a persist/read holds the WAL when this
+// runs it reports `busy` and no-ops; the next tick retries. Never throws.
+export function checkpointWal(): void {
+  try {
+    const [res] = db.pragma('wal_checkpoint(TRUNCATE)') as Array<{
+      busy: number;
+      log: number;
+      checkpointed: number;
+    }>;
+    if (res?.busy) log.debug('wal checkpoint busy — readers/writers active, will retry', res);
+  } catch (err) {
+    log.warn('wal checkpoint failed', { err });
+  }
+}
+
 // One maintenance pass: clear non-starred orphans, then enforce the size cap.
 export function runMaintenance(capBytes: number = DB_MAX_SIZE_BYTES): void {
   try {
