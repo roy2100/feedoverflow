@@ -107,6 +107,20 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_article_states_pub ON article_states (pu
   }
 }
 
+// Migrate: remember each article's originating feed URL. feed_id points at a feeds row that
+// DELETE removes, so a kept starred article becomes an orphan with a dead feed_id and no way
+// back to its feed. feed_url survives feed deletion, letting a re-added URL adopt its own
+// starred orphans (see adoptStarredOrphans). Backfill from the live feed where it still
+// exists; pre-existing orphans (feed already gone) have no URL to recover and stay NULL.
+try {
+  db.exec(`ALTER TABLE article_states ADD COLUMN feed_url TEXT`);
+} catch {}
+db.exec(
+  `UPDATE article_states
+     SET feed_url = (SELECT url FROM feeds WHERE feeds.id = article_states.feed_id)
+   WHERE feed_url IS NULL AND feed_id IN (SELECT id FROM feeds)`,
+);
+
 // Migrate: drop the retired feed_cache table. Its items_json duplicated article_states list
 // metadata; freshness now lives in feeds.last_fetched_at and lists read from article_states.
 db.exec(`DROP TABLE IF EXISTS feed_cache`);

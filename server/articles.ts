@@ -101,15 +101,16 @@ export function enrich(
 // no-op writes, no spurious updated_at bumps that would reshuffle the updated_at-ordered
 // starred list on every poll). When the update does fire, content genuinely changed, so
 // content_updated_at is stamped unconditionally — the UI's "edited upstream" signal.
-// is_starred is never touched, so the user's flag survives. feed_id/feed_name are set only
-// on insert (a live feed never changes an article's feed; a deleted feed purges its rows,
-// so there is nothing to re-home). Safe from every fetch path (on-demand cache miss,
-// background refresh, startup warming, poller); all items persisted (no cap) so
-// article_states stays a durable, complete record for offline statistics/research.
+// is_starred is never touched, so the user's flag survives. feed_id/feed_name/feed_url are set
+// only on insert (a live feed never changes an article's feed). A deleted feed purges its
+// non-starred rows; a kept starred row keeps feed_url so a re-added URL can adopt it (see
+// adoptStarredOrphans). Safe from every fetch path (on-demand cache miss, background refresh,
+// startup warming, poller); all items persisted (no cap) so article_states stays a durable,
+// complete record for offline statistics/research.
 const upsertPolledArticle = db.prepare(`
   INSERT INTO article_states
-    (article_id,feed_id,feed_name,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
-  VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@pubTs,@summary,@content,@author,@audioUrl,@audioDuration,0)
+    (article_id,feed_id,feed_name,feed_url,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
+  VALUES (@id,@feedId,@feedName,@feedUrl,@title,@link,@pubDate,@pubTs,@summary,@content,@author,@audioUrl,@audioDuration,0)
   ON CONFLICT(article_id) DO UPDATE SET
     title          = excluded.title,
     pub_date       = excluded.pub_date,
@@ -137,6 +138,7 @@ export function persistItems(feed: Feed, items: RssItem[], feedName: string): vo
         id: a.id,
         feedId: a.feedId,
         feedName: a.feedName,
+        feedUrl: feed.url,
         title: a.title,
         link: a.link,
         pubDate: a.pubDate,
@@ -199,10 +201,13 @@ export function lookupContent(articleId: string): string {
   return saved?.content || saved?.summary || '';
 }
 
+// feed_url is derived server-side from the live feed (the client's article payload has no URL)
+// so a starred row remembers its origin for adoptStarredOrphans. Insert-only, like feed_id: a
+// row already persisted by persistItems keeps the feed_url it was inserted with.
 const upsertState = db.prepare(`
   INSERT INTO article_states
-    (article_id,feed_id,feed_name,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    (article_id,feed_id,feed_name,feed_url,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
+  VALUES (?,?,?,(SELECT url FROM feeds WHERE id = ?),?,?,?,?,?,?,?,?,?,?)
   ON CONFLICT(article_id) DO UPDATE SET
     audio_url      = COALESCE(excluded.audio_url, audio_url),
     audio_duration = COALESCE(excluded.audio_duration, audio_duration),
@@ -215,6 +220,7 @@ export function saveState(article: Article, patch: StatePatch): void {
     article.id,
     article.feedId,
     article.feedName,
+    article.feedId,
     article.title,
     article.link,
     article.pubDate,
@@ -226,4 +232,18 @@ export function saveState(article: Article, patch: StatePatch): void {
     article.audioDuration || null,
     patch.is_starred ?? null,
   );
+}
+
+// Re-adopt a re-added feed's starred orphans: rows kept by a prior DELETE whose feed_id now
+// points at a gone feed but whose feed_url matches the URL being (re-)added. Only starred rows
+// survive deletion, so only they can be orphans. Matching on feed_url + "feed_id not in feeds"
+// (the maintenance.ts orphan idiom) targets exactly those, and UNIQUE(feeds.url) guarantees a
+// single live feed per URL. Also refreshes feed_name so the adopted row shows the current name.
+const adoptOrphans = db.prepare(`
+  UPDATE article_states SET feed_id = ?, feed_name = ?
+  WHERE feed_url = ? AND is_starred = 1 AND feed_id NOT IN (SELECT id FROM feeds)
+`);
+
+export function adoptStarredOrphans(feedId: string, feedName: string, url: string): number {
+  return adoptOrphans.run(feedId, feedName, url).changes;
 }

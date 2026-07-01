@@ -286,3 +286,62 @@ describe('search input guard', () => {
     assert.deepEqual(res.body, { articles: [], query: 'a' });
   });
 });
+
+describe('starred orphan adoption on feed re-add', () => {
+  const url = 'https://orphan.example.com/feed';
+
+  test('a re-added URL re-homes its own starred orphans (via OPML import)', async () => {
+    // Feed A exists; star an article under it. Starring derives feed_url from the live feed.
+    db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run('feed-A', 'Feed A', url);
+    const article = {
+      id: 'orphan-art-1',
+      feedId: 'feed-A',
+      feedName: 'Feed A',
+      title: 'Kept Bookmark',
+      summary: 's',
+      content: '<p>b</p>',
+      link: 'https://orphan.example.com/1',
+      pubDate: new Date().toISOString(),
+      author: 'me',
+      audioUrl: '',
+      audioDuration: '',
+      isStarred: false,
+    };
+    await request(app).post('/api/articles/star').send({ article, starred: true }).expect(200);
+    const seeded = db
+      .prepare('SELECT feed_url FROM article_states WHERE article_id = ?')
+      .get('orphan-art-1') as { feed_url: string };
+    assert.equal(seeded.feed_url, url, 'feed_url is captured from the live feed on star');
+
+    // Delete Feed A: the starred article is kept but orphaned (feed_id points at a gone feed).
+    await request(app).delete('/api/feeds/feed-A').expect(200);
+    const orphaned = db
+      .prepare('SELECT feed_id FROM article_states WHERE article_id = ?')
+      .get('orphan-art-1') as { feed_id: string };
+    assert.equal(orphaned.feed_id, 'feed-A', 'orphan still references the deleted feed');
+
+    // Re-add the same URL (OPML path avoids the network parse of POST /api/feeds).
+    const opml = `<?xml version="1.0"?><opml version="1.0"><body>
+      <outline text="Feed A (renamed)" xmlUrl="${url}" /></body></opml>`;
+    const imp = await request(app).post('/api/feeds/import-opml').send({ opml });
+    assert.equal(imp.status, 200);
+    const newId = imp.body.feeds[0].id as string;
+
+    // The orphan is adopted into the re-added feed, with the current name.
+    const adopted = db
+      .prepare('SELECT feed_id, feed_name FROM article_states WHERE article_id = ?')
+      .get('orphan-art-1') as { feed_id: string; feed_name: string };
+    assert.equal(adopted.feed_id, newId, 'starred orphan re-homed to the re-added feed');
+    assert.equal(adopted.feed_name, 'Feed A (renamed)', 'feed_name refreshed on adoption');
+
+    // And it now lists under the re-added feed's per-feed endpoint (would 404-empty before).
+    const list = db
+      .prepare('SELECT 1 FROM article_states WHERE feed_id = ? AND article_id = ?')
+      .get(newId, 'orphan-art-1');
+    assert.ok(list, 'adopted article is queryable under the new feed_id');
+
+    // Cleanup: drop the surviving starred row so it doesn't leak into other suites' counts.
+    db.prepare('DELETE FROM article_states WHERE article_id = ?').run('orphan-art-1');
+    db.prepare('DELETE FROM feeds WHERE id = ?').run(newId);
+  });
+});

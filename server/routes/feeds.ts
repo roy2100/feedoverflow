@@ -3,7 +3,13 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { parseStringPromise } from 'xml2js';
 
-import { resolveUrl, rowToArticle, normalizePubDates, LIST_LIMIT } from '../articles.ts';
+import {
+  resolveUrl,
+  rowToArticle,
+  normalizePubDates,
+  adoptStarredOrphans,
+  LIST_LIMIT,
+} from '../articles.ts';
 import { ensureFresh } from '../cache.ts';
 import { db } from '../db.ts';
 import { parseURL } from '../parse-url.ts';
@@ -45,6 +51,8 @@ router.post('/api/feeds', async (req, res) => {
     }
     throw err;
   }
+  // Re-adopt any starred articles orphaned by a prior delete of this same URL.
+  adoptStarredOrphans(id, feedTitle, url);
   res.json({ id, name: feedTitle, url });
 });
 
@@ -77,6 +85,7 @@ router.post('/api/feeds/import-opml', async (req, res) => {
       }
       const id = crypto.randomUUID();
       ins.run(id, feed.name, feed.url);
+      adoptStarredOrphans(id, feed.name, feed.url);
       importedFeeds.push({ id, ...feed });
       existingUrls.add(feed.url);
     }
