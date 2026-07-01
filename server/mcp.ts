@@ -4,10 +4,13 @@ import type { Express, Request, Response } from 'express';
 import { z } from 'zod';
 
 import { isLocalhost } from './auth.ts';
-import { PORT } from './config.ts';
+import { LOCAL_API_PORT } from './config.ts';
 
-// MCP tools reuse the HTTP API by calling it over loopback in this same process.
-const BASE_URL = `http://localhost:${PORT}`;
+// MCP tools reuse the HTTP API by calling it over loopback in this same process. They
+// target the no-auth loopback listener (LOCAL_API_PORT), not the public auth-gated PORT,
+// so the calls carry no session cookie yet still pass — that is the whole point of the
+// second listener. registerMcp is mounted only on that same loopback-only app.
+const BASE_URL = `http://127.0.0.1:${LOCAL_API_PORT}`;
 
 async function request(method: string, path: string, body?: unknown) {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -182,12 +185,12 @@ function buildServer(): McpServer {
 /**
  * Mount the MCP server on the Express app using the Streamable HTTP transport.
  * Stateless: a fresh server + transport is created per request, so there is no
- * session state to track — fine for a single-user local app. Must be registered
- * before the SPA `*` fallback in app.ts, or the fallback would swallow `/mcp`.
+ * session state to track — fine for a single-user local app. Mounted only on the
+ * loopback-only `localApp` (127.0.0.1:LOCAL_API_PORT), never on the public port.
  */
 export function registerMcp(app: Express): void {
-  // MCP clients connect over loopback (http://localhost:3002/mcp). Block public
-  // (tunnel) requests outright so the endpoint isn't an unauthenticated backdoor.
+  // Mounted on the loopback-only listener, so requests are already local by construction.
+  // Keep this check as defense-in-depth (rejects anything non-loopback with 404).
   // Returns true when the request may proceed; otherwise responds 404 and returns false.
   const allowLocal = (req: Request, res: Response): boolean => {
     if (isLocalhost(req)) return true;

@@ -18,6 +18,21 @@ const distDir = path.join(__dirname, '../client/dist');
 
 const ALLOWED_ORIGINS = ['http://localhost:3000', 'https://rss.royl.uk', 'https://rss.lan'];
 
+const noStore = (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+};
+
+// The per-domain API routers, shared by both listeners. Each carries full /api/... paths
+// and is mounted bare; :id paths for one domain stay in one router (Express matching).
+function mountRouters(target: express.Express): void {
+  target.use(feedsRouter);
+  target.use(settingsRouter);
+  target.use(contentRouter);
+  target.use(articlesRouter);
+  target.use(searchRouter);
+}
+
 export const app = express();
 // Behind the Cloudflare Tunnel, cloudflared connects from 127.0.0.1, so without
 // this the real client IP is masked and every public request looks like localhost.
@@ -26,30 +41,31 @@ app.set('trust proxy', 'loopback');
 app.use(compression());
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
-app.use('/api', (_req, res, next) => {
-  res.set('Cache-Control', 'no-store');
-  next();
-});
+app.use('/api', noStore);
 app.use(express.static(distDir));
 
 registerAuth(app);
 
 // ── API routers ──────────────────────────────────────────────────────────────
 // Mounted after registerAuth so the /api auth gate (installed there) covers them,
-// and before registerMcp + the SPA fallback. Each router carries full /api/... paths.
-app.use(feedsRouter);
-app.use(settingsRouter);
-app.use(contentRouter);
-app.use(articlesRouter);
-app.use(searchRouter);
+// and before the SPA fallback.
+mountRouters(app);
 
-// MCP server over Streamable HTTP — must be before the SPA fallback
-registerMcp(app);
-
-// SPA fallback — must be after all /api routes
+// SPA fallback — must be after all /api routes. MCP is intentionally NOT mounted here:
+// it lives only on the loopback-only `localApp` below, so there is no public MCP surface.
 app.get('*', (_req, res) => {
   res.sendFile(path.join(distDir, 'index.html'));
 });
+
+// ── Loopback-only companion app (127.0.0.1:LOCAL_API_PORT) ─────────────────────
+// The full API with NO auth gate, plus the MCP endpoint. index.ts binds this to
+// 127.0.0.1 so it never leaves loopback — that binding, not a request header, is what
+// makes it auth-exempt. No static/SPA: unknown paths 404 naturally.
+export const localApp = express();
+localApp.use(express.json({ limit: '2mb' }));
+localApp.use('/api', noStore);
+mountRouters(localApp);
+registerMcp(localApp);
 
 // Background services (cache warming, poller, DB maintenance) are started by index.ts
 // only after the server successfully binds its port — not at import time.
