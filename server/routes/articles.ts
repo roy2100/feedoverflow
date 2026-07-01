@@ -39,7 +39,7 @@ router.get('/api/all-articles', async (req, res) => {
   const feeds = db.prepare('SELECT * FROM feeds').all() as Feed[];
   const ac = new AbortController();
   req.on('close', () => ac.abort());
-  await Promise.allSettled(feeds.map((f) => ensureFresh(f, ac.signal)));
+  await Promise.allSettled(feeds.map((f) => ensureFresh(f)));
   if (ac.signal.aborted) return;
   let articles;
   if (req.query.mode === 'digest' && feeds.length > 0) {
@@ -62,7 +62,7 @@ router.get('/api/today', async (req, res) => {
   todayStart.setHours(0, 0, 0, 0);
   const ac = new AbortController();
   req.on('close', () => ac.abort());
-  await Promise.allSettled(feeds.map((f) => ensureFresh(f, ac.signal)));
+  await Promise.allSettled(feeds.map((f) => ensureFresh(f)));
   if (ac.signal.aborted) return;
   let articles;
   if (req.query.mode === 'digest' && feeds.length > 0) {

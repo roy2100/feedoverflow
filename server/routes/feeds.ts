@@ -127,7 +127,7 @@ router.get('/api/feeds/:id/articles', async (req, res) => {
   const ac = new AbortController();
   req.on('close', () => ac.abort());
   try {
-    await ensureFresh(feed, ac.signal);
+    await ensureFresh(feed);
     if (ac.signal.aborted) return;
     // article_states is the durable record of every fetched item; read the feed's newest
     // LIST_LIMIT rows straight from it (pub_ts is the sortable publish time). No live/historic
