@@ -95,14 +95,37 @@ export function enrich(
   });
 }
 
-// Persist fetched items into article_states. INSERT OR IGNORE only — never overwrites an
-// existing row or its starred flag, so it is safe to call from every fetch path (on-demand
-// cache miss, background refresh, startup warming, poller). All items are persisted (no cap)
-// so article_states is a durable, complete record for offline statistics/research.
-const insertPolledArticle = db.prepare(`
-  INSERT OR IGNORE INTO article_states
+// Persist fetched items into article_states. Upsert keyed on article_id: a brand-new item
+// inserts (unstarred); a re-fetched item refreshes its content fields so the local row
+// tracks upstream edits, guarded by a WHERE clause so unchanged rows aren't rewritten (no
+// no-op writes, no spurious updated_at bumps that would reshuffle the updated_at-ordered
+// starred list on every poll). When the update does fire, content genuinely changed, so
+// content_updated_at is stamped unconditionally — the UI's "edited upstream" signal.
+// is_starred is never touched, so the user's flag survives. feed_id/feed_name are set only
+// on insert (a live feed never changes an article's feed; a deleted feed purges its rows,
+// so there is nothing to re-home). Safe from every fetch path (on-demand cache miss,
+// background refresh, startup warming, poller); all items persisted (no cap) so
+// article_states stays a durable, complete record for offline statistics/research.
+const upsertPolledArticle = db.prepare(`
+  INSERT INTO article_states
     (article_id,feed_id,feed_name,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
   VALUES (@id,@feedId,@feedName,@title,@link,@pubDate,@pubTs,@summary,@content,@author,@audioUrl,@audioDuration,0)
+  ON CONFLICT(article_id) DO UPDATE SET
+    title          = excluded.title,
+    pub_date       = excluded.pub_date,
+    pub_ts         = excluded.pub_ts,
+    summary        = excluded.summary,
+    content        = excluded.content,
+    author         = excluded.author,
+    audio_url      = COALESCE(excluded.audio_url, audio_url),
+    audio_duration = COALESCE(excluded.audio_duration, audio_duration),
+    updated_at     = datetime('now'),
+    content_updated_at = @contentUpdatedAt
+  WHERE title <> excluded.title
+     OR summary <> excluded.summary
+     OR content <> excluded.content
+     OR author <> excluded.author
+     OR pub_date <> excluded.pub_date
 `);
 
 export function persistItems(feed: Feed, items: RssItem[], feedName: string): void {
@@ -110,7 +133,7 @@ export function persistItems(feed: Feed, items: RssItem[], feedName: string): vo
   const now = Date.now();
   db.transaction(() => {
     for (const a of enriched) {
-      insertPolledArticle.run({
+      upsertPolledArticle.run({
         id: a.id,
         feedId: a.feedId,
         feedName: a.feedName,
@@ -123,6 +146,7 @@ export function persistItems(feed: Feed, items: RssItem[], feedName: string): vo
         author: a.author,
         audioUrl: a.audioUrl || null,
         audioDuration: a.audioDuration || null,
+        contentUpdatedAt: now,
       });
     }
   })();
@@ -149,6 +173,7 @@ export function rowToArticle(r: ArticleStateRow, { withContent = false } = {}): 
     audioUrl: r.audio_url || '',
     audioDuration: r.audio_duration || '',
     isStarred: !!r.is_starred,
+    updatedAt: r.content_updated_at ?? null,
   };
 }
 

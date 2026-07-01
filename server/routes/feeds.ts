@@ -81,9 +81,18 @@ router.patch('/api/feeds/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+const deleteFeed = db.transaction((id: string): number => {
+  const info = db.prepare('DELETE FROM feeds WHERE id = ?').run(id);
+  if (info.changes === 0) return 0;
+  // Purge the feed's non-starred articles so a re-add starts from a clean slate. Starred
+  // rows are kept (bookmarks survive feed removal, per the durable-record design) — they
+  // become orphans the periodic maintenance pass also leaves alone.
+  db.prepare('DELETE FROM article_states WHERE feed_id = ? AND is_starred = 0').run(id);
+  return info.changes;
+});
+
 router.delete('/api/feeds/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM feeds WHERE id = ?').run(req.params.id);
-  if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
+  if (deleteFeed(req.params.id) === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });
 

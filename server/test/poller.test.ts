@@ -52,7 +52,7 @@ test('persistItems — writes new articles with their content', () => {
   );
 });
 
-test('persistItems INSERT OR IGNORE — repeat persists do not overwrite existing state', () => {
+test('persistItems — a re-persist preserves the user starred flag', () => {
   const feed = { id: 'f5', name: 'Feed 5', url: 'https://example.com/f5' };
   const items = makeFakeItems(1, 'f5');
   const articleId = makeId(items[0].link, items[0].title, items[0].pubDate);
@@ -65,6 +65,55 @@ test('persistItems INSERT OR IGNORE — repeat persists do not overwrite existin
     .prepare('SELECT is_starred FROM article_states WHERE article_id = ?')
     .get(articleId) as { is_starred: number };
   assert.equal(row.is_starred, 1, 'user starred state must not be overwritten by a re-persist');
+});
+
+test('persistItems — re-persist syncs upstream content edits (same article_id)', () => {
+  const feed = { id: 'f7', name: 'Feed 7', url: 'https://example.com/f7' };
+  const items = makeFakeItems(1, 'f7');
+  const articleId = makeId(items[0].link, items[0].title, items[0].pubDate);
+
+  persistItems(feed, items, 'Feed 7');
+  const before = db
+    .prepare('SELECT content_updated_at FROM article_states WHERE article_id = ?')
+    .get(articleId) as { content_updated_at: number | null };
+  assert.equal(before.content_updated_at, null, 'first insert must not mark the row as updated');
+
+  // Same link/title/pubDate → same id; only the body changed upstream.
+  const edited = [{ ...items[0], contentEncoded: '<p>Edited body</p>', contentSnippet: 'Edited' }];
+  persistItems(feed, edited, 'Feed 7');
+
+  const row = db
+    .prepare('SELECT content, summary, content_updated_at FROM article_states WHERE article_id = ?')
+    .get(articleId) as { content: string; summary: string; content_updated_at: number | null };
+  assert.equal(row.content, '<p>Edited body</p>', 'upstream content edit must propagate');
+  assert.equal(row.summary, 'Edited');
+  assert.ok(
+    typeof row.content_updated_at === 'number',
+    'a real content edit must stamp content_updated_at',
+  );
+});
+
+test('persistItems — an unchanged re-persist is a no-op (no updated_at churn)', () => {
+  const feed = { id: 'f8', name: 'Feed 8', url: 'https://example.com/f8' };
+  const items = makeFakeItems(1, 'f8');
+  const articleId = makeId(items[0].link, items[0].title, items[0].pubDate);
+
+  persistItems(feed, items, 'Feed 8');
+  const first = db
+    .prepare('SELECT updated_at, content_updated_at FROM article_states WHERE article_id = ?')
+    .get(articleId) as { updated_at: string; content_updated_at: number | null };
+
+  persistItems(feed, items, 'Feed 8'); // identical content
+  const second = db
+    .prepare('SELECT updated_at, content_updated_at FROM article_states WHERE article_id = ?')
+    .get(articleId) as { updated_at: string; content_updated_at: number | null };
+
+  assert.equal(
+    second.updated_at,
+    first.updated_at,
+    'unchanged re-persist must not bump updated_at',
+  );
+  assert.equal(second.content_updated_at, null, 'unchanged re-persist must not mark as edited');
 });
 
 test('persistItems — persists all items with no 50-item cap', () => {

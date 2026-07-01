@@ -20,6 +20,10 @@ export interface Article {
   audioUrl: string;
   audioDuration: string;
   isStarred: boolean;
+  // Epoch ms of the last genuine upstream content edit (see persistItems). Null when the
+  // article has never been edited since first fetch — the UI shows an "updated" time only
+  // when this is set.
+  updatedAt?: number | null;
 }
 
 export interface ArticleStateRow {
@@ -36,6 +40,9 @@ export interface ArticleStateRow {
   audio_duration: string;
   is_starred: number;
   updated_at: string;
+  // Epoch ms of the last genuine upstream content edit; NULL until first edited. Absent on
+  // rows inserted by tests via raw SQL.
+  content_updated_at?: number | null;
   // Publish time as epoch ms (parsed from pub_date, else fetch time). Sortable, unlike the
   // RFC-822 pub_date text. Absent only on rows inserted by tests via raw SQL.
   pub_ts?: number;

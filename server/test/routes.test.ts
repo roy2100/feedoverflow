@@ -49,6 +49,35 @@ describe('feeds CRUD', () => {
     const res = await request(app).delete('/api/feeds/nope');
     assert.equal(res.status, 404);
   });
+
+  test('DELETE /api/feeds/:id purges non-starred articles but keeps starred ones', async () => {
+    db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(
+      'del-2',
+      'Purge Me',
+      'https://example.com/del2',
+    );
+    const ins = db.prepare(
+      'INSERT INTO article_states (article_id,feed_id,feed_name,title,link,is_starred) VALUES (?,?,?,?,?,?)',
+    );
+    ins.run('a-plain', 'del-2', 'Purge Me', 'Plain', 'https://example.com/del2/1', 0);
+    ins.run('a-starred', 'del-2', 'Purge Me', 'Starred', 'https://example.com/del2/2', 1);
+
+    const res = await request(app).delete('/api/feeds/del-2');
+    assert.equal(res.status, 200);
+    assert.equal(db.prepare('SELECT 1 FROM feeds WHERE id = ?').get('del-2'), undefined);
+    assert.equal(
+      db.prepare('SELECT 1 FROM article_states WHERE article_id = ?').get('a-plain'),
+      undefined,
+      'non-starred article must be purged',
+    );
+    assert.ok(
+      db.prepare('SELECT 1 FROM article_states WHERE article_id = ?').get('a-starred'),
+      'starred article must survive feed deletion',
+    );
+    // This suite shares one in-memory DB; drop the surviving starred row so it doesn't
+    // inflate the later /starred/count assertions.
+    db.prepare('DELETE FROM article_states WHERE article_id = ?').run('a-starred');
+  });
 });
 
 describe('OPML import', () => {

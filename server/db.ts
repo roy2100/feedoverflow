@@ -67,6 +67,14 @@ try {
   db.exec(`ALTER TABLE feeds ADD COLUMN last_fetched_at INTEGER`);
 } catch {}
 
+// Migrate: content-edit timestamp (epoch ms). Set only when a re-fetch changes an article's
+// content fields (see persistItems' upsert) — NOT on first insert, starring, or a feed
+// re-home. NULL therefore means "never edited upstream since first seen", which the UI uses
+// to decide whether to show an "updated" time.
+try {
+  db.exec(`ALTER TABLE article_states ADD COLUMN content_updated_at INTEGER`);
+} catch {}
+
 // Migrate: sortable publish time (epoch ms) on article_states. pub_date is RFC-822 text and
 // not orderable as a string, so list endpoints sort/filter on pub_ts instead. Backfill any
 // pre-existing rows (NULL pub_ts) from pub_date, falling back to updated_at then 0.
