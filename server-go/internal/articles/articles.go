@@ -9,10 +9,15 @@ package articles
 
 import (
 	"crypto/md5"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
+
+	"rss-reader/server-go/internal/dates"
+	"rss-reader/server-go/internal/model"
 )
 
 // LIST_LIMIT — shared cap for the article-list endpoints (see articles.ts).
@@ -56,6 +61,80 @@ func NormalizeDuration(dur string) string {
 		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
 	}
 	return fmt.Sprintf("%d:%02d", m, s)
+}
+
+// Row is a scanned article_states row (the columns rowToArticle needs). Nullable
+// columns use sql.Null* — feed_id/feed_name/title/link/pub_date/summary/content/
+// author are never NULL in the data but scanned as NullString defensively.
+type Row struct {
+	ArticleID        string
+	FeedID           sql.NullString
+	FeedName         sql.NullString
+	Title            sql.NullString
+	Link             sql.NullString
+	PubDate          sql.NullString
+	Summary          sql.NullString
+	Content          sql.NullString
+	Author           sql.NullString
+	AudioURL         sql.NullString
+	AudioDuration    sql.NullString
+	IsStarred        sql.NullInt64 // NULL in some rows; Node's !!r.is_starred treats it as false
+	ContentUpdatedAt sql.NullInt64
+}
+
+// RowToArticle is the port of rowToArticle. List endpoints pass withContent=false
+// to strip summary+content; starred reads pass true. updatedAt is content_updated_at
+// (nil → JSON null). Fields Node emits without `|| ”` (feedId/feedName/title/link/
+// pubDate) are non-NULL in the data, so their string value is exact.
+func RowToArticle(r Row, withContent bool) model.Article {
+	a := model.Article{
+		ID:            r.ArticleID,
+		FeedID:        r.FeedID.String,
+		FeedName:      r.FeedName.String,
+		Title:         r.Title.String,
+		Link:          r.Link.String,
+		PubDate:       r.PubDate.String,
+		Author:        r.Author.String,
+		AudioURL:      r.AudioURL.String,
+		AudioDuration: r.AudioDuration.String,
+		IsStarred:     r.IsStarred.Valid && r.IsStarred.Int64 != 0,
+	}
+	if withContent {
+		a.Summary = r.Summary.String
+		a.Content = r.Content.String
+	}
+	if r.ContentUpdatedAt.Valid {
+		v := r.ContentUpdatedAt.Int64
+		a.UpdatedAt = &v
+	}
+	return a
+}
+
+// pubMs is the sort key: parsed publish ms, else 0 (unparseable sinks to bottom).
+func pubMs(pubDate string) int64 {
+	if t, ok := dates.ParsePubDate(pubDate); ok {
+		return t.UnixMilli()
+	}
+	return 0
+}
+
+// ByPubDateDesc stable-sorts newest-first by parsed pub_date, mirroring
+// byPubDateDesc + V8's stable Array.sort (ties keep input order).
+func ByPubDateDesc(arts []model.Article) {
+	sort.SliceStable(arts, func(i, j int) bool {
+		return pubMs(arts[i].PubDate) > pubMs(arts[j].PubDate)
+	})
+}
+
+// NormalizePubDates rewrites each parseable pubDate to canonical ISO-8601 in place,
+// leaving unparseable strings untouched — the port of normalizePubDates.
+func NormalizePubDates(arts []model.Article) []model.Article {
+	for i := range arts {
+		if t, ok := dates.ParsePubDate(arts[i].PubDate); ok {
+			arts[i].PubDate = dates.ISOString(t.UnixMilli())
+		}
+	}
+	return arts
 }
 
 // parseLeadingInt mirrors JS parseInt(s, 10): parse an optional sign + leading

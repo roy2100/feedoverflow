@@ -1,4 +1,4 @@
-package dates
+package dates_test
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	_ "time/tzdata" // embed zoneinfo so the test is self-contained on any host
 
 	"rss-reader/server-go/internal/articles"
+	"rss-reader/server-go/internal/dates"
 )
 
 // TestMain pins time.Local to Asia/Shanghai — the zone the oracle was generated
@@ -75,7 +76,7 @@ func TestParsePubDateParity(t *testing.T) {
 	}
 	mism := 0
 	for _, d := range o.Dates {
-		got, ok := ParsePubDate(d.Input)
+		got, ok := dates.ParsePubDate(d.Input)
 		if d.Ms == nil {
 			if ok {
 				mism++
@@ -99,7 +100,7 @@ func TestParsePubDateParity(t *testing.T) {
 			}
 			continue
 		}
-		if iso := ISOString(*d.Ms); iso != d.Iso {
+		if iso := dates.ISOString(*d.Ms); iso != d.Iso {
 			mism++
 			if mism <= 20 {
 				t.Errorf("input %q: iso Node=%q Go=%q", d.Input, d.Iso, iso)
@@ -115,7 +116,7 @@ func TestParsePubDateParity(t *testing.T) {
 func TestPubTsParity(t *testing.T) {
 	o := loadOracle(t)
 	for _, c := range o.PubTsCases {
-		if got := PubTs(c.Input, o.Fallback); got != c.PubTs {
+		if got := dates.PubTs(c.Input, o.Fallback); got != c.PubTs {
 			t.Errorf("pubTs %q: Node=%d Go=%d", c.Input, c.PubTs, got)
 		}
 	}
