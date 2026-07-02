@@ -4,7 +4,7 @@ Ops scripts for running the Go backend (`server-go/`) in production, kept separa
 from the Node `scripts/` so the Node path stays intact for rollback.
 
 The launchd job `com.rss-reader.app` is the single switch: it points at either
-`node .../server/index.ts` (Node) or `~/Deploy/rss-reader/server-go` (Go). Both
+`node .../server/index.ts` (Node) or `~/Deploy/rss-reader/rss-reader` (Go). Both
 serve the **same** `~/Deploy/rss-reader/server/rss.db` and `client/dist`, so the
 tunnel/Caddy front end is unchanged.
 

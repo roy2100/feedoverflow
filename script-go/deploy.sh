@@ -22,7 +22,10 @@ LABEL="com.rss-reader.app"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 PORT="${PORT:-3002}"
 LOCAL_API_PORT="${LOCAL_API_PORT:-4002}"
-BIN="$DEPLOY_ROOT/server-go"
+# Name the deployed binary "rss-reader" so argv[0] — the process title shown by
+# ps/top/Activity Monitor — matches Node's process.title. Go has no stdlib runtime
+# setproctitle; the binary name IS the process title, so no library is needed.
+BIN="$DEPLOY_ROOT/rss-reader"
 
 [ -d "$DEPLOY_ROOT" ] || { echo "error: $DEPLOY_ROOT missing (run the Node migrate first)"; exit 1; }
 
