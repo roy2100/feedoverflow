@@ -6,6 +6,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 
 	"rss-reader/server-go/internal/articles"
 	"rss-reader/server-go/internal/model"
@@ -161,6 +162,44 @@ func LookupContent(db *sql.DB, id string) (string, error) {
 		return content.String, nil
 	}
 	return summary.String, nil
+}
+
+// FeedHasRows reports whether article_states already holds any row for a feed —
+// the `SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1` guard ensureFresh
+// uses to tell a brand-new feed (await first fetch) from one that only needs a
+// background refresh.
+func FeedHasRows(db *sql.DB, feedID string) (bool, error) {
+	var one int
+	err := db.QueryRow(`SELECT 1 FROM article_states WHERE feed_id = ? LIMIT 1`, feedID).Scan(&one)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ResolveURL is the port of resolveUrl (articles.ts): rsshub://path expands to
+// <rsshub_base_url>/path, with the base taken from settings (default
+// http://localhost:1200) and its trailing slash trimmed. Non-rsshub URLs pass
+// through unchanged.
+func ResolveURL(db *sql.DB, url string) (string, error) {
+	const scheme = "rsshub://"
+	if url == "" || !strings.HasPrefix(url, scheme) {
+		return url, nil
+	}
+	base := "http://localhost:1200"
+	var v sql.NullString
+	err := db.QueryRow(`SELECT value FROM settings WHERE key = 'rsshub_base_url'`).Scan(&v)
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+	if v.Valid && v.String != "" {
+		base = v.String
+	}
+	// Node uses base.replace(/\/$/, '') — strips exactly one trailing slash.
+	return strings.TrimSuffix(base, "/") + "/" + url[len(scheme):], nil
 }
 
 // Settings — GET /api/settings: all key/value pairs as a flat map.
