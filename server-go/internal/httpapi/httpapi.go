@@ -24,6 +24,7 @@ import (
 
 	"rss-reader/server-go/internal/articles"
 	"rss-reader/server-go/internal/auth"
+	"rss-reader/server-go/internal/cache"
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/httpx"
 	"rss-reader/server-go/internal/model"
@@ -39,6 +40,13 @@ var allowedOrigins = map[string]bool{
 // Server carries the dependencies the handlers need.
 type Server struct {
 	DB *db.DB
+	// Cache is the fetch scheduler (Phase 6). ensureFresh runs before serving a
+	// feed's rows (GET /api/feeds/:id/articles).
+	Cache *cache.Cache
+	// Parse resolves+parses a feed URL for POST /api/feeds (which parses directly,
+	// not through the cache, matching Node). nil → feed.ParseURL; injectable in
+	// tests to avoid the network.
+	Parse cache.FetchFunc
 	// AuthUser/AuthPass gate the public listener when both are set (auth disabled
 	// otherwise), matching registerAuth.
 	AuthUser string
@@ -79,6 +87,11 @@ func (s *Server) NewLocalRouter() http.Handler {
 // mountAPIRoutes registers the shared /api routes on r.
 func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/feeds", s.getFeeds)
+	r.Post("/api/feeds", s.postFeed)
+	r.Post("/api/feeds/import-opml", s.postImportOPML)
+	r.Patch("/api/feeds/{id}", s.patchFeed)
+	r.Delete("/api/feeds/{id}", s.deleteFeed)
+	r.Get("/api/feeds/{id}/articles", s.getFeedArticles)
 	r.Get("/api/all-articles", s.getAllArticles)
 	r.Get("/api/today", s.getToday)
 	r.Get("/api/starred", s.getStarred)

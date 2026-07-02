@@ -24,13 +24,21 @@ import (
 // Layouts tried (in order) against both the raw and the normalized string. Zoned
 // layouts win when an offset/zone is present; the bare (zoneless) layouts are
 // parsed in time.Local to match `new Date()`.
+// Layouts pair each zero-padded-day RFC822 form with a single-digit-day (`2`)
+// variant, because some feeds emit e.g. "Fri, 5 Jun 2026 …" which V8's `new Date`
+// parses but Go's padded `02` rejects. The padded form is tried first so any
+// input it already handled parses identically; the `2` form only adds coverage.
 var zonedLayouts = []string{
 	time.RFC3339Nano,                  // 2006-01-02T15:04:05.999999999Z07:00
 	time.RFC3339,                      // 2006-01-02T15:04:05Z07:00
 	"Mon, 02 Jan 2006 15:04:05 -0700", // RFC822 numeric offset
+	"Mon, 2 Jan 2006 15:04:05 -0700",  // …single-digit day
 	"Mon, 02 Jan 2006 15:04:05 MST",   // RFC822 named zone (GMT/UTC)
+	"Mon, 2 Jan 2006 15:04:05 MST",    // …single-digit day
 	"02 Jan 2006 15:04:05 -0700",      // RFC822 without weekday
+	"2 Jan 2006 15:04:05 -0700",       // …single-digit day
 	"02 Jan 2006 15:04:05 MST",        //
+	"2 Jan 2006 15:04:05 MST",         // …single-digit day
 	"2006-01-02T15:04:05-0700",        // ISO-ish, colon-less offset
 	"2006-01-02 15:04:05 -0700",       // space-separated with offset
 	"2006-01-02 15:04:05 -07:00",      //
@@ -41,7 +49,9 @@ var localLayouts = []string{
 	"2006-01-02T15:04:05",       // ISO no zone
 	"2006-01-02 15:04:05",       // space-separated, no zone
 	"Mon, 02 Jan 2006 15:04:05", // RFC822 no zone
+	"Mon, 2 Jan 2006 15:04:05",  // …single-digit day
 	"02 Jan 2006 15:04:05",      // RFC822 no weekday, no zone
+	"2 Jan 2006 15:04:05",       // …single-digit day
 	"2006-01-02",                // bare date (midnight local)
 }
 

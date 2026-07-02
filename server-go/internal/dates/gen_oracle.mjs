@@ -38,6 +38,8 @@ const edgeCases = [
   'Mon, 25 May 2026 10:15:39 ',
   '2026-06-17 14:14:08  +0800',
   '2026-06-17T06:14:08+00:00',
+  'Fri, 5 Jun 2026 00:00:00 +0000', // single-digit day — V8 parses, Go padded `02` rejects
+  'Sun, 7 Jun 2026 09:30:00', // single-digit day, zoneless
 ];
 
 const inputs = [...new Set([...rows.map((r) => r.pub_date), ...edgeCases])];

@@ -55,9 +55,11 @@ for i in $(seq 1 50); do
 done
 
 AID=$(sqlite3 "$WORK/base.db" "SELECT article_id FROM article_states LIMIT 1")
+FID=$(sqlite3 "$WORK/base.db" "SELECT id FROM feeds LIMIT 1")
 
 declare -a ENDPOINTS=(
   "/api/feeds|map(del(.category))"
+  "/api/feeds/$FID/articles|."
   "/api/all-articles|del(.cacheReady)"
   "/api/all-articles?mode=digest|del(.cacheReady)"
   "/api/today|del(.cacheReady)"
