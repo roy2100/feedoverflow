@@ -1,0 +1,76 @@
+name: CI
+
+# Covers the Go backend (server-go) and the React client only. The legacy Node
+# backend (server/) is intentionally out of scope — it is kept solely as a
+# rollback target and will be removed once the Go cutover is closed out.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go backend (server-go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server-go
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Track the version pinned in server-go/go.mod.
+          go-version-file: server-go/go.mod
+          cache-dependency-path: server-go/go.sum
+
+      # make lint requires staticcheck on PATH (mattn/go-sqlite3 needs cgo, which
+      # the ubuntu runner's gcc + the Makefile's CGO_ENABLED=1 already provide).
+      - name: Install staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # fmt-check + lint (vet + staticcheck) + offline unit tests. Live-network
+      # *_itest.go suites (build tag itest) are excluded by default.
+      - name: make check
+        run: make check
+
+  client:
+    name: Client (React)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+
+      # Root deps provide oxlint/oxfmt; client deps provide tsc/vitest.
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix client
+
+      - name: Typecheck
+        run: npm run typecheck --prefix client
+
+      - name: Test
+        run: npm test --prefix client
+
+      # oxlint/oxfmt scoped to client so the Node server tree stays out of scope.
+      - name: Lint (oxlint)
+        run: npx oxlint client
+
+      - name: Format check (oxfmt)
+        run: npx oxfmt --check client
