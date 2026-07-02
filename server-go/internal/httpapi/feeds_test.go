@@ -101,6 +101,26 @@ func TestFeedRename(t *testing.T) {
 	}
 }
 
+// TestFeedRenameEmpty guards the fixed latent bug: an empty/whitespace name is
+// rejected with 400 rather than reaching the NOT NULL name column and 500ing.
+func TestFeedRenameEmpty(t *testing.T) {
+	s := newFeedsServer(t, fakeParse("Orig"))
+	h := s.NewLocalRouter()
+	rec := do(h, "POST", "/api/feeds", `{"url":"https://f.example/rss"}`, jsonHdr())
+	var added struct{ ID string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &added)
+
+	for _, body := range []string{`{"name":""}`, `{"name":"   "}`, `{}`} {
+		if rec := do(h, "PATCH", "/api/feeds/"+added.ID, body, jsonHdr()); rec.Code != 400 {
+			t.Fatalf("empty rename %s: want 400, got %d", body, rec.Code)
+		}
+	}
+	// The name is untouched after the rejected renames.
+	if name, _, _ := feedRow(t, s, added.ID); name != "Orig" {
+		t.Fatalf("rejected rename mutated name: %q", name)
+	}
+}
+
 func TestFeedDeleteKeepsStarredPurgesRest(t *testing.T) {
 	s := newFeedsServer(t, fakeParse("F"))
 	h := s.NewLocalRouter()

@@ -96,10 +96,13 @@ router.post('/api/feeds/import-opml', async (req, res) => {
 });
 
 router.patch('/api/feeds/:id', (req, res) => {
-  const { name } = req.body;
+  // feeds.name is NOT NULL, so reject an empty rename up front rather than letting
+  // `name || null` reach the UPDATE and throw the constraint (a 500).
+  const name = (typeof req.body?.name === 'string' && req.body.name.trim()) || '';
+  if (!name) return res.status(400).json({ error: 'name required' });
   const info = db
     .prepare('UPDATE feeds SET name = ? WHERE id = ?')
-    .run(name || null, req.params.id);
+    .run(name, req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
 });

@@ -50,6 +50,24 @@ describe('feeds CRUD', () => {
     assert.equal(res.status, 404);
   });
 
+  test('PATCH /api/feeds/:id rejects an empty name with 400', async () => {
+    db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(
+      'patch-empty',
+      'Keep Me',
+      'https://example.com/patch-empty',
+    );
+    for (const name of ['', '   ']) {
+      const res = await request(app).patch('/api/feeds/patch-empty').send({ name });
+      assert.equal(res.status, 400);
+    }
+    const res = await request(app).patch('/api/feeds/patch-empty').send({});
+    assert.equal(res.status, 400);
+    const row = db.prepare('SELECT name FROM feeds WHERE id = ?').get('patch-empty') as {
+      name: string;
+    };
+    assert.equal(row.name, 'Keep Me');
+  });
+
   test('DELETE /api/feeds/:id removes an existing feed', async () => {
     db.prepare('INSERT INTO feeds (id,name,url) VALUES (?,?,?)').run(
       'del-1',

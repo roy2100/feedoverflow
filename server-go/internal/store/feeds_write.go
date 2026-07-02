@@ -86,16 +86,11 @@ func InsertFeedIgnore(w *sql.DB, id, name, url string) error {
 	return err
 }
 
-// RenameFeed updates a feed's name (empty → NULL, matching `name || null`), and
-// returns the affected row count (0 = not found).
+// RenameFeed updates a feed's name and returns the affected row count (0 = not
+// found). The caller must pass a non-empty name — feeds.name is NOT NULL, and the
+// PATCH handler rejects empty names before reaching here.
 func RenameFeed(w *sql.DB, id, name string) (int64, error) {
-	var nameArg any
-	if name == "" {
-		nameArg = nil
-	} else {
-		nameArg = name
-	}
-	res, err := w.Exec(`UPDATE feeds SET name = ? WHERE id = ?`, nameArg, id)
+	res, err := w.Exec(`UPDATE feeds SET name = ? WHERE id = ?`, name, id)
 	if err != nil {
 		return 0, err
 	}

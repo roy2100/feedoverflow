@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -135,7 +136,14 @@ func (s *Server) patchFeed(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	changes, err := store.RenameFeed(s.DB.Writer(), chi.URLParam(r, "id"), body.Name)
+	// feeds.name is NOT NULL, so an empty rename must be rejected up front rather
+	// than reaching the UPDATE (which would 500 on the constraint).
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "name required"})
+		return
+	}
+	changes, err := store.RenameFeed(s.DB.Writer(), chi.URLParam(r, "id"), name)
 	if err != nil {
 		serverError(w, err)
 		return
