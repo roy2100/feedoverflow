@@ -1,6 +1,12 @@
-# Built binaries (default `go build .` output names the binary after the dir)
+# Built binaries (default `go build .` output names the binary after the dir;
+# `make build` names it rss-reader for the process title)
 /server-go
+/rss-reader
 *.exe
+
+# Coverage artifacts from `make cover`
+coverage.out
+coverage.html
 
 # Local parity/test DB copies (never commit rss.db copies)
 *.db
