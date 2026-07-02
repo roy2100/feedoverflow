@@ -81,6 +81,17 @@ func New(cfg Config) *slog.Logger {
 	return slog.New(h)
 }
 
+// LevelFatal sits above slog.LevelError and maps to the vendored "fatal"/60 pair
+// (see levelName). slog has no fatal constant; emit it via Fatal.
+const LevelFatal = slog.LevelError + 4
+
+// Fatal logs msg at fatal level through l. It does not exit — callers decide
+// (main and crash.Guard os.Exit after logging), mirroring index.ts where
+// process.exit(1) follows logger.fatal.
+func Fatal(l *slog.Logger, msg string, args ...any) {
+	l.Log(context.Background(), LevelFatal, msg, args...)
+}
+
 // levelName / levelNum map slog levels to the vendored name + numeric severity.
 func levelName(l slog.Level) (string, int) {
 	switch {
@@ -90,8 +101,10 @@ func levelName(l slog.Level) (string, int) {
 		return "info", 30
 	case l < slog.LevelError:
 		return "warn", 40
-	default:
+	case l < LevelFatal:
 		return "error", 50
+	default:
+		return "fatal", 60
 	}
 }
 

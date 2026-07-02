@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"rss-reader/server-go/internal/cache"
+	"rss-reader/server-go/internal/crash"
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/store"
 )
@@ -42,11 +43,13 @@ func (r *Runner) Start(ctx context.Context) {
 // StartPoller ports startPoller: run maintenance now + every 24h, checkpoint the
 // WAL now + every 5 min, and (after a 5s delay) poll all feeds every 15 min.
 func (r *Runner) StartPoller(ctx context.Context) {
-	RunMaintenance(r.DB, r.CapBytes, r.Log)
-	CheckpointWAL(r.DB.Writer(), r.Log)
+	// Eager first runs, guarded so a panic on the very first pass is logged and
+	// swallowed rather than crashing startup.
+	r.safeRun("maintenance", func() { RunMaintenance(r.DB, r.CapBytes, r.Log) })
+	r.safeRun("checkpoint", func() { CheckpointWAL(r.DB.Writer(), r.Log) })
 
-	go r.tick(ctx, maintenanceInterval, func() { RunMaintenance(r.DB, r.CapBytes, r.Log) })
-	go r.tick(ctx, checkpointInterval, func() { CheckpointWAL(r.DB.Writer(), r.Log) })
+	go r.tick(ctx, "maintenance", maintenanceInterval, func() { RunMaintenance(r.DB, r.CapBytes, r.Log) })
+	go r.tick(ctx, "checkpoint", checkpointInterval, func() { CheckpointWAL(r.DB.Writer(), r.Log) })
 
 	go func() {
 		select {
@@ -54,14 +57,24 @@ func (r *Runner) StartPoller(ctx context.Context) {
 			return
 		case <-time.After(pollStartDelay):
 		}
-		r.pollAllFeeds(ctx)
-		r.tick(ctx, pollInterval, func() { r.pollAllFeeds(ctx) })
+		r.safeRun("poller", func() { r.pollAllFeeds(ctx) })
+		r.tick(ctx, "poller", pollInterval, func() { r.pollAllFeeds(ctx) })
 	}()
 }
 
-// tick runs fn every d until ctx is cancelled (fn is not run immediately — callers
-// that need an eager first run invoke it before tick, like Node's leading call).
-func (r *Runner) tick(ctx context.Context, d time.Duration, fn func()) {
+// safeRun runs fn under crash.Recover: a panic in one unit of work is logged at
+// error level (with stack) and swallowed so the caller's loop keeps running — the
+// Go-idiomatic per-iteration recovery (cf. net/http per-request), instead of
+// taking down the process. crash.Guard/os.Exit is reserved for main + listeners.
+func (r *Runner) safeRun(name string, fn func()) {
+	defer crash.Recover(r.Log, name)
+	fn()
+}
+
+// tick runs fn every d until ctx is cancelled, each run guarded by safeRun so one
+// panicking iteration does not kill the worker. (fn is not run immediately —
+// callers that need an eager first run invoke it via safeRun before tick.)
+func (r *Runner) tick(ctx context.Context, name string, d time.Duration, fn func()) {
 	t := time.NewTicker(d)
 	defer t.Stop()
 	for {
@@ -69,7 +82,7 @@ func (r *Runner) tick(ctx context.Context, d time.Duration, fn func()) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			fn()
+			r.safeRun(name, fn)
 		}
 	}
 }
@@ -92,8 +105,10 @@ func (r *Runner) pollAllFeeds(ctx context.Context) {
 			case <-time.After(delay):
 			}
 		}
-		if _, err := r.Cache.RefreshFeed(ctx, f); err != nil {
-			r.Log.Warn("feed poll failed", "feedId", f.ID, "feedUrl", f.URL, "err", err)
-		}
+		r.safeRun("feed-poll "+f.ID, func() {
+			if _, err := r.Cache.RefreshFeed(ctx, f); err != nil {
+				r.Log.Warn("feed poll failed", "feedId", f.ID, "feedUrl", f.URL, "err", err)
+			}
+		})
 	}
 }

@@ -7,9 +7,11 @@ package cache
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
+	"rss-reader/server-go/internal/crash"
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/feed"
 	"rss-reader/server-go/internal/model"
@@ -156,6 +158,7 @@ func (c *Cache) EnsureFresh(ctx context.Context, f model.Feed) error {
 // swallowed (the Node path logs at debug and moves on).
 func (c *Cache) backgroundRefresh(f model.Feed) {
 	go func() {
+		defer crash.Recover(slog.Default(), "background-refresh")
 		_, _ = c.RefreshFeed(context.Background(), f)
 	}()
 }
@@ -196,10 +199,12 @@ func (c *Cache) StartCacheWarming() error {
 		return nil
 	}
 	go func() {
+		defer crash.Recover(slog.Default(), "cache-warming")
 		var wg sync.WaitGroup
 		for _, f := range uncached {
 			wg.Add(1)
 			go func(f model.Feed) {
+				defer crash.Recover(slog.Default(), "cache-warming-feed")
 				defer wg.Done()
 				_, _ = c.RefreshFeed(context.Background(), f)
 			}(f)

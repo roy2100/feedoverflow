@@ -46,7 +46,7 @@ func (r *Runner) StartResourceMonitor(ctx context.Context) {
 	prevCPU := cpuMicros()
 	prevWall := time.Now()
 
-	r.logSample(nil, start)
+	r.safeRun("resource-monitor", func() { r.logSample(nil, start) })
 
 	go func() {
 		t := time.NewTicker(sampleInterval)
@@ -65,7 +65,7 @@ func (r *Runner) StartResourceMonitor(ctx context.Context) {
 				}
 				prevCPU = cpu
 				prevWall = now
-				r.logSample(&pct, start)
+				r.safeRun("resource-monitor", func() { r.logSample(&pct, start) })
 			}
 		}
 	}()

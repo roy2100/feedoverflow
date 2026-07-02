@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"rss-reader/server-go/internal/cache"
 	"rss-reader/server-go/internal/config"
+	"rss-reader/server-go/internal/crash"
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/favicon"
 	"rss-reader/server-go/internal/httpapi"
@@ -24,16 +24,8 @@ import (
 func main() {
 	cfg := config.Load()
 
-	handle, err := db.OpenHandle(cfg.DBPath)
-	if err != nil {
-		log.Fatalf("open db %s: %v", cfg.DBPath, err)
-	}
-	defer handle.Close()
-	if err := db.InitSchema(handle.Writer()); err != nil {
-		log.Fatalf("init schema: %v", err)
-	}
-
-	// Shared structured logger: NDJSON to <LogDir>/app.log (rotated) when LogDir is
+	// Shared structured logger built first so startup failures and panics land in
+	// the NDJSON app.log, not just stderr: <LogDir>/app.log (rotated) when LogDir is
 	// set, else stderr. slog stays the default so any stray stdlib slog use routes here.
 	var appLogger *slog.Logger
 	if cfg.LogDir != "" {
@@ -42,6 +34,28 @@ func main() {
 		appLogger = slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	}
 	slog.SetDefault(appLogger)
+
+	// Route a panic in the main goroutine through the structured logger before the
+	// process exits (launchd KeepAlive restarts it) — the Go analogue of index.ts's
+	// uncaughtException handler. Background goroutines carry their own crash.Guard;
+	// a panic there cannot be caught here (Go panics don't cross goroutines).
+	defer crash.Guard(appLogger, "main")
+
+	// fatal logs a structured fatal record then exits(1), the analogue of Node's
+	// logger.fatal(...) + process.exit(1) (replaces stdlib log.Fatalf → stderr-only).
+	fatal := func(msg string, args ...any) {
+		applog.Fatal(appLogger, msg, args...)
+		os.Exit(1)
+	}
+
+	handle, err := db.OpenHandle(cfg.DBPath)
+	if err != nil {
+		fatal("open db failed", "err", err, "path", cfg.DBPath)
+	}
+	defer handle.Close()
+	if err := db.InitSchema(handle.Writer()); err != nil {
+		fatal("init schema failed", "err", err)
+	}
 
 	c := cache.New(handle, nil)     // nil fetch → feed.ParseURL
 	fav := favicon.New(handle, nil) // nil fetch → Google s2
@@ -52,9 +66,10 @@ func main() {
 
 	localAddr := "127.0.0.1:" + strconv.Itoa(cfg.LocalAPIPort)
 	go func() {
-		log.Printf("server-go loopback listening on %s", localAddr)
+		defer crash.Guard(appLogger, "loopback-listener")
+		appLogger.Info("loopback listening", "addr", localAddr)
 		if err := http.ListenAndServe(localAddr, srv.NewLocalRouter()); err != nil {
-			log.Fatalf("loopback listener failed: %v", err)
+			fatal("loopback listener failed", "err", err, "addr", localAddr)
 		}
 	}()
 
@@ -63,7 +78,7 @@ func main() {
 	// gate — so the contract-diff harness can keep the copy DB static.
 	if !cfg.DisableJobs {
 		if err := c.StartCacheWarming(); err != nil {
-			log.Printf("cache warming failed to start: %v", err)
+			appLogger.Warn("cache warming failed to start", "err", err)
 		}
 		runner := &jobs.Runner{
 			DB: handle, Cache: c, Log: appLogger,
@@ -77,8 +92,8 @@ func main() {
 	if cfg.AuthUser != "" && cfg.AuthPass != "" {
 		authState = "enabled"
 	}
-	log.Printf("server-go public listening on %s (db=%s, auth=%s)", publicAddr, cfg.DBPath, authState)
+	appLogger.Info("public listening", "addr", publicAddr, "db", cfg.DBPath, "auth", authState)
 	if err := http.ListenAndServe(publicAddr, srv.NewPublicRouter()); err != nil {
-		log.Fatalf("public listener failed: %v", err)
+		fatal("public listener failed", "err", err, "addr", publicAddr)
 	}
 }
