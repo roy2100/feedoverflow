@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"rss-reader/server-go/internal/cache"
 	"rss-reader/server-go/internal/db"
@@ -255,5 +256,52 @@ func TestEnsureFreshNewFeedAwaits(t *testing.T) {
 	}
 	if got := rowCount(t, handle.Reader()); got != 1 {
 		t.Errorf("new feed rows not persisted: got %d, want 1", got)
+	}
+}
+
+// TestStartCacheWarming: never-fetched feeds are warmed up front and gate Ready();
+// once they settle Ready() flips true. Uses an injected fetch (no network).
+func TestStartCacheWarming(t *testing.T) {
+	handle := newTestDB(t)
+	// Replace the seeded starter feeds with two uncached (last_fetched_at NULL) feeds.
+	if _, err := handle.Writer().Exec(`DELETE FROM feeds`); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"w1", "w2"} {
+		if _, err := handle.Writer().Exec(
+			`INSERT INTO feeds (id, name, url) VALUES (?, 'F', ?)`, id, "https://f/"+id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var calls int32
+	c := cache.New(handle, func(_ context.Context, url string) (*feed.Parsed, error) {
+		atomic.AddInt32(&calls, 1)
+		// Unique link per feed so both persist (feed_id is insert-only).
+		return &feed.Parsed{Title: "F", Items: []feed.Item{
+			{Link: url + "#1", Title: "One", Content: "b", PubDate: "Fri, 05 Jun 2026 00:00:00 GMT"},
+		}}, nil
+	})
+
+	if c.Ready() {
+		t.Fatal("Ready() should be false before warming completes")
+	}
+	if err := c.StartCacheWarming(); err != nil {
+		t.Fatalf("StartCacheWarming: %v", err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for !c.Ready() {
+		if time.Now().After(deadline) {
+			t.Fatal("warming did not flip Ready() within 5s")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Errorf("warmed %d feeds, want 2", got)
+	}
+	var rows int
+	_ = handle.Reader().QueryRow(`SELECT COUNT(*) FROM article_states`).Scan(&rows)
+	if rows != 2 {
+		t.Errorf("warming persisted %d rows, want 2", rows)
 	}
 }

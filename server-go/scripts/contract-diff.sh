@@ -43,7 +43,9 @@ sleep 0.3
 ( cd "$REPO/server" && TEST_DB="$WORK/node.db" PORT=$NODE_PUB LOCAL_API_PORT=$NODE_PORT \
     exec node index.ts >"$WORK/node.log" 2>&1 ) &
 NODE_PID=$!
-RSS_DB="$WORK/go.db" PORT=$GO_PUB LOCAL_API_PORT=$GO_PORT "$WORK/server-go" >"$WORK/go.log" 2>&1 &
+# RSS_DISABLE_JOBS mirrors Node's TEST_DB gate: no poller / maintenance / warming,
+# so the Go server never mutates the frozen go.db copy mid-run.
+RSS_DB="$WORK/go.db" RSS_DISABLE_JOBS=1 PORT=$GO_PUB LOCAL_API_PORT=$GO_PORT "$WORK/server-go" >"$WORK/go.log" 2>&1 &
 GO_PID=$!
 cleanup() { kill $NODE_PID $GO_PID 2>/dev/null; }
 trap cleanup EXIT

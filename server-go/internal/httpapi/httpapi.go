@@ -54,8 +54,10 @@ type Server struct {
 	// otherwise), matching registerAuth.
 	AuthUser string
 	AuthPass string
-	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope
-	// (wired to real warming in Phase 9; normalized out of the contract-diff).
+	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope.
+	// When a Cache is present its warming state wins (see cacheReady); this field
+	// is the fallback for tests/servers without a Cache. Normalized out of the
+	// contract-diff either way.
 	CacheReady bool
 
 	// In-memory "currently open" article (GET|POST /api/current-article). nil = none.
@@ -108,6 +110,15 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Patch("/api/settings", s.patchSettings)
 	r.Get("/api/current-article", s.getCurrentArticle)
 	r.Post("/api/current-article", s.postCurrentArticle)
+}
+
+// cacheReady reports the warming state for the all-articles/today envelope: the
+// live Cache's warming flag when present, else the static CacheReady fallback.
+func (s *Server) cacheReady() bool {
+	if s.Cache != nil {
+		return s.Cache.Ready()
+	}
+	return s.CacheReady
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {
@@ -166,7 +177,7 @@ func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"articles":   articles.NormalizePubDates(arts),
-		"cacheReady": s.CacheReady,
+		"cacheReady": s.cacheReady(),
 	})
 }
 
@@ -180,7 +191,7 @@ func (s *Server) getToday(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"articles":   articles.NormalizePubDates(arts),
-		"cacheReady": s.CacheReady,
+		"cacheReady": s.cacheReady(),
 	})
 }
 

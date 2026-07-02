@@ -17,6 +17,11 @@ type Config struct {
 	AuthUser       string // empty => auth disabled
 	AuthPass       string
 	DBMaxSizeBytes int64
+	// DisableJobs skips background workers (poller, maintenance, checkpoint,
+	// resource monitor, cache warming). Set by RSS_DISABLE_JOBS — the Go analogue
+	// of Node keying its jobs off TEST_DB; the contract-diff harness sets it so the
+	// Go server never mutates the frozen copy DB mid-run.
+	DisableJobs bool
 }
 
 // Load reads config from the environment. If RSS_ENV_FILE is set (or server/.env
@@ -32,6 +37,7 @@ func Load() Config {
 		AuthUser:       os.Getenv("AUTH_USER"),
 		AuthPass:       os.Getenv("AUTH_PASS"),
 		DBMaxSizeBytes: int64(envInt("DB_MAX_SIZE_MB", 2048)) * 1024 * 1024,
+		DisableJobs:    os.Getenv("RSS_DISABLE_JOBS") != "",
 	}
 }
 

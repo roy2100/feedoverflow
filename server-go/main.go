@@ -5,7 +5,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -14,6 +16,7 @@ import (
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/favicon"
 	"rss-reader/server-go/internal/httpapi"
+	"rss-reader/server-go/internal/jobs"
 )
 
 func main() {
@@ -39,6 +42,20 @@ func main() {
 			log.Fatalf("loopback listener failed: %v", err)
 		}
 	}()
+
+	// Background workers (poller, maintenance, WAL checkpoint, resource monitor,
+	// cache warming). Gated by RSS_DISABLE_JOBS — the Go analogue of Node's TEST_DB
+	// gate — so the contract-diff harness can keep the copy DB static.
+	if !cfg.DisableJobs {
+		if err := c.StartCacheWarming(); err != nil {
+			log.Printf("cache warming failed to start: %v", err)
+		}
+		runner := &jobs.Runner{
+			DB: handle, Cache: c, Log: slog.Default(),
+			CapBytes: cfg.DBMaxSizeBytes, DBPath: cfg.DBPath,
+		}
+		runner.Start(context.Background())
+	}
 
 	publicAddr := ":" + strconv.Itoa(cfg.Port)
 	authState := "disabled"
