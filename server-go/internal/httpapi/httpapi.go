@@ -54,6 +54,10 @@ type Server struct {
 	// otherwise), matching registerAuth.
 	AuthUser string
 	AuthPass string
+	// DistDir is the client/dist directory served on the public listener (static
+	// assets + SPA fallback). Empty disables static serving (loopback listener
+	// never serves it).
+	DistDir string
 	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope.
 	// When a Cache is present its warming state wins (see cacheReady); this field
 	// is the fallback for tests/servers without a Cache. Normalized out of the
@@ -76,6 +80,10 @@ func (s *Server) NewPublicRouter() http.Handler {
 	r.Get("/healthz", healthz)
 	a.RegisterRoutes(r)
 	s.mountAPIRoutes(r)
+	// Static assets + SPA fallback for any unmatched non-/api path (public only).
+	if s.DistDir != "" {
+		r.NotFound(s.spaFallback)
+	}
 	return r
 }
 

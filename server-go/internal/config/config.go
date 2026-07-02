@@ -22,6 +22,10 @@ type Config struct {
 	// of Node keying its jobs off TEST_DB; the contract-diff harness sets it so the
 	// Go server never mutates the frozen copy DB mid-run.
 	DisableJobs bool
+	// ClientDist is the client build served on the public listener (static + SPA).
+	ClientDist string
+	// LogDir is where NDJSON logs are written (rotated). Empty → jobs/log to stderr.
+	LogDir string
 }
 
 // Load reads config from the environment. If RSS_ENV_FILE is set (or server/.env
@@ -38,6 +42,8 @@ func Load() Config {
 		AuthPass:       os.Getenv("AUTH_PASS"),
 		DBMaxSizeBytes: int64(envInt("DB_MAX_SIZE_MB", 2048)) * 1024 * 1024,
 		DisableJobs:    os.Getenv("RSS_DISABLE_JOBS") != "",
+		ClientDist:     envStr("CLIENT_DIST", "client/dist"),
+		LogDir:         os.Getenv("LOG_DIR"),
 	}
 }
 

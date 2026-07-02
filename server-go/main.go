@@ -9,6 +9,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 
 	"rss-reader/server-go/internal/cache"
@@ -17,6 +18,7 @@ import (
 	"rss-reader/server-go/internal/favicon"
 	"rss-reader/server-go/internal/httpapi"
 	"rss-reader/server-go/internal/jobs"
+	applog "rss-reader/server-go/internal/logger"
 )
 
 func main() {
@@ -31,9 +33,22 @@ func main() {
 		log.Fatalf("init schema: %v", err)
 	}
 
+	// Shared structured logger: NDJSON to <LogDir>/app.log (rotated) when LogDir is
+	// set, else stderr. slog stays the default so any stray stdlib slog use routes here.
+	var appLogger *slog.Logger
+	if cfg.LogDir != "" {
+		appLogger = applog.New(applog.Config{Dir: cfg.LogDir})
+	} else {
+		appLogger = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	}
+	slog.SetDefault(appLogger)
+
 	c := cache.New(handle, nil)     // nil fetch → feed.ParseURL
 	fav := favicon.New(handle, nil) // nil fetch → Google s2
-	srv := &httpapi.Server{DB: handle, Cache: c, Favicon: fav, AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass}
+	srv := &httpapi.Server{
+		DB: handle, Cache: c, Favicon: fav,
+		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,
+	}
 
 	localAddr := "127.0.0.1:" + strconv.Itoa(cfg.LocalAPIPort)
 	go func() {
@@ -51,7 +66,7 @@ func main() {
 			log.Printf("cache warming failed to start: %v", err)
 		}
 		runner := &jobs.Runner{
-			DB: handle, Cache: c, Log: slog.Default(),
+			DB: handle, Cache: c, Log: appLogger,
 			CapBytes: cfg.DBMaxSizeBytes, DBPath: cfg.DBPath,
 		}
 		runner.Start(context.Background())

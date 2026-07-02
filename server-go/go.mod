@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/mmcdole/gofeed v1.3.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
