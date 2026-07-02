@@ -74,8 +74,15 @@ func (r *Runner) StartResourceMonitor(ctx context.Context) {
 func (r *Runner) logSample(cpuPercent *float64, start time.Time) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+	// True process RSS (parity with Node's process.memoryUsage().rss) — includes
+	// cgo/SQLite malloc + mmap that runtime.MemStats.Sys omits. Fall back to Sys
+	// if the platform probe fails.
+	rss := m.Sys
+	if b, ok := processRSSBytes(); ok {
+		rss = b
+	}
 	attrs := []any{
-		"rssMb", toMB(m.Sys), // total memory obtained from the OS
+		"rssMb", toMB(rss),
 		"heapUsedMb", toMB(m.HeapAlloc),
 		"heapTotalMb", toMB(m.HeapSys),
 		"dbMb", derefFloat(r.dbSizeMB()), // nil (JSON null) on stat failure, like ln.ts
