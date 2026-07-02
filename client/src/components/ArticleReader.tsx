@@ -123,6 +123,14 @@ export default function ArticleReader({
       const h = Number(img.getAttribute('height'));
       if (w > 0 && h > 0) img.style.aspectRatio = `${w} / ${h}`;
     });
+    // Feed-supplied links navigate in-place by default. In an iOS standalone
+    // PWA that leaves the app's own webview and returns via back-navigation,
+    // which triggers a WebKit layout bug (blank strip at the bottom). Forcing
+    // a new tab/external browser sidesteps that navigation entirely.
+    root.querySelectorAll('a[href]').forEach((a) => {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
   }, [article?.id, rssContent, fullContent, textOnly]);
 
   const handleFetchFull = async () => {
