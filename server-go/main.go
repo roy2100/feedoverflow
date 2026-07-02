@@ -12,6 +12,7 @@ import (
 	"rss-reader/server-go/internal/cache"
 	"rss-reader/server-go/internal/config"
 	"rss-reader/server-go/internal/db"
+	"rss-reader/server-go/internal/favicon"
 	"rss-reader/server-go/internal/httpapi"
 )
 
@@ -27,8 +28,9 @@ func main() {
 		log.Fatalf("init schema: %v", err)
 	}
 
-	c := cache.New(handle, nil) // nil fetch → feed.ParseURL
-	srv := &httpapi.Server{DB: handle, Cache: c, AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass}
+	c := cache.New(handle, nil)     // nil fetch → feed.ParseURL
+	fav := favicon.New(handle, nil) // nil fetch → Google s2
+	srv := &httpapi.Server{DB: handle, Cache: c, Favicon: fav, AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass}
 
 	localAddr := "127.0.0.1:" + strconv.Itoa(cfg.LocalAPIPort)
 	go func() {
