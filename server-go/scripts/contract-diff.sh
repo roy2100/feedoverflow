@@ -71,6 +71,13 @@ declare -a ENDPOINTS=(
   "/api/starred/count|."
   "/api/settings|."
   "/api/articles/$AID/content|."
+  "/api/search?q=a|."
+  "/api/search?q=the|."
+  "/api/search?q=Go|."
+  "/api/search?q=2026|."
+  "/api/search?q=the&scope=starred|."
+  "/api/search?q=the&scope=feed&feedId=$FID|."
+  "/api/current-article|."
 )
 
 FAIL=0

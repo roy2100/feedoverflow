@@ -202,6 +202,29 @@ func ResolveURL(db *sql.DB, url string) (string, error) {
 	return strings.TrimSuffix(base, "/") + "/" + url[len(scheme):], nil
 }
 
+// Search — GET /api/search: LIKE across title/summary/content, optionally scoped
+// to starred or one feed, newest-by-text-pub_date first, cap 200 (the caller
+// re-sorts by parsed date and slices to 100). Port of routes/search.ts. `like` is
+// the already-escaped pattern (ESCAPE '\'); scope is "starred" | "feed" | "".
+func Search(r *sql.DB, like, scope, feedID string) ([]articles.Row, error) {
+	q := `SELECT ` + articleCols + ` FROM article_states
+		WHERE (title LIKE ? ESCAPE '\' OR summary LIKE ? ESCAPE '\' OR content LIKE ? ESCAPE '\')`
+	args := []any{like, like, like}
+	switch {
+	case scope == "starred":
+		q += ` AND is_starred = 1`
+	case scope == "feed" && feedID != "":
+		q += ` AND feed_id = ?`
+		args = append(args, feedID)
+	}
+	q += ` ORDER BY pub_date DESC LIMIT 200`
+	rows, err := r.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scanArticleRows(rows)
+}
+
 // Settings — GET /api/settings: all key/value pairs as a flat map.
 func Settings(db *sql.DB) (map[string]string, error) {
 	rows, err := db.Query(`SELECT key, value FROM settings`)

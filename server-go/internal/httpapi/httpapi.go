@@ -112,6 +112,7 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/starred/count", s.getStarredCount)
 	r.Post("/api/articles/star", s.postStar)
 	r.Get("/api/articles/{id}/content", s.getArticleContent)
+	r.Get("/api/search", s.getSearch)
 	r.Get("/api/fetch-content", s.getFetchContent)
 	r.Get("/api/favicon", s.getFaviconRoute)
 	r.Get("/api/settings", s.getSettings)
