@@ -83,11 +83,6 @@ dbinit:
 freezefeeds:
 	go run ./cmd/freezefeeds
 
-## contract-diff: run the API contract diff vs the Node server
-.PHONY: contract-diff
-contract-diff:
-	./scripts/contract-diff.sh
-
 ## deploy: build client + Go binary, flip launchd to Go, health-check (script-go)
 .PHONY: deploy
 deploy:

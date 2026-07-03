@@ -12,7 +12,7 @@
     "**/node_modules/**",
     "**/coverage/**",
     "**/*.min.js",
-    "server/vendor/**",
+    "server-go/**",
     "docs/**",
     "**/*.md"
   ]

@@ -1,12 +1,13 @@
 # RSS Reader
 
 A self-hosted, full-stack RSS reader with a clean reading-first UI, full-text article
-extraction, a podcast player, and a built-in **MCP server** that lets an LLM (Claude,
-etc.) read and manage your feeds as tools — including summarizing the article you're
-currently reading.
+extraction, and a podcast player. It also has a built-in **MCP server** that lets an LLM
+(Claude, etc.) read and manage your feeds as tools — including summarizing the article
+you're currently reading — though that surface currently ships only in the legacy Node
+backend (see the MCP status note below).
 
-TypeScript end to end. React + PWA client, Express + SQLite backend, no build step on
-the server (runs `.ts` directly on Node 24's native type-stripping).
+React + PWA client (TypeScript), and a single-binary **Go backend** (`server-go/`) over
+SQLite that serves the API and the static client.
 
 > **Live demo:** _add your deployed URL here_
 > **Screenshot:** _add `docs/screenshot.png` and it renders below_
@@ -39,6 +40,11 @@ the server (runs `.ts` directly on Node 24's native type-stripping).
 
 ## AI / MCP integration
 
+> **Status:** the MCP server shipped in the original **Node** backend and was intentionally
+> **not** ported in the Go migration — the current Go backend does not serve `/mcp` (the
+> loopback-only port is reserved as its future host). The full MCP implementation lives on
+> the `legacy_server_node` branch; the description below documents that surface.
+
 The server exposes a [Model Context Protocol](https://modelcontextprotocol.io) endpoint
 (Streamable HTTP transport) with **13 tools**, so an MCP-capable client can drive the
 reader conversationally:
@@ -58,53 +64,51 @@ this and find related posts"* and have it just work.
 ## Architecture
 
 ```
-client/   React 19 + TypeScript + Vite + Zustand + react-router, PWA
-server/    Express + better-sqlite3 (synchronous SQLite), TypeScript run directly on Node 24
-           ├─ poller        scheduled feed fetch + persist
-           ├─ content       Mozilla Readability full-text extraction
-           ├─ favicon       fetched + cached per feed
-           ├─ maintenance   DB size cap / old-article pruning
-           └─ mcp           Streamable-HTTP MCP server (wraps the HTTP API)
+client/     React 19 + TypeScript + Vite + Zustand + react-router, PWA
+server-go/  Go + go-sqlite3 (SQLite), chi router — a single compiled binary
+            ├─ jobs        scheduled feed fetch/persist + maintenance
+            ├─ content     go-readability full-text extraction
+            ├─ favicon     fetched + cached per feed
+            └─ maintenance DB size cap / old-article pruning
 ```
 
-- **No backend build step.** The server runs `.ts` files directly via Node 24's native
-  TypeScript type-stripping — `node index.ts`, no bundler, no `tsc` emit.
+- **Single binary.** The backend compiles to one cgo binary (`mattn/go-sqlite3`); no
+  bundler, no runtime dependencies beyond the SQLite file it manages.
 - **One source of truth.** MCP tools call the HTTP API over loopback rather than
   re-implementing logic, keeping the AI and UI behaviors identical.
-- Tested on both ends (`node:test` for the server, Vitest for the client); linted and
-  formatted with [oxlint / oxfmt](https://oxc.rs).
+- Tested on both ends (`go test` for the server, Vitest for the client); the server is
+  vetted with `staticcheck`, the client linted/formatted with [oxlint / oxfmt](https://oxc.rs).
 
 ## Getting started
 
-Requires **Node ≥ 24**.
+Requires **Go ≥ 1.26** (backend, built with cgo) and **Node ≥ 22** (client + tooling).
 
 ```bash
-# install (root + server + client)
-npm install && cd server && npm install && cd ../client && npm install && cd ..
+# install client + root tooling deps (the Go backend uses go modules — no npm install)
+npm install && cd client && npm install && cd ..
 
-# run server (:3002) + client (:3000) together
+# run the Go server (:3002) + client (:3000) together
 npm run dev
 ```
 
 Open http://localhost:3000, then add a feed URL or import an OPML file.
 
-To enable the MCP endpoint for a client like Claude Desktop, point it at
-`http://localhost:4002/mcp` (Streamable HTTP transport). MCP is served on the
-loopback-only, no-auth companion listener (`LOCAL_API_PORT`, default 4002) — never
-the public port — so it works with or without `AUTH_USER`/`AUTH_PASS` set.
+The loopback-only, no-auth companion listener (`LOCAL_API_PORT`, default 4002) is where the
+MCP endpoint was served in the Node backend; the Go backend keeps the listener but does not
+yet mount `/mcp` (see the MCP status note above).
 
 ### Auth (optional)
 
-Copy `server/.env.example` to `server/.env` and set `AUTH_USER` / `AUTH_PASS` to require
-login for non-localhost requests (e.g. when exposing the reader over a Cloudflare Tunnel).
-Leave them empty for localhost-only private use.
+Set `AUTH_USER` / `AUTH_PASS` (in the environment, or in an env file pointed to by
+`RSS_ENV_FILE`) to require login on every request — for exposing the reader over a public
+tunnel. Leave them empty for localhost-only private use.
 
 ## Tech stack
 
 **Frontend:** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
-**Backend:** Node 24, Express, better-sqlite3, Mozilla Readability, rss-parser, zod
-**AI:** `@modelcontextprotocol/sdk` (Streamable HTTP)
-**Tooling:** oxlint, oxfmt, node:test, Vitest
+**Backend:** Go 1.26, chi, mattn/go-sqlite3, go-readability, gofeed, lumberjack
+**AI:** Model Context Protocol (Streamable HTTP) — Node backend only, pending a Go port
+**Tooling:** go test + staticcheck (server), oxlint + oxfmt + Vitest (client)
 
 ## License
 

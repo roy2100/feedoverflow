@@ -3,22 +3,24 @@
 ## Commands
 
 ```bash
-npm run dev              # server (3002) + client (3000) in parallel
-npm run server / client  # individual processes
+npm run dev              # Go server (3002) + client (3000) in parallel
+npm run server / client  # individual processes (server → `cd server-go && go run .`)
 
-npm install && cd server && npm install && cd ../client && npm install
+npm install && cd client && npm install   # client + root tooling deps (Go backend uses go modules)
 
 # Tests
-cd server && npm test           # typecheck + offline node:test suites (*.test.ts)
-cd server && npm run test:integration  # live-network suites (*.itest.ts — real feeds: coindesk, sspai, reddit)
-cd server && npm run test:coverage  # node:test with V8 coverage report (excludes *.test.ts, vendor/)
+cd server-go && make check      # fmt-check + lint (vet + staticcheck) + offline unit tests
+cd server-go && make test       # lint + offline unit tests (*_test.go)
+cd server-go && make test-int   # live-network suites (build tag itest — real feeds: coindesk, sspai, reddit)
+cd server-go && make cover      # go test with coverage report
 cd client && npm test           # vitest suites (jsdom)
 cd client && npm run test:coverage  # vitest with V8 coverage report (text + html, excludes tests/types/entry)
 ./scripts/burst-latency.sh      # concurrent-burst latency smoke test vs a running server (loopback :4002)
                                 # ROUNDS=/BASE_URL=/FAIL_MS= env overrides; FAIL_MS gates a regression
 
-# Production deploy
-./scripts/deploy-mac.sh  # install deps, build frontend, restart backend service
+# Production deploy (Go backend)
+./script-go/deploy.sh    # build client + cgo Go binary on the Mac, sync to ~/Deploy, flip launchd to Go, health-check
+./script-go/rollback.sh  # restore the saved plist backup (rollback path)
 
 # Service management
 launchctl start com.rss-reader.app
@@ -26,7 +28,7 @@ launchctl stop com.rss-reader.app
 launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
 tail -f ~/Deploy/rss-reader/logs/app.log      # structured NDJSON (slog); server.log holds raw stderr
 
-# Lint & format (oxc — run from repo root, covers client + server)
+# Lint & format (oxc — run from repo root; now covers the client only, the Go backend uses gofmt/staticcheck)
 npm run fmt              # oxfmt: format & write in place
 npm run fmt:check        # oxfmt: check only, no writes
 npm run lint             # oxlint: catch-bug rules (correctness=error)
@@ -56,15 +58,19 @@ npm run lint             # must exit 0 (no correctness errors)
 Do not silence lint errors or rewrite business logic just to make `lint` pass — if a correctness
 rule flags real intent, surface it rather than auto-suppressing.
 
+oxlint/oxfmt now cover the **client only** — the Go backend (`server-go/`) is formatted with
+`gofmt` and vetted with `go vet` + `staticcheck` via its Makefile. After changing Go code, run
+`cd server-go && make fmt` then `make check` (fmt-check + lint + tests) before committing.
+
 ## Deployment
 
 Single-user macOS app exposed publicly at `https://rss.royl.uk:8443` via a **rathole** reverse tunnel to an **Aliyun VPS** that terminates TLS with **Caddy** (Let's Encrypt, DNS-01). The app still runs on the Mac; the VPS only fronts it. Session-cookie auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files. Full setup/runbook: `docs/rathole-vps-tunnel.md`.
 
-- Backend: launchd `com.rss-reader.app` → `~/Deploy/rss-reader/server/index.ts` on port 3002 (run via `node`'s native TS type-stripping; requires node ≥ 24 — `util.styleText` used by the vendored slog logger)
-- Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, static files via Express
+- Backend: launchd `com.rss-reader.app` → the compiled Go binary at `~/Deploy/rss-reader/rss-reader` on port 3002 (single cgo binary — `mattn/go-sqlite3` — built on the Mac, no runtime deps). Built + wired up by `script-go/deploy.sh`
+- Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, served as static files by the Go server (`CLIENT_DIST` env)
 - Public path: browser → Caddy `:8443` (Aliyun VPS, TLS) → rathole server (VPS `:2333`, noise) → tunnel → rathole client (Mac, launchd `com.rss-reader.rathole`) → `localhost:3002`. Cloudflare is **DNS-only** (grey-cloud A record → VPS IP); the old Cloudflare Tunnel / `cloudflared` is retired. `:8443` is non-standard on purpose — avoids Aliyun mainland ICP filing (备案) for ports 80/443
-- Auth: `AUTH_USER` / `AUTH_PASS` in `server/.env` (gitignored, loaded by `load-env.ts` before `app.ts`; rsynced to deploy by `scripts/deploy-mac.sh`). Empty/unset → auth disabled. `app.set('trust proxy', 'loopback')` is required so `req.ip`/`req.secure` reflect the real client: Caddy sets `X-Forwarded-Proto`/`X-Forwarded-For`, which travel through the rathole raw-TCP tunnel; the immediate peer at the app is the loopback rathole client — needed for the `Secure` cookie flag and the MCP localhost-only block (the auth gate itself no longer keys off IP)
-- Ports: networth.local → 3001, rss.royl.uk:8443 (public) → VPS → tunnel → 3002, dev client → 3000, **127.0.0.1:4002 → loopback-only no-auth API + MCP** (`LOCAL_API_PORT`, never tunneled)
+- Auth: `AUTH_USER` / `AUTH_PASS` loaded from the env file pointed to by `RSS_ENV_FILE` (default `~/Deploy/rss-reader/server/.env`, gitignored; the plist sets it). Empty/unset → auth disabled. When set, **every** request on the public listener requires a valid session cookie
+- Ports: networth.local → 3001, rss.royl.uk:8443 (public) → VPS → tunnel → 3002, dev client → 3000, **127.0.0.1:4002 → loopback-only no-auth API** (`LOCAL_API_PORT`, never tunneled — reserved as the future MCP host)
 
 ## Architecture
 
@@ -73,36 +79,37 @@ Three-panel RSS reader: **sidebar → article list → reader pane**.
 One of the app's purposes is to **durably persist every fetched article** (not just starred
 ones) into `article_states` for offline statistics/research. That is why *every* fetch path —
 on-demand reads, background refresh, startup warming, and the poller — persists through one
-shared chain (`refreshFeed` in `cache.ts` → `persistItems` in `articles.ts`), there is no
+shared refresh/persist chain (`internal/cache` → `internal/store` into `article_states`), there is no
 per-feed item cap on persistence, and the DB size cap defaults to 2GB. There is no read/unread
 feature — articles only carry a starred flag.
 
 ```
-root/               concurrently orchestrator
-server/             (ESM + TS, run natively by Node, port 3002)
-  index.ts          entrypoint — loads .env, sets process.title, imports app, listens, then starts background services (cache warming, poller, maintenance) only after a successful bind
-  load-env.ts       loads server/.env (if present) — imported before app.ts
-  app.ts            Express app assembly — middleware, auth, mounts routes/, MCP, SPA fallback (no handlers)
-  routes/           per-domain express.Router() modules — feeds, settings, content, articles, search (full /api/... paths)
-  db.ts             SQLite setup, schema, migrations, seed data
-  auth.ts           session login/logout + per-request gate
-  articles.ts       id/enrich/dedup helpers + article_states upserts
-  cache.ts          refreshFeed fetch chain + ensureFresh (TTL via feeds.last_fetched_at) + startup warming
-  favicon.ts        favicon_cache read-through (fetches from Google s2, stores BLOB)
-  poller.ts         background feed polling (also kicks off the maintenance pass)
-  maintenance.ts    orphan cleanup + DB size-cap enforcement (oldest non-starred deleted, then VACUUM)
-  logger.ts         shared slog logger instance (NDJSON → logs/app.log)
-  vendor/slog.ts    vendored zero-dep structured logger (requires node ≥ 24)
-  parse-url.ts      rss-parser wrapper + feed types
-  mcp.ts            MCP server (Streamable HTTP) mounted at POST /mcp — on the loopback-only localApp, not the public port
-  types.ts          shared interfaces
-  test/             node:test suites (*.test.ts offline, *.itest.ts live-network); import app/db/helpers from ../
-  tsconfig.json     typecheck config (tsc --noEmit; node strips types, does not check)
-  rss.db            SQLite database (gitignored)
+root/               concurrently orchestrator (`npm run dev`)
+server-go/          Go backend (single cgo binary, port 3002 — chi router, mattn/go-sqlite3)
+  main.go           entrypoint — load config, open DB, build logger, start public + loopback listeners, then background jobs (gated by RSS_DISABLE_JOBS)
+  internal/config   env config (Load / LoadEnvFile via RSS_ENV_FILE; PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, CLIENT_DIST, LOG_DIR)
+  internal/httpapi  Server struct + NewPublicRouter / NewLocalRouter; per-domain handlers (feeds.go, content.go, search.go, static.go) carrying full /api/... paths
+  internal/db       SQLite open (WAL), schema + migrations
+  internal/auth     session login/logout + per-request gate (auth.go) + login rate-limit (ratelimit.go)
+  internal/articles id/enrich/dedup helpers over article_states
+  internal/store    article_states writes — persist upserts, feed writes, adopt-orphans
+  internal/cache    refreshFeed fetch chain + ensureFresh (TTL via feeds.last_fetched_at) + startup warming
+  internal/favicon  favicon_cache read-through (fetches from Google s2, stores BLOB)
+  internal/jobs     background workers — poller, maintenance (orphan cleanup + size-cap + VACUUM), resource monitor, WAL checkpoint
+  internal/feed     gofeed RSS wrapper (ParseURL) + feed types
+  internal/dates    publish-date parsing (parsePubDate / pubTs)
+  internal/ssrf     SSRF guard for outbound content/favicon fetches
+  internal/model    shared structs
+  internal/logger   slog logger + lumberjack rotation (NDJSON → logs/app.log)
+  internal/httpx    JSON response helpers
+  internal/crash    panic guard (Go analogue of the uncaughtException handler)
+  cmd/dbinit, cmd/freezefeeds   CLI utilities
+  Makefile          run/build/test/lint/cover/deploy targets; go.mod pins Go 1.26
+  *_test.go         offline unit tests; *_itest.go (build tag itest) live-network suites
 client/             Vite + React + TypeScript (port 3000)
   src/App.tsx       top-level layout/auth/audio owner
   src/store.ts      zustand store — feeds/articles/views + all fetch logic
-  src/types.ts      shared client types (Feed, Article, View, AudioCtxValue) — mirrors server/types.ts
+  src/types.ts      shared client types (Feed, Article, View, AudioCtxValue) — mirrors the backend JSON shapes (server-go/internal/model)
   src/components/    *.tsx — FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, SettingsModal, PodcastPlayer, LoginForm
   src/pages/         *.tsx — mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
   src/index.css     CSS variables (--bg, --accent, etc.)
@@ -111,7 +118,7 @@ client/             Vite + React + TypeScript (port 3000)
 ```
 
 TypeScript, type-stripped by Vite/Vitest (no separate build step for types). `npm run typecheck`
-(`tsc --noEmit`, in `client/`) is the type gate — Vite does not type-check. `strict: true`, matching the server.
+(`tsc --noEmit`, in `client/`) is the type gate — Vite does not type-check. `strict: true`.
 
 **Data flow:** the `store.ts` zustand store owns app state (`feeds`, `articles`, `selectedView`, `selectedArticle`, `starredCount`) and exposes the action creators; components subscribe via `useStore`. Audio-player wiring lives in `App.tsx` and is shared through `AudioContext`. `selectedView` shape: `{ type: 'all' | 'today' | 'starred' | 'feed', feed? }`. Read/star use optimistic updates — mutate local state immediately, fire-and-forget POST to sync.
 
@@ -124,19 +131,20 @@ information the current context already makes obvious (e.g. hide the per-row fee
 feed is selected — the header already names it), keep labels in one consistent language, and drop
 stale or redundant chrome. Every pixel should carry information the user doesn't already have.
 
-### Server (`server/`)
+### Server (`server-go/`)
 
-- Split into focused modules (see tree above); `app.ts` is assembly only (middleware → `registerAuth` → mount the `routes/` routers via `mountRouters` → SPA `*` fallback), with the API handlers living in per-domain `express.Router()` modules under `routes/`. `index.ts` is the thin entrypoint. Tests import `app`, `localApp`, `db`, and helpers (`makeId`, `persistItems`) from `articles.ts`.
-  - **Two listeners share the same routers.** `app.ts` exports both the public `app` (all interfaces, auth-gated, static + SPA) and `localApp` (bound by `index.ts` to `127.0.0.1:LOCAL_API_PORT`, **no auth**, no SPA). `mountRouters()` mounts the same router instances on both. `registerMcp` runs **only on `localApp`** — there is no public MCP surface. "Whether auth applies" is decided by which socket a request arrived on, not by a spoofable header.
-  - **Route registration order is load-bearing**: on the public `app`, routers mount after `registerAuth(app)` (so the `/api` auth gate covers them) and before the `*` SPA fallback. Each router carries full `/api/...` paths and is mounted bare (`app.use(router)`); `:id` paths for one domain (e.g. feeds) stay in one router to keep Express matching intact.
-- TypeScript, run directly by Node ≥ 22.18 via native type-stripping — no build step. ESM (`import`/`export`); `"type": "module"` in `server/package.json`. `npm run typecheck` validates types (Node does not).
-- `better-sqlite3` (synchronous, WAL mode)
-- RSS fetched via `rss-parser` through `refreshFeed` (`cache.ts`): fetch upstream → `persistItems` all items into `article_states` → stamp `feeds.last_fetched_at` (epoch ms). Both writes run in one transaction. There is **no separate items cache** — the list endpoints read straight from `article_states`; `feeds.last_fetched_at` is only a 5-min TTL freshness signal. `ensureFresh(feed)` decides per request: fresh → serve as-is; stale-but-fetched-before → background refresh; brand-new feed with no rows → await one fetch. Every fetch path routes through `refreshFeed` — on-demand reads (`ensureFresh`), startup warming, and the background poller (`poller.ts`, every 15 min). `persistItems` **upserts** on the `article_id` PK: a new item inserts, a re-fetched item refreshes its content fields (title/summary/content/author/pub_date) so the local row tracks upstream edits, guarded by a `WHERE …<>excluded…` clause so unchanged rows aren't rewritten (no spurious `updated_at` bumps). `is_starred` is never touched, so the user's flag survives; `feed_id`/`feed_name`/`feed_url` are set only on insert (a live feed never re-homes an article; deleting a feed purges its non-starred rows — see `DELETE /api/feeds/:id`). Kept starred rows keep their `feed_url`, so re-adding the same URL re-adopts them via `adoptStarredOrphans` (the one deliberate re-home path). When the update fires, content genuinely changed, so `content_updated_at` (epoch ms) is stamped — the reader shows an "更新于" time only when it is set. On-demand Readability full-text (`/api/fetch-content`) is **not** persisted, so the feed stays the sole `content` source. Article bodies live only in `article_states.content`; `lookupContent` reads from there, and `/api/search` is a single `article_states` `LIKE` query. Each row also carries `pub_ts` (sortable publish epoch-ms, parsed from `pub_date`) so list reads use `ORDER BY pub_ts DESC`. `article_id` is the global PRIMARY KEY (no cross-feed dupes), so the merged `latest` lists are a single global `ORDER BY pub_ts DESC LIMIT 500` served by a standalone `(pub_ts)` index; the `digest` lists fan out per-feed (each scan served by the `(feed_id, pub_ts)` index) and merge-sort in JS
-- Maintenance (`maintenance.ts`): runs at poller startup + every 24h. `cleanupOrphans()` deletes non-starred rows whose feed is gone (starred orphans kept). `enforceSizeCap()` caps the logical DB size at `DB_MAX_SIZE_MB` (default 2GB) — when over, deletes the oldest non-starred articles (publish time parsed from RFC-822 `pub_date`, falling back to `updated_at`) down to 90% of the cap, then `VACUUM`s. Starred articles are never deleted
-- Logging: shared `logger` (`logger.ts`, vendored slog in `vendor/slog.ts`) writes NDJSON to `logs/app.log` (size rotation + gzip + retention) and pretty colorized output to a dev TTY. Use `logger.info|warn|error(...)` with a fields object; pass an Error as the `err` field to auto-serialize its stack/cause. Disabled under `TEST_DB`. Tune via `LOG_LEVEL` / `LOG_DIR`
-- Article IDs: `md5(link || title+pubDate).slice(0,12)`
-- `enrich()` joins live RSS items with persisted `article_states` rows
-- Auth (`auth.ts`): when `AUTH_USER`/`AUTH_PASS` are set, **every** `/api/*` request on the public `app` requires a valid `session` cookie — no localhost bypass, local and remote are gated identically; disabled otherwise (`/api/login` `/api/logout` `/api/auth-check` are registered before the gate and stay reachable). The auth gate is **not** installed on `localApp`, so the loopback-only port serves the API unauthenticated by design. `isLocalhost()` is still exported but only the MCP transport uses it now (redundant defense-in-depth, since `localApp` is already loopback-bound). The login route is rate-limited (`express-rate-limit`)
+The Go backend is a strict 1:1 port of the original Node server (see `docs/plan-go-backend-migration.md`) — same API, same SQLite schema, same behavior, enforced by differential "oracle" tests. The Node original is preserved on the `legacy_server_node` branch. The invariants below are the ported contract; only the language/module names changed.
+
+- Split into focused packages under `internal/` (see tree above); `main.go` is the thin entrypoint (load config → open DB → build logger → start both listeners → start jobs). `internal/httpapi` owns the `Server` struct and both router constructors, with per-domain handlers (`feeds.go`, `content.go`, `search.go`, `static.go`) carrying full `/api/...` paths on a chi router.
+  - **Two listeners share the same handlers.** `srv.NewPublicRouter()` (all interfaces, auth-gated, static + SPA) and `srv.NewLocalRouter()` (bound by `main.go` to `127.0.0.1:LOCAL_API_PORT`, **no auth**, no SPA). "Whether auth applies" is decided by which socket a request arrived on, not by a spoofable header. **MCP is not ported** — the loopback listener currently has no MCP consumer; it is kept and reserved as the future Go MCP host.
+  - The `/api` auth gate is chi middleware on the public router only; `/api/login` `/api/logout` `/api/auth-check` are registered outside it and stay reachable.
+- Go 1.26, compiled to a single **cgo** binary (`mattn/go-sqlite3`, WAL mode) — must be built on the Mac (`CGO_ENABLED=1`). `make check` (fmt-check + `go vet` + `staticcheck` + tests) is the gate.
+- RSS fetched via `gofeed` (`internal/feed`) through the refresh chain (`internal/cache`): fetch upstream → persist all items into `article_states` (`internal/store`) → stamp `feeds.last_fetched_at` (epoch ms). Both writes run in one transaction. There is **no separate items cache** — the list endpoints read straight from `article_states`; `feeds.last_fetched_at` is only a 5-min TTL freshness signal. `ensureFresh` decides per request: fresh → serve as-is; stale-but-fetched-before → background refresh; brand-new feed with no rows → await one fetch. Every fetch path routes through the same chain — on-demand reads, startup warming, and the background poller (`internal/jobs`, every 15 min). The persist step **upserts** on the `article_id` PK: a new item inserts, a re-fetched item refreshes its content fields (title/summary/content/author/pub_date) so the local row tracks upstream edits, guarded by a `WHERE …<>excluded…` clause so unchanged rows aren't rewritten (no spurious `updated_at` bumps). `is_starred` is never touched, so the user's flag survives; `feed_id`/`feed_name`/`feed_url` are set only on insert (a live feed never re-homes an article; deleting a feed purges its non-starred rows — see `DELETE /api/feeds/:id`). Kept starred rows keep their `feed_url`, so re-adding the same URL re-adopts them (adopt-orphans, the one deliberate re-home path). When the update fires, content genuinely changed, so `content_updated_at` (epoch ms) is stamped — the reader shows an "更新于" time only when it is set. On-demand Readability full-text (`/api/fetch-content`, via `go-readability`) is **not** persisted, so the feed stays the sole `content` source. Article bodies live only in `article_states.content`; the content lookup reads from there, and `/api/search` is a single `article_states` `LIKE` query. Each row also carries `pub_ts` (sortable publish epoch-ms, parsed from `pub_date`) so list reads use `ORDER BY pub_ts DESC`. `article_id` is the global PRIMARY KEY (no cross-feed dupes), so the merged `latest` lists are a single global `ORDER BY pub_ts DESC LIMIT 500` served by a standalone `(pub_ts)` index; the `digest` lists fan out per-feed (each scan served by the `(feed_id, pub_ts)` index) and merge-sort in Go
+- Maintenance (`internal/jobs/maintenance.go`): runs at poller startup + every 24h. Orphan cleanup deletes non-starred rows whose feed is gone (starred orphans kept). The size cap bounds the logical DB size at `DB_MAX_SIZE_MB` (default 2GB) — when over, deletes the oldest non-starred articles (publish time parsed from RFC-822 `pub_date`, falling back to `updated_at`) down to 90% of the cap, then `VACUUM`s. Starred articles are never deleted
+- Logging: shared slog logger (`internal/logger`) writes NDJSON to `<LogDir>/app.log` (lumberjack size rotation + gzip + retention) or stderr when `LogDir` is unset. Background workers carry a `crash.Guard` panic handler. Tune via `LOG_DIR`
+- Article IDs: `md5(link || title+pubDate)` truncated to 12 chars (`internal/dates`/`internal/articles`)
+- Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`)
+- Auth (`internal/auth`): when `AUTH_USER`/`AUTH_PASS` are set, **every** `/api/*` request on the public router requires a valid `session` cookie — no localhost bypass, local and remote are gated identically; disabled otherwise. The gate is **not** installed on the loopback router, so `LOCAL_API_PORT` serves the API unauthenticated by design (loopback-bound). The login route is rate-limited (`ratelimit.go`)
 
 **SQLite tables:**
 - `feeds(id, name, url, last_fetched_at)` — `last_fetched_at` (epoch ms) is the per-feed refresh freshness stamp
@@ -169,6 +177,14 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 | POST | `/api/login` `/api/logout` | session auth (when enabled) |
 | GET | `/api/auth-check` | whether the request is authed |
 
-### MCP server (`server/mcp.ts`)
+### MCP server — not in the Go backend (pending)
 
-Mounted via the MCP **Streamable HTTP** transport at `POST /mcp` (stateless — fresh server + transport per request; `GET`/`DELETE` return 405), **only on the loopback-only `localApp`** (`registerMcp(localApp)` in `app.ts`), never on the public port. Because that listener is bound to `127.0.0.1:LOCAL_API_PORT`, there is no public MCP surface — a request via the tunnel can never reach it (the `isLocalhost` check remains as redundant defense-in-depth). Exposes 13 tools (feed CRUD, OPML import, article lists, star, current article, full-content fetch) that call the API over loopback at `http://127.0.0.1:${LOCAL_API_PORT}` — the **no-auth** listener, so the internal calls pass even when `AUTH_USER`/`AUTH_PASS` are set (this is what fixed MCP-under-auth). Configure clients with `{ "type": "http", "url": "http://localhost:4002/mcp" }` (or whatever `LOCAL_API_PORT` is set to).
+> **Status:** the MCP server was **not** ported in the Go migration (explicitly out of scope —
+> see `docs/plan-go-backend-migration.md`). The current Go backend serves no `/mcp` endpoint. The
+> loopback-only, no-auth listener (`127.0.0.1:LOCAL_API_PORT`) is kept and **reserved as the future
+> Go MCP host**, but currently has no MCP consumer. The full Node MCP implementation (Streamable
+> HTTP transport, 13 tools) is preserved on the `legacy_server_node` branch.
+
+When MCP is ported to Go, it must mount on the loopback listener only (never the public port) and
+call the API over loopback at `http://127.0.0.1:${LOCAL_API_PORT}` — the no-auth listener — so
+internal calls pass even when `AUTH_USER`/`AUTH_PASS` are set, matching the original design.

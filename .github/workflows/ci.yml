@@ -1,8 +1,8 @@
 name: CI
 
-# Covers the Go backend (server-go) and the React client only. The legacy Node
-# backend (server/) is intentionally out of scope — it is kept solely as a
-# rollback target and will be removed once the Go cutover is closed out.
+# Covers the Go backend (server-go) and the React client. The legacy Node backend
+# (server/) has been removed from main now that the Go cutover is complete; it is
+# preserved on the `legacy_server_node` branch as the source-level rollback target.
 
 on:
   push:
