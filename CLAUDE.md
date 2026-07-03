@@ -19,8 +19,9 @@ cd client && npm run test:coverage  # vitest with V8 coverage report (text + htm
                                 # ROUNDS=/BASE_URL=/FAIL_MS= env overrides; FAIL_MS gates a regression
 
 # Production deploy (Go backend)
-./script-go/deploy.sh    # build client + cgo Go binary on the Mac, sync to ~/Deploy, flip launchd to Go, health-check
-./script-go/rollback.sh  # restore the saved plist backup (rollback path)
+./script-go/deploy.sh             # build client + cgo Go binary on the Mac, sync to ~/Deploy, kickstart the installed service, health-check
+./script-go/install-service.sh    # register the launchd job (write plist + bootstrap); run once on a fresh box, after deploy.sh builds the binary
+./script-go/uninstall-service.sh  # stop + remove the launchd job (deployed files kept)
 
 # Service management
 launchctl start com.rss-reader.app
@@ -66,7 +67,7 @@ oxlint/oxfmt now cover the **client only** — the Go backend (`server-go/`) is 
 
 Single-user macOS app exposed publicly at `https://rss.royl.uk:8443` via a **rathole** reverse tunnel to an **Aliyun VPS** that terminates TLS with **Caddy** (Let's Encrypt, DNS-01). The app still runs on the Mac; the VPS only fronts it. Session-cookie auth (`AUTH_USER` / `AUTH_PASS` env vars) gates public access. Prefer simple solutions — SQLite, in-memory cache, local files. Full setup/runbook: `docs/rathole-vps-tunnel.md`.
 
-- Backend: launchd `com.rss-reader.app` → the compiled Go binary at `~/Deploy/rss-reader/rss-reader` on port 3002 (single cgo binary — `mattn/go-sqlite3` — built on the Mac, no runtime deps). Built + wired up by `script-go/deploy.sh`
+- Backend: launchd `com.rss-reader.app` → the compiled Go binary at `~/Deploy/rss-reader/rss-reader` on port 3002 (single cgo binary — `mattn/go-sqlite3` — built on the Mac, no runtime deps). Built + synced by `script-go/deploy.sh`; the launchd job is registered by `script-go/install-service.sh`
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, served as static files by the Go server (`CLIENT_DIST` env)
 - Public path: browser → Caddy `:8443` (Aliyun VPS, TLS) → rathole server (VPS `:2333`, noise) → tunnel → rathole client (Mac, launchd `com.rss-reader.rathole`) → `localhost:3002`. Cloudflare is **DNS-only** (grey-cloud A record → VPS IP); the old Cloudflare Tunnel / `cloudflared` is retired. `:8443` is non-standard on purpose — avoids Aliyun mainland ICP filing (备案) for ports 80/443
 - Auth: `AUTH_USER` / `AUTH_PASS` loaded from the env file pointed to by `RSS_ENV_FILE` (default `~/Deploy/rss-reader/server/.env`, gitignored; the plist sets it). Empty/unset → auth disabled. When set, **every** request on the public listener requires a valid session cookie
