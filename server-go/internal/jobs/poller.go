@@ -3,7 +3,7 @@ package jobs
 import (
 	"context"
 	"log/slog"
-	"math/rand"
+	"sync"
 	"time"
 
 	"rss-reader/server-go/internal/cache"
@@ -87,28 +87,33 @@ func (r *Runner) tick(ctx context.Context, name string, d time.Duration, fn func
 	}
 }
 
-// pollAllFeeds refreshes every feed, staggered 2–5s apart so the fan-out doesn't
-// bunch (the single-flight + concurrency cap in cache also bound it). Port of
-// pollAllFeeds.
+// pollAllFeeds refreshes every feed concurrently and waits for the batch to
+// finish. There is no artificial per-feed stagger: the cache's REFRESH_CONCURRENCY
+// slot cap (internal/cache, REFRESH_CONCURRENCY) is the single throttle on how many
+// fetch+persist chains run at once, so the poll fans out and lets that cap bound
+// it. Each feed runs under safeRun so one panicking fetch doesn't take the batch
+// down. Port of pollAllFeeds.
 func (r *Runner) pollAllFeeds(ctx context.Context) {
 	feeds, err := store.ListFeeds(r.DB.Reader())
 	if err != nil {
 		r.Log.Warn("poll: list feeds failed", "err", err)
 		return
 	}
-	for i, f := range feeds {
-		if i > 0 {
-			delay := time.Duration(2000+rand.Intn(3000)) * time.Millisecond
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(delay):
-			}
+	var wg sync.WaitGroup
+	for _, f := range feeds {
+		if ctx.Err() != nil {
+			break
 		}
-		r.safeRun("feed-poll "+f.ID, func() {
-			if _, err := r.Cache.RefreshFeed(ctx, f); err != nil {
-				r.Log.Warn("feed poll failed", "feedId", f.ID, "feedUrl", f.URL, "err", err)
-			}
-		})
+		f := f
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.safeRun("feed-poll "+f.ID, func() {
+				if _, err := r.Cache.RefreshFeed(ctx, f); err != nil {
+					r.Log.Warn("feed poll failed", "feedId", f.ID, "feedUrl", f.URL, "err", err)
+				}
+			})
+		}()
 	}
+	wg.Wait()
 }

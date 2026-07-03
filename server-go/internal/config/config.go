@@ -17,6 +17,10 @@ type Config struct {
 	AuthUser       string // empty => auth disabled
 	AuthPass       string
 	DBMaxSizeBytes int64
+	// RefreshConcurrency caps how many feed fetch+persist chains run at once
+	// (REFRESH_CONCURRENCY). It is the single throttle on every fetch path — poll
+	// fan-out, startup warming, on-demand reads.
+	RefreshConcurrency int
 	// DisableJobs skips background workers (poller, maintenance, checkpoint,
 	// resource monitor, cache warming). Set by RSS_DISABLE_JOBS — the Go analogue
 	// of Node keying its jobs off TEST_DB; the contract-diff harness sets it so the
@@ -35,15 +39,16 @@ func Load() Config {
 		LoadEnvFile(p)
 	}
 	return Config{
-		Port:           envInt("PORT", 3002),
-		LocalAPIPort:   envInt("LOCAL_API_PORT", 4002),
-		DBPath:         envStr("RSS_DB", "rss.db"),
-		AuthUser:       os.Getenv("AUTH_USER"),
-		AuthPass:       os.Getenv("AUTH_PASS"),
-		DBMaxSizeBytes: int64(envInt("DB_MAX_SIZE_MB", 2048)) * 1024 * 1024,
-		DisableJobs:    os.Getenv("RSS_DISABLE_JOBS") != "",
-		ClientDist:     envStr("CLIENT_DIST", "client/dist"),
-		LogDir:         os.Getenv("LOG_DIR"),
+		Port:               envInt("PORT", 3002),
+		LocalAPIPort:       envInt("LOCAL_API_PORT", 4002),
+		DBPath:             envStr("RSS_DB", "rss.db"),
+		AuthUser:           os.Getenv("AUTH_USER"),
+		AuthPass:           os.Getenv("AUTH_PASS"),
+		DBMaxSizeBytes:     int64(envInt("DB_MAX_SIZE_MB", 2048)) * 1024 * 1024,
+		RefreshConcurrency: envInt("REFRESH_CONCURRENCY", 6),
+		DisableJobs:        os.Getenv("RSS_DISABLE_JOBS") != "",
+		ClientDist:         envStr("CLIENT_DIST", "client/dist"),
+		LogDir:             os.Getenv("LOG_DIR"),
 	}
 }
 

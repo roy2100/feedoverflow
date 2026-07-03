@@ -57,8 +57,8 @@ func main() {
 		fatal("init schema failed", "err", err)
 	}
 
-	c := cache.New(handle, nil)     // nil fetch → feed.ParseURL
-	fav := favicon.New(handle, nil) // nil fetch → Google s2
+	c := cache.New(handle, nil, cache.WithConcurrency(cfg.RefreshConcurrency)) // nil fetch → feed.ParseURL
+	fav := favicon.New(handle, nil)                                            // nil fetch → Google s2
 	srv := &httpapi.Server{
 		DB: handle, Cache: c, Favicon: fav,
 		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,

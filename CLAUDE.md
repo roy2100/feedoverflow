@@ -88,7 +88,7 @@ feature — articles only carry a starred flag.
 root/               concurrently orchestrator (`npm run dev`)
 server-go/          Go backend (single cgo binary, port 3002 — chi router, mattn/go-sqlite3)
   main.go           entrypoint — load config, open DB, build logger, start public + loopback listeners, then background jobs (gated by RSS_DISABLE_JOBS)
-  internal/config   env config (Load / LoadEnvFile via RSS_ENV_FILE; PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, CLIENT_DIST, LOG_DIR)
+  internal/config   env config (Load / LoadEnvFile via RSS_ENV_FILE; PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, REFRESH_CONCURRENCY, CLIENT_DIST, LOG_DIR)
   internal/httpapi  Server struct + NewPublicRouter / NewLocalRouter; per-domain handlers (feeds.go, content.go, search.go, static.go) carrying full /api/... paths
   internal/db       SQLite open (WAL), schema + migrations
   internal/auth     session login/logout + per-request gate (auth.go) + login rate-limit (ratelimit.go)

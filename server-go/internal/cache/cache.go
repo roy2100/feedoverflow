@@ -21,10 +21,11 @@ import (
 // CacheTTL mirrors CACHE_TTL: a feed fetched within this window is fresh.
 const CacheTTL = 5 * time.Minute
 
-// refreshConcurrency mirrors REFRESH_CONCURRENCY: at most this many refreshes do
-// their fetch+persist work at once, so a page-load / startup fan-out can't bunch
-// every feed's persist together.
-const refreshConcurrency = 2
+// defaultRefreshConcurrency is the fallback REFRESH_CONCURRENCY: at most this many
+// refreshes do their fetch+persist work at once, so a page-load / startup / poll
+// fan-out can't bunch every feed's persist together. main.go overrides it from
+// config via WithConcurrency.
+const defaultRefreshConcurrency = 6
 
 // Result is the port of RefreshResult: the parsed items plus the resolved feed
 // name (parsed.title || feed.name).
@@ -60,18 +61,35 @@ type flight struct {
 	err  error
 }
 
+// Option customizes a Cache at construction. Unset options keep the defaults.
+type Option func(*Cache)
+
+// WithConcurrency overrides the fetch+persist slot cap (REFRESH_CONCURRENCY).
+// n < 1 is ignored so a misconfigured value keeps the default.
+func WithConcurrency(n int) Option {
+	return func(c *Cache) {
+		if n >= 1 {
+			c.sem = make(chan struct{}, n)
+		}
+	}
+}
+
 // New builds a Cache over a DB handle. Pass nil fetch to use feed.ParseURL.
-func New(handle *db.DB, fetch FetchFunc) *Cache {
+func New(handle *db.DB, fetch FetchFunc, opts ...Option) *Cache {
 	if fetch == nil {
 		fetch = feed.ParseURL
 	}
-	return &Cache{
+	c := &Cache{
 		db:       handle,
 		fetch:    fetch,
 		inflight: map[string]*flight{},
-		sem:      make(chan struct{}, refreshConcurrency),
+		sem:      make(chan struct{}, defaultRefreshConcurrency),
 		now:      func() int64 { return time.Now().UnixMilli() },
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // RefreshFeed is the single-flight wrapper (port of refreshFeed): concurrent

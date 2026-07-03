@@ -158,7 +158,7 @@ func TestCheckpointWAL(t *testing.T) {
 func TestPollAllFeedsPersists(t *testing.T) {
 	handle := newTestDB(t)
 	// InitSchema seeds 4 starter feeds; drop them so this test has exactly one feed
-	// (no inter-feed stagger, no article_id collision from the shared stub item).
+	// (no article_id collision from the shared stub item).
 	if _, err := handle.Writer().Exec(`DELETE FROM feeds`); err != nil {
 		t.Fatal(err)
 	}
