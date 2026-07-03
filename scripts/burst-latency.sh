@@ -30,7 +30,6 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://127.0.0.1:4002}"
 ROUNDS="${ROUNDS:-3}"
 FAIL_MS="${FAIL_MS:-0}"            # 0 = report only; >0 = fail the run if any request exceeds it
-SLEEP_BETWEEN="${SLEEP_BETWEEN:-2}"
 
 ENDPOINTS=(
   "api/starred/count"
@@ -53,30 +52,43 @@ trap 'rm -rf "$tmp"' EXIT
 worst_ms=0
 fail=0
 
-# Warm-up burst (discarded): the very first request after the process has been idle pays a
-# one-off wake-up cost (macOS compresses idle pages; the fault-back is unrelated to the refresh
-# path). Measure steady state so FAIL_MS gates the concurrent-refresh behavior this test targets.
-for ep in "${ENDPOINTS[@]}"; do curl -sk -o /dev/null "$BASE_URL/$ep" & done
+# Warm-up (discarded): the very first request after the process has been idle pays a one-off
+# wake-up cost (macOS compresses idle pages; unrelated to the refresh path). It also primes each
+# endpoint's keep-alive connection so the measured requests below reuse it instead of paying
+# fresh-connection setup. Measure steady state so FAIL_MS gates the concurrent-refresh behavior.
+for ep in "${ENDPOINTS[@]}"; do curl -sk --keepalive -o /dev/null "$BASE_URL/$ep" & done
 wait
 
+# Fire each endpoint on its own persistent keep-alive connection, reused across all ROUNDS
+# requests, with the four endpoints running concurrently. Reusing one connection per endpoint
+# matches the real client path (browser -> Caddy -> rathole -> Node all hold persistent
+# connections). A fresh connection per request instead occasionally stalls ~600ms waiting on the
+# server's accept queue under connection churn — a load-generator artifact, not an event-loop
+# stall, so it must not pollute this measurement. ROUNDS = requests per endpoint.
+i=0
+for ep in "${ENDPOINTS[@]}"; do
+  {
+    for _ in $(seq 1 "$ROUNDS"); do
+      printf 'url = "%s/%s"\n-o /dev/null\n-w "%%{time_total}\\n"\n' "$BASE_URL" "$ep"
+    done | curl -sk --keepalive -K - >"$tmp/$i"
+  } &
+  i=$((i + 1))
+done
+wait
+
+# The endpoints ran concurrently, so the r-th sample of each lines up in time — transpose the
+# per-endpoint sample lists back into per-round rows for display.
 for round in $(seq 1 "$ROUNDS"); do
-  echo "--- burst $round (concurrent) ---"
-  # Fire every endpoint at once; stash each request's total time by index.
+  echo "--- burst $round (concurrent, keep-alive) ---"
   i=0
   for ep in "${ENDPOINTS[@]}"; do
-    curl -sk -o /dev/null -w "%{time_total}" "$BASE_URL/$ep" >"$tmp/$i" &
-    i=$((i + 1))
-  done
-  wait
-  i=0
-  for ep in "${ENDPOINTS[@]}"; do
-    ms="$(awk "BEGIN{printf \"%.0f\", $(cat "$tmp/$i") * 1000}")"
+    sec="$(awk "NR==$round" "$tmp/$i")"
+    ms="$(awk "BEGIN{printf \"%.0f\", ${sec:-0} * 1000}")"
     printf "  %-32s %5dms\n" "$ep" "$ms"
     [ "$ms" -gt "$worst_ms" ] && worst_ms="$ms"
     { [ "$FAIL_MS" -gt 0 ] && [ "$ms" -gt "$FAIL_MS" ]; } && fail=1
     i=$((i + 1))
   done
-  [ "$round" -lt "$ROUNDS" ] && sleep "$SLEEP_BETWEEN"
 done
 
 echo "==> worst: ${worst_ms}ms"
