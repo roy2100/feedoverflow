@@ -143,6 +143,25 @@ func InitSchema(db *sql.DB) error {
 	); err != nil {
 		return fmt.Errorf("idx pub: %w", err)
 	}
+	// Partial index over starred rows only: GET /api/starred and /api/starred/count
+	// filter on is_starred = 1, a tiny fraction of the (potentially 100k+ row) table.
+	// Without it those queries full-scan the whole pub_ts index and do a table lookup
+	// per row to check is_starred (~800ms on a 440MB DB). The partial index keys just
+	// the starred rows by pub_ts, so both the ordered list and the count are index-only.
+	if _, err := db.Exec(
+		`CREATE INDEX IF NOT EXISTS idx_article_states_starred ON article_states (pub_ts) WHERE is_starred = 1`,
+	); err != nil {
+		return fmt.Errorf("idx starred: %w", err)
+	}
+	// Partial index over audio-bearing rows only: GET /api/podcasts filters on a
+	// non-empty audio_url (a small slice of the table) and orders by pub_date. Without
+	// it that query full-scans the table and builds a temp B-tree to sort (~800ms on a
+	// 440MB DB). Keying the podcast rows by pub_date makes the read index-only, no sort.
+	if _, err := db.Exec(
+		`CREATE INDEX IF NOT EXISTS idx_article_states_podcast ON article_states (pub_date DESC) WHERE audio_url IS NOT NULL AND audio_url != ''`,
+	); err != nil {
+		return fmt.Errorf("idx podcast: %w", err)
+	}
 
 	// pub_ts backfill: db.ts recomputes pub_ts for pre-existing NULL rows via
 	// pubTs(). That is domain logic ported in Phase 2. It is a no-op on a fresh
