@@ -121,7 +121,7 @@ func SinceByFeed(db *sql.DB, feedID string, since int64, limit int) ([]articles.
 // Starred — GET /api/starred: starred rows, newest-updated first.
 func Starred(db *sql.DB) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT ` + articleCols + ` FROM article_states WHERE is_starred = 1 ORDER BY updated_at DESC`)
+		`SELECT ` + articleCols + ` FROM article_states WHERE is_starred = 1 ORDER BY pub_ts DESC`)
 	if err != nil {
 		return nil, err
 	}

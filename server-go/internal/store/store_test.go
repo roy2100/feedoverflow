@@ -193,15 +193,16 @@ func TestNewestAndSinceByFeed(t *testing.T) {
 func TestStarredAndCount(t *testing.T) {
 	h := newTestDB(t)
 	w := h.Writer()
-	insertArticle(t, w, af{id: "s_old", link: "l1", isStarred: 1, updatedAt: "2020-01-01 00:00:00"})
-	insertArticle(t, w, af{id: "s_new", link: "l2", isStarred: 1, updatedAt: "2021-01-01 00:00:00"})
+	// pub_ts drives the sort; updated_at is inverted to prove it's not the key.
+	insertArticle(t, w, af{id: "s_old", link: "l1", isStarred: 1, pubTs: 1000, updatedAt: "2021-01-01 00:00:00"})
+	insertArticle(t, w, af{id: "s_new", link: "l2", isStarred: 1, pubTs: 2000, updatedAt: "2020-01-01 00:00:00"})
 	insertArticle(t, w, af{id: "plain", link: "l3", isStarred: 0})
 
 	starred, err := store.Starred(h.Reader())
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Newest updated_at first; unstarred excluded.
+	// Newest pub_ts first; unstarred excluded.
 	eqStrings(t, articleIDs(starred), []string{"s_new", "s_old"})
 
 	n, err := store.StarredCount(h.Reader())
