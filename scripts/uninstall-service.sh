@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Unregister the Go backend launchd job: stop it and remove the LaunchAgent plist.
 # The deployed binary, DB, and client under ~/Deploy/rss-reader are left untouched —
-# re-register with script-go/install-service.sh.
+# re-register with scripts/install-service.sh.
 #
-# Usage: script-go/uninstall-service.sh
+# Usage: scripts/uninstall-service.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh

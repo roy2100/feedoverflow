@@ -5,12 +5,12 @@ set -euo pipefail
 # Mac (no cross-compile), sync both into ~/Deploy/rss-reader, and kickstart the
 # installed launchd service so the new binary/client take effect.
 #
-# The launchd service must already be registered by script-go/install-service.sh —
+# The launchd service must already be registered by scripts/install-service.sh —
 # deploy.sh never writes the plist. On a fresh box, run deploy.sh once (it builds the
 # binary, then tells you to install the service), then install-service.sh.
 #
-# Usage: script-go/deploy.sh            # PORT 3002, LOCAL_API_PORT 4002
-#        PORT=8080 script-go/deploy.sh
+# Usage: scripts/deploy.sh            # PORT 3002, LOCAL_API_PORT 4002
+#        PORT=8080 scripts/deploy.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -31,7 +31,7 @@ echo "    $(ls -la "$BIN" | awk '{print $5" bytes"}')"
 
 [ -f "$PLIST" ] || {
   echo "error: service not installed ($PLIST missing)"
-  echo "       binary is built — run script-go/install-service.sh to register it"
+  echo "       binary is built — run scripts/install-service.sh to register it"
   exit 1
 }
 

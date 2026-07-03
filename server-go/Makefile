@@ -83,20 +83,20 @@ dbinit:
 freezefeeds:
 	go run ./cmd/freezefeeds
 
-## deploy: build client + Go binary, sync, kickstart the installed service, health-check (script-go)
+## deploy: build client + Go binary, sync, kickstart the installed service, health-check (scripts)
 .PHONY: deploy
 deploy:
-	../script-go/deploy.sh
+	../scripts/deploy.sh
 
 ## install-service: register the launchd job (write plist + bootstrap); run once on a fresh box
 .PHONY: install-service
 install-service:
-	../script-go/install-service.sh
+	../scripts/install-service.sh
 
 ## uninstall-service: stop + remove the launchd job (deployed files kept)
 .PHONY: uninstall-service
 uninstall-service:
-	../script-go/uninstall-service.sh
+	../scripts/uninstall-service.sh
 
 ## clean: remove build/coverage artifacts
 .PHONY: clean

@@ -5,19 +5,17 @@ set -euo pipefail
 # server-go/internal/jobs/resource.go) back into an aligned table: local time, RSS, heap,
 # DB size, CPU%, uptime.
 #
-# This is the script-go counterpart of scripts/service-stats-mac.sh. The Go and Node
-# backends share the same NDJSON slog record shape ({ ts, msg, ctx, ... }) and the same
-# ctx field names (rssMb, heapUsedMb, dbMb, cpuPercent, uptimeSec), so the only real
-# difference is the filter: the Go sample carries no ctx.mod, so rows are keyed on the
-# message "resource sample". Parsing uses jq (not node) to keep the Go-stack tooling free
-# of a Node runtime dependency.
+# The Go backend's slog records are NDJSON ({ ts, msg, ctx, ... }) with ctx field names
+# rssMb, heapUsedMb, dbMb, cpuPercent, uptimeSec; the Go sample carries no ctx.mod, so
+# rows are keyed on the message "resource sample". Parsing uses jq (not node) to keep the
+# Go-stack tooling free of a Node runtime dependency.
 #
 # Usage:
-#   ./script-go/service-stats-mac.sh            # active log only
-#   ./script-go/service-stats-mac.sh --all      # also include gzipped rotated archives (chronological)
-#   LOG_DIR=/some/path ./script-go/service-stats-mac.sh
+#   ./scripts/service-stats-mac.sh            # active log only
+#   ./scripts/service-stats-mac.sh --all      # also include gzipped rotated archives (chronological)
+#   LOG_DIR=/some/path ./scripts/service-stats-mac.sh
 #
-# Log dir mirrors internal/logger + the deploy layout (script-go/deploy.sh sets LOG_DIR):
+# Log dir mirrors internal/logger + the deploy layout (scripts/deploy.sh sets LOG_DIR):
 # $HOME/Deploy/rss-reader/logs. Override with LOG_DIR.
 
 LOG_DIR="${LOG_DIR:-$HOME/Deploy/rss-reader/logs}"

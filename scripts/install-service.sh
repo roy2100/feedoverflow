@@ -6,8 +6,8 @@ set -euo pipefail
 # Run this once on a fresh box (after deploy.sh has built the binary); thereafter
 # deploy.sh alone rolls out new builds by kickstarting the installed service.
 #
-# Usage: script-go/install-service.sh          # PORT 3002, LOCAL_API_PORT 4002
-#        PORT=8080 script-go/install-service.sh
+# Usage: scripts/install-service.sh          # PORT 3002, LOCAL_API_PORT 4002
+#        PORT=8080 scripts/install-service.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 [ -x "$BIN" ] || {
   echo "error: binary not found at $BIN"
-  echo "       run script-go/deploy.sh first to build it, then re-run this script"
+  echo "       run scripts/deploy.sh first to build it, then re-run this script"
   exit 1
 }
 
