@@ -21,18 +21,25 @@ func nullIfEmpty(s string) any {
 // updated_at — never title/content/etc, so a star can't clobber persisted content.
 // feed_url is derived from the live feed (insert-only). Runs on the write pool.
 func SaveState(w *sql.DB, a model.Article, isStarred int, now int64) error {
+	// Stamp the star-action time only when flipping to starred; leave it NULL on an
+	// unstar so the ON CONFLICT below preserves any prior value. now is epoch ms.
+	var starredAt any
+	if isStarred == 1 {
+		starredAt = now
+	}
 	_, err := w.Exec(
 		`INSERT INTO article_states
-		   (article_id,feed_id,feed_name,feed_url,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred)
-		 VALUES (?,?,?,(SELECT url FROM feeds WHERE id = ?),?,?,?,?,?,?,?,?,?,?)
+		   (article_id,feed_id,feed_name,feed_url,title,link,pub_date,pub_ts,summary,content,author,audio_url,audio_duration,is_starred,starred_at)
+		 VALUES (?,?,?,(SELECT url FROM feeds WHERE id = ?),?,?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(article_id) DO UPDATE SET
 		   audio_url      = COALESCE(excluded.audio_url, audio_url),
 		   audio_duration = COALESCE(excluded.audio_duration, audio_duration),
 		   is_starred = CASE WHEN excluded.is_starred IS NOT NULL THEN excluded.is_starred ELSE is_starred END,
+		   starred_at = CASE WHEN excluded.is_starred = 1 THEN excluded.starred_at ELSE starred_at END,
 		   updated_at = datetime('now')`,
 		a.ID, a.FeedID, a.FeedName, a.FeedID, a.Title, a.Link, a.PubDate,
 		dates.PubTs(a.PubDate, now), a.Summary, a.Content, a.Author,
-		nullIfEmpty(a.AudioURL), nullIfEmpty(a.AudioDuration), isStarred,
+		nullIfEmpty(a.AudioURL), nullIfEmpty(a.AudioDuration), isStarred, starredAt,
 	)
 	return err
 }

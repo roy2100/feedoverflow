@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/feed"
 	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/store"
@@ -17,15 +18,16 @@ type state struct {
 	feedURL          sql.NullString
 	updatedAt        string
 	contentUpdatedAt sql.NullInt64
+	starredAt        sql.NullInt64
 }
 
 func stateByLink(t *testing.T, r *sql.DB, link string) state {
 	t.Helper()
 	var s state
 	err := r.QueryRow(
-		`SELECT content, audio_url, is_starred, feed_url, updated_at, content_updated_at
+		`SELECT content, audio_url, is_starred, feed_url, updated_at, content_updated_at, starred_at
 		 FROM article_states WHERE link = ?`, link).
-		Scan(&s.content, &s.audioURL, &s.isStarred, &s.feedURL, &s.updatedAt, &s.contentUpdatedAt)
+		Scan(&s.content, &s.audioURL, &s.isStarred, &s.feedURL, &s.updatedAt, &s.contentUpdatedAt, &s.starredAt)
 	if err != nil {
 		t.Fatalf("stateByLink %q: %v", link, err)
 	}
@@ -67,6 +69,94 @@ func TestSaveStateInsertThenStarNeverClobbersContent(t *testing.T) {
 	}
 	if got.isStarred.Int64 != 0 {
 		t.Fatalf("is_starred not updated: %d", got.isStarred.Int64)
+	}
+}
+
+func TestStarredAtBackfillAndReRunIdempotent(t *testing.T) {
+	h := newTestDB(t)
+	w := h.Writer()
+	// Simulate a legacy starred row: NULL starred_at, a known updated_at text stamp.
+	// 2021-01-01 00:00:00 UTC = 1609459200s -> 1609459200000 ms.
+	insertArticle(t, w, af{id: "legacy", link: "l1", isStarred: 1, pubTs: 5,
+		updatedAt: "2021-01-01 00:00:00", starredAt: nil})
+
+	// Re-run the migration: backfill must seed starred_at from updated_at, and the
+	// index drop/recreate + ALTER must all be no-ops the second time.
+	if err := db.InitSchema(w); err != nil {
+		t.Fatalf("re-run InitSchema: %v", err)
+	}
+	got := stateByLink(t, h.Reader(), "l1")
+	if !got.starredAt.Valid || got.starredAt.Int64 != 1_609_459_200_000 {
+		t.Fatalf("backfill from updated_at failed: %+v", got.starredAt)
+	}
+
+	// Second re-run must not disturb the already-backfilled value.
+	if err := db.InitSchema(w); err != nil {
+		t.Fatalf("second re-run InitSchema: %v", err)
+	}
+	if got = stateByLink(t, h.Reader(), "l1"); got.starredAt.Int64 != 1_609_459_200_000 {
+		t.Fatalf("re-run clobbered starred_at: %+v", got.starredAt)
+	}
+}
+
+func TestSaveStateStarredAtTracksStarAction(t *testing.T) {
+	h := newTestDB(t)
+	w := h.Writer()
+	insertFeed(t, w, "f1", "Feed One", "http://f1/rss", nil)
+	art := model.Article{ID: "id1", FeedID: "f1", Link: "http://f1/a", Content: "body"}
+
+	// Star at t1: starred_at is stamped even though the article's pub_date is old.
+	if err := store.SaveState(w, art, 1, 1_700_000_000_000); err != nil {
+		t.Fatal(err)
+	}
+	got := stateByLink(t, h.Reader(), art.Link)
+	if !got.starredAt.Valid || got.starredAt.Int64 != 1_700_000_000_000 {
+		t.Fatalf("star should stamp starred_at: %+v", got.starredAt)
+	}
+
+	// Unstar at t2: starred_at is preserved (ignored while not starred, kept for audit).
+	if err := store.SaveState(w, art, 0, 1_700_000_001_000); err != nil {
+		t.Fatal(err)
+	}
+	got = stateByLink(t, h.Reader(), art.Link)
+	if got.isStarred.Int64 != 0 {
+		t.Fatalf("unstar failed: %+v", got.isStarred)
+	}
+	if !got.starredAt.Valid || got.starredAt.Int64 != 1_700_000_000_000 {
+		t.Fatalf("unstar must not clear starred_at: %+v", got.starredAt)
+	}
+
+	// Re-star at t3: starred_at moves forward so the row sorts to the top.
+	if err := store.SaveState(w, art, 1, 1_700_000_002_000); err != nil {
+		t.Fatal(err)
+	}
+	got = stateByLink(t, h.Reader(), art.Link)
+	if !got.starredAt.Valid || got.starredAt.Int64 != 1_700_000_002_000 {
+		t.Fatalf("re-star should refresh starred_at: %+v", got.starredAt)
+	}
+}
+
+func TestStarredOrdersByStarAction(t *testing.T) {
+	h := newTestDB(t)
+	w := h.Writer()
+	insertFeed(t, w, "f1", "Feed One", "http://f1/rss", nil)
+	// "older" has the NEWER publish date; "newer" is published earlier but starred later.
+	older := model.Article{ID: "a", FeedID: "f1", Link: "http://f1/older",
+		PubDate: "Mon, 02 Jan 2006 15:04:05 GMT", Content: "x"}
+	newer := model.Article{ID: "b", FeedID: "f1", Link: "http://f1/newer",
+		PubDate: "Mon, 01 Jan 2001 00:00:00 GMT", Content: "y"}
+	if err := store.SaveState(w, older, 1, 1_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveState(w, newer, 1, 2_000); err != nil { // starred later
+		t.Fatal(err)
+	}
+	rows, err := store.Starred(h.Reader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].ArticleID != "b" || rows[1].ArticleID != "a" {
+		t.Fatalf("want star-action order [b a], got %+v", rows)
 	}
 }
 

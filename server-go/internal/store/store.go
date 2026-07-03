@@ -118,10 +118,12 @@ func SinceByFeed(db *sql.DB, feedID string, since int64, limit int) ([]articles.
 	return scanArticleRows(rows)
 }
 
-// Starred — GET /api/starred: starred rows, newest-updated first.
+// Starred — GET /api/starred: starred rows, newest-starred first. starred_at is
+// non-NULL for every starred row (backfilled + set on star), so the partial index
+// idx_article_states_starred serves this order index-only.
 func Starred(db *sql.DB) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT ` + articleCols + ` FROM article_states WHERE is_starred = 1 ORDER BY pub_ts DESC`)
+		`SELECT ` + articleCols + ` FROM article_states WHERE is_starred = 1 ORDER BY starred_at DESC`)
 	if err != nil {
 		return nil, err
 	}

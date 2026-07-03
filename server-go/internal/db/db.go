@@ -1,17 +1,17 @@
 // Package db owns the SQLite connection, schema, and migrations. It is the Go
-// counterpart to server/db.ts and reuses the same rss.db file/schema unchanged.
+// counterpart to server/db.ts and reuses the same rss.db file/schema.
 //
-// The schema/migration SQL is copied verbatim from db.ts (same statement text,
-// same ALTER order) so `sqlite3 .schema` is byte-identical between the Node and
-// Go builds — see docs/plan-go-backend-migration.md Phase 1.
+// The migration chain began as a verbatim port of db.ts (same statement text and
+// ALTER order — see docs/plan-go-backend-migration.md Phase 1) and has since
+// diverged as the Go build gained its own columns (e.g. starred_at). Migrations
+// stay strictly additive and idempotent so the single live rss.db and every fresh
+// DB both converge on the same schema; column *order* is deliberately not pinned
+// (all queries use explicit named column lists, never positional SELECT *).
 //
 // Known production drift (decided: ignore, do not "fix"): the live rss.db carries
-// a dead `feeds.category` column (from a removed feature; unused by current code)
-// and a frozen article_states column order (pub_ts before content_updated_at).
-// Both are identical drift under Node — a fresh Node DB matches the Go fresh init,
-// and the live Node app already runs against this file. Parity rules that follow:
-// this package never references `category`, and all queries use explicit named
-// column lists (never positional SELECT *) so column order is irrelevant.
+// a dead `feeds.category` column from a removed feature. It is harmless as long
+// as this package never references `category` — which, per the named-column rule
+// above, it doesn't.
 package db
 
 import (
@@ -132,6 +132,9 @@ func InitSchema(db *sql.DB) error {
 	execIgnore(db, `ALTER TABLE article_states ADD COLUMN content_updated_at INTEGER`)
 	// Sortable publish time (epoch ms).
 	execIgnore(db, `ALTER TABLE article_states ADD COLUMN pub_ts INTEGER`)
+	// Star-action time (epoch ms); NULL until first starred. Drives the /api/starred
+	// order (newest-starred first) independent of publish date.
+	execIgnore(db, `ALTER TABLE article_states ADD COLUMN starred_at INTEGER`)
 
 	if _, err := db.Exec(
 		`CREATE INDEX IF NOT EXISTS idx_article_states_feed_pub ON article_states (feed_id, pub_ts)`,
@@ -143,13 +146,27 @@ func InitSchema(db *sql.DB) error {
 	); err != nil {
 		return fmt.Errorf("idx pub: %w", err)
 	}
+	// Backfill starred_at for pre-existing starred rows (one-time, before the index
+	// below keys on it): seed from updated_at (text datetime → epoch ms), falling back
+	// to pub_ts then 0, so the invariant is_starred = 1 ⟹ starred_at NOT NULL holds.
+	if _, err := db.Exec(`
+  UPDATE article_states
+     SET starred_at = COALESCE(CAST(strftime('%s', updated_at) AS INTEGER) * 1000, pub_ts, 0)
+   WHERE is_starred = 1 AND starred_at IS NULL`,
+	); err != nil {
+		return fmt.Errorf("starred_at backfill: %w", err)
+	}
 	// Partial index over starred rows only: GET /api/starred and /api/starred/count
 	// filter on is_starred = 1, a tiny fraction of the (potentially 100k+ row) table.
 	// Without it those queries full-scan the whole pub_ts index and do a table lookup
-	// per row to check is_starred (~800ms on a 440MB DB). The partial index keys just
-	// the starred rows by pub_ts, so both the ordered list and the count are index-only.
+	// per row to check is_starred (~800ms on a 440MB DB). Keying the starred rows by
+	// starred_at DESC serves both the newest-starred-first list and the count index-only.
+	// Drop the prior pub_ts-keyed variant so this definition wins on existing DBs.
+	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_article_states_starred`); err != nil {
+		return fmt.Errorf("drop old idx starred: %w", err)
+	}
 	if _, err := db.Exec(
-		`CREATE INDEX IF NOT EXISTS idx_article_states_starred ON article_states (pub_ts) WHERE is_starred = 1`,
+		`CREATE INDEX IF NOT EXISTS idx_article_states_starred ON article_states (starred_at DESC) WHERE is_starred = 1`,
 	); err != nil {
 		return fmt.Errorf("idx starred: %w", err)
 	}
@@ -194,11 +211,9 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("drop feed_cache: %w", err)
 	}
 
-	// Collapse any duplicate feed URLs (keep oldest rowid, re-home losers'
-	// articles, delete loser rows), then enforce uniqueness with an index.
-	if err := collapseDuplicateFeeds(db); err != nil {
-		return err
-	}
+	// Enforce feed-URL uniqueness. The one-time dup-collapse this index once
+	// depended on is retired: the live DB was long since collapsed, this
+	// constraint has prevented new dups since, and a fresh DB never has any.
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_feeds_url ON feeds (url)`); err != nil {
 		return fmt.Errorf("unique feeds url: %w", err)
 	}
@@ -213,70 +228,6 @@ func InitSchema(db *sql.DB) error {
 		return err
 	}
 	return nil
-}
-
-// collapseDuplicateFeeds mirrors the dup-URL collapse transaction in db.ts.
-func collapseDuplicateFeeds(db *sql.DB) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	rows, err := tx.Query(`SELECT url FROM feeds GROUP BY url HAVING COUNT(*) > 1`)
-	if err != nil {
-		return err
-	}
-	var dupURLs []string
-	for rows.Next() {
-		var u string
-		if err := rows.Scan(&u); err != nil {
-			rows.Close()
-			return err
-		}
-		dupURLs = append(dupURLs, u)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	for _, url := range dupURLs {
-		fr, err := tx.Query(`SELECT id, name FROM feeds WHERE url = ? ORDER BY rowid`, url)
-		if err != nil {
-			return err
-		}
-		type feedRow struct{ id, name string }
-		var frows []feedRow
-		for fr.Next() {
-			var f feedRow
-			if err := fr.Scan(&f.id, &f.name); err != nil {
-				fr.Close()
-				return err
-			}
-			frows = append(frows, f)
-		}
-		fr.Close()
-		if err := fr.Err(); err != nil {
-			return err
-		}
-		if len(frows) == 0 {
-			continue
-		}
-		winner := frows[0]
-		for _, loser := range frows[1:] {
-			if _, err := tx.Exec(
-				`UPDATE article_states SET feed_id = ?, feed_name = ? WHERE feed_id = ?`,
-				winner.id, winner.name, loser.id,
-			); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(`DELETE FROM feeds WHERE id = ?`, loser.id); err != nil {
-				return err
-			}
-		}
-	}
-	return tx.Commit()
 }
 
 // seedDefaultFeeds inserts the four starter feeds only when the table is empty,

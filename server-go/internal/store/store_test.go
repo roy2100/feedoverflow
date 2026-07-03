@@ -42,6 +42,7 @@ type af struct {
 	isStarred                     int
 	updatedAt                     string // "" -> datetime('now')
 	contentUpdatedAt              any    // nil -> NULL
+	starredAt                     any    // nil -> NULL
 }
 
 func insertArticle(t *testing.T, w *sql.DB, a af) {
@@ -52,11 +53,11 @@ func insertArticle(t *testing.T, w *sql.DB, a af) {
 	}
 	_, err := w.Exec(`INSERT INTO article_states
 		(article_id,feed_id,feed_name,feed_url,title,link,pub_date,pub_ts,summary,content,author,
-		 audio_url,audio_duration,is_starred,updated_at,content_updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE(?,datetime('now')),?)`,
+		 audio_url,audio_duration,is_starred,updated_at,content_updated_at,starred_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE(?,datetime('now')),?,?)`,
 		a.id, a.feedID, a.feedName, a.feedURL, a.title, a.link, a.pubDate, a.pubTs,
 		a.summary, a.content, a.author, a.audioURL, a.audioDuration, a.isStarred,
-		updated, a.contentUpdatedAt)
+		updated, a.contentUpdatedAt, a.starredAt)
 	if err != nil {
 		t.Fatalf("insertArticle %q: %v", a.id, err)
 	}
@@ -193,17 +194,18 @@ func TestNewestAndSinceByFeed(t *testing.T) {
 func TestStarredAndCount(t *testing.T) {
 	h := newTestDB(t)
 	w := h.Writer()
-	// pub_ts drives the sort; updated_at is inverted to prove it's not the key.
-	insertArticle(t, w, af{id: "s_old", link: "l1", isStarred: 1, pubTs: 1000, updatedAt: "2021-01-01 00:00:00"})
-	insertArticle(t, w, af{id: "s_new", link: "l2", isStarred: 1, pubTs: 2000, updatedAt: "2020-01-01 00:00:00"})
+	// starred_at drives the sort; pub_ts is inverted to prove it's not the key.
+	// s_recent has the OLDER pub_ts but the NEWER star time, so it must come first.
+	insertArticle(t, w, af{id: "s_stale", link: "l1", isStarred: 1, pubTs: 2000, starredAt: int64(1000)})
+	insertArticle(t, w, af{id: "s_recent", link: "l2", isStarred: 1, pubTs: 1000, starredAt: int64(2000)})
 	insertArticle(t, w, af{id: "plain", link: "l3", isStarred: 0})
 
 	starred, err := store.Starred(h.Reader())
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Newest pub_ts first; unstarred excluded.
-	eqStrings(t, articleIDs(starred), []string{"s_new", "s_old"})
+	// Newest starred_at first; unstarred excluded.
+	eqStrings(t, articleIDs(starred), []string{"s_recent", "s_stale"})
 
 	n, err := store.StarredCount(h.Reader())
 	if err != nil {
