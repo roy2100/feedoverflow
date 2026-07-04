@@ -11,9 +11,11 @@ React + PWA client (TypeScript), and a single-binary **Go backend** (`server-go/
 SQLite that serves the API and the static client.
 
 > **Live demo:** _add your deployed URL here_
-> **Screenshot:** _add `docs/screenshot.png` and it renders below_
 
-<!-- ![RSS Reader](docs/screenshot.png) -->
+<p>
+  <img src="docs/images/screenshot-desktop.png" alt="Desktop: three-pane feed / list / reader layout" width="700">
+  <img src="docs/images/screenshot-mobile.png" alt="Mobile: single-pane reader view" width="200">
+</p>
 
 ---
 

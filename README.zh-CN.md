@@ -10,9 +10,11 @@
 基于 SQLite，同时提供 API 和静态客户端资源。
 
 > **在线演示：** _在这里填上你的部署地址_
-> **截图：** _添加 `docs/screenshot.png` 后会在下方渲染_
 
-<!-- ![RSS Reader](docs/screenshot.png) -->
+<p>
+  <img src="docs/images/screenshot-desktop.png" alt="桌面端：订阅 / 列表 / 阅读三栏布局" width="700">
+  <img src="docs/images/screenshot-mobile.png" alt="移动端：单栏阅读视图" width="200">
+</p>
 
 ---
 
