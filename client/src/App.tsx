@@ -301,7 +301,12 @@ export default function App() {
   return (
     <AudioContext.Provider value={audioCtx}>
       <div
-        style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}
+        style={{
+          display: 'flex',
+          height: 'var(--app-height, 100vh)',
+          overflow: 'hidden',
+          background: 'var(--bg)',
+        }}
       >
         {!readingMode && !sidebarCollapsed && (
           <FeedSidebar
