@@ -12,10 +12,12 @@ SQLite that serves the API and the static client.
 
 > **Live demo:** _add your deployed URL here_
 
-<p>
-  <img src="docs/images/screenshot-desktop.png" alt="Desktop: three-pane feed / list / reader layout" width="700">
-  <img src="docs/images/screenshot-mobile.png" alt="Mobile: single-pane reader view" width="200">
-</p>
+<table>
+<tr>
+<td><img src="docs/images/screenshot-desktop.png" alt="Desktop: three-pane feed / list / reader layout" width="600"></td>
+<td><img src="docs/images/screenshot-mobile.png" alt="Mobile: single-pane reader view" width="180"></td>
+</tr>
+</table>
 
 ---
 

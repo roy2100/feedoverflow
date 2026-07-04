@@ -11,10 +11,12 @@
 
 > **在线演示：** _在这里填上你的部署地址_
 
-<p>
-  <img src="docs/images/screenshot-desktop.png" alt="桌面端：订阅 / 列表 / 阅读三栏布局" width="700">
-  <img src="docs/images/screenshot-mobile.png" alt="移动端：单栏阅读视图" width="200">
-</p>
+<table>
+<tr>
+<td><img src="docs/images/screenshot-desktop.png" alt="桌面端：订阅 / 列表 / 阅读三栏布局" width="600"></td>
+<td><img src="docs/images/screenshot-mobile.png" alt="移动端：单栏阅读视图" width="180"></td>
+</tr>
+</table>
 
 ---
 
