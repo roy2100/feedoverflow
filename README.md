@@ -3,8 +3,7 @@
 A self-hosted, full-stack RSS reader with a clean reading-first UI, full-text article
 extraction, and a podcast player. It also has a built-in **MCP server** that lets an LLM
 (Claude, etc.) read and manage your feeds as tools — including summarizing the article
-you're currently reading — though that surface currently ships only in the legacy Node
-backend (see the MCP status note below).
+you're currently reading.
 
 React + PWA client (TypeScript), and a single-binary **Go backend** (`server-go/`) over
 SQLite that serves the API and the static client.
@@ -40,14 +39,10 @@ SQLite that serves the API and the static client.
 
 ## AI / MCP integration
 
-> **Status:** the MCP server shipped in the original **Node** backend and was intentionally
-> **not** ported in the Go migration — the current Go backend does not serve `/mcp` (the
-> loopback-only port is reserved as its future host). The full MCP implementation lives on
-> the `legacy_server_node` branch; the description below documents that surface.
-
-The server exposes a [Model Context Protocol](https://modelcontextprotocol.io) endpoint
-(Streamable HTTP transport) with **13 tools**, so an MCP-capable client can drive the
-reader conversationally:
+The Go server exposes a [Model Context Protocol](https://modelcontextprotocol.io) endpoint
+(Streamable HTTP transport) with **13 tools**, mounted at `/mcp` on the loopback-only,
+no-auth listener (`LOCAL_API_PORT`), so an MCP-capable client can drive the reader
+conversationally:
 
 | Area | Tools |
 |------|-------|
@@ -69,6 +64,7 @@ server-go/  Go + go-sqlite3 (SQLite), chi router — a single compiled binary
             ├─ jobs        scheduled feed fetch/persist + maintenance
             ├─ content     go-readability full-text extraction
             ├─ favicon     fetched + cached per feed
+            ├─ mcp         Model Context Protocol server (13 tools), loopback-only
             └─ maintenance DB size cap / old-article pruning
 ```
 
@@ -93,9 +89,8 @@ npm run dev
 
 Open http://localhost:3000, then add a feed URL or import an OPML file.
 
-The loopback-only, no-auth companion listener (`LOCAL_API_PORT`, default 4002) is where the
-MCP endpoint was served in the Node backend; the Go backend keeps the listener but does not
-yet mount `/mcp` (see the MCP status note above).
+The loopback-only, no-auth companion listener (`LOCAL_API_PORT`, default 4002) also serves
+the MCP endpoint at `/mcp` (see the AI / MCP integration section above).
 
 ### Auth (optional)
 
@@ -107,7 +102,7 @@ tunnel. Leave them empty for localhost-only private use.
 
 **Frontend:** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
 **Backend:** Go 1.26, chi, mattn/go-sqlite3, go-readability, gofeed, lumberjack
-**AI:** Model Context Protocol (Streamable HTTP) — Node backend only, pending a Go port
+**AI:** Model Context Protocol (Streamable HTTP), via `modelcontextprotocol/go-sdk`
 **Tooling:** go test + staticcheck (server), oxlint + oxfmt + Vitest (client)
 
 ## License
