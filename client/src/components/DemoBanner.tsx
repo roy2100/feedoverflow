@@ -1,7 +1,9 @@
 // Build-time demo marker. Rendered only when the client is built with
 // VITE_DEMO_MODE=1 (the public demo instance); a no-op in the production build,
-// so this file is dormant on `main`. The banner's height is reserved by main.tsx
-// shrinking --app-height, so it never overlaps the app chrome.
+// so this file is dormant on `main`. It's a normal-flow strip that stacks above
+// <App/> inside #root (main.tsx keeps the page body at full viewport height and
+// gives the app the remaining --app-height), so it reserves space rather than
+// overlapping the app chrome.
 export const DEMO_MODE = Boolean(import.meta.env.VITE_DEMO_MODE);
 export const DEMO_BANNER_HEIGHT = 32;
 
@@ -11,12 +13,8 @@ export default function DemoBanner() {
     <div
       role="note"
       style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
         height: DEMO_BANNER_HEIGHT,
-        zIndex: 2000,
+        flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -29,6 +27,8 @@ export default function DemoBanner() {
         boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
         textAlign: 'center',
         userSelect: 'none',
+        position: 'relative',
+        zIndex: 2000,
       }}
     >
       <span>Live demo — sample data, resets every 6&nbsp;hours.</span>

@@ -9,7 +9,7 @@
 前端是 React + PWA 客户端（TypeScript），后端是单二进制的 **Go 服务**（`server-go/`），
 基于 SQLite，同时提供 API 和静态客户端资源。
 
-> **在线演示：** _在这里填上你的部署地址_
+> **在线演示：** <https://demo.royl.uk:8443> — 公开体验实例，示例数据，每 6 小时重置一次。
 
 <table>
 <tr>
