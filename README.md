@@ -1,5 +1,7 @@
 # RSS Reader
 
+**English** | [简体中文](README.zh-CN.md)
+
 A self-hosted, full-stack RSS reader with a clean reading-first UI, full-text article
 extraction, and a podcast player. It also has a built-in **MCP server** that lets an LLM
 (Claude, etc.) read and manage your feeds as tools — including summarizing the article
@@ -100,10 +102,10 @@ tunnel. Leave them empty for localhost-only private use.
 
 ## Tech stack
 
-**Frontend:** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
-**Backend:** Go 1.26, chi, mattn/go-sqlite3, go-readability, gofeed, lumberjack
-**AI:** Model Context Protocol (Streamable HTTP), via `modelcontextprotocol/go-sdk`
-**Tooling:** go test + staticcheck (server), oxlint + oxfmt + Vitest (client)
+- **Frontend:** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
+- **Backend:** Go 1.26, chi, mattn/go-sqlite3, go-readability, gofeed, lumberjack
+- **AI:** Model Context Protocol (Streamable HTTP), via `modelcontextprotocol/go-sdk`
+- **Tooling:** go test + staticcheck (server), oxlint + oxfmt + Vitest (client)
 
 ## License
 
