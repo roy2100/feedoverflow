@@ -10,7 +10,7 @@ you're currently reading.
 React + PWA client (TypeScript), and a single-binary **Go backend** (`server-go/`) over
 SQLite that serves the API and the static client.
 
-> **Live demo:** _add your deployed URL here_
+> **Live demo:** <https://demo.royl.uk:8443> — public sandbox with sample data, resets every 6 hours.
 
 <table>
 <tr>
