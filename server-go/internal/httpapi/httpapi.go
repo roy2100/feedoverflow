@@ -4,10 +4,10 @@
 // Two routers share the same API routes (mountAPIRoutes):
 //   - Public (NewPublicRouter): CORS + auth gate; served on all interfaces.
 //   - Loopback (NewLocalRouter): no auth; bound to 127.0.0.1 only. The socket, not
-//     a header, decides whether auth applies.
+//     a header, decides whether auth applies. Also mounts /mcp (internal/mcp),
+//     the Streamable HTTP MCP server — never on the public router.
 //
 // Reads go through the DB read pool; writes through the single-writer pool.
-// Static/SPA serving and MCP are out of this phase (SPA is Phase 10; MCP is out).
 package httpapi
 
 import (
@@ -28,6 +28,7 @@ import (
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/favicon"
 	"rss-reader/server-go/internal/httpx"
+	"rss-reader/server-go/internal/mcp"
 	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/store"
 )
@@ -58,6 +59,10 @@ type Server struct {
 	// assets + SPA fallback). Empty disables static serving (loopback listener
 	// never serves it).
 	DistDir string
+	// LocalAPIPort is the loopback listener's own port. The MCP server's tools
+	// call back into the API over 127.0.0.1:LocalAPIPort (see internal/mcp),
+	// same self-call pattern as the Node original.
+	LocalAPIPort int
 	// CacheReady mirrors cache.ts cacheReady in the all-articles/today envelope.
 	// When a Cache is present its warming state wins (see cacheReady); this field
 	// is the fallback for tests/servers without a Cache. Normalized out of the
@@ -94,6 +99,7 @@ func (s *Server) NewLocalRouter() http.Handler {
 	r.Use(apiNoStore)
 	r.Get("/healthz", healthz)
 	s.mountAPIRoutes(r)
+	r.Handle("/mcp", mcp.Handler(s.LocalAPIPort))
 	return r
 }
 

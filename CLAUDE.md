@@ -71,7 +71,7 @@ Single-user macOS app exposed publicly at `https://rss.royl.uk:8443` via a **rat
 - Frontend: Vite build → `~/Deploy/rss-reader/client/dist/`, served as static files by the Go server (`CLIENT_DIST` env)
 - Public path: browser → Caddy `:8443` (Aliyun VPS, TLS) → rathole server (VPS `:2333`, noise) → tunnel → rathole client (Mac, launchd `com.rss-reader.rathole`) → `localhost:3002`. Cloudflare is **DNS-only** (grey-cloud A record → VPS IP); the old Cloudflare Tunnel / `cloudflared` is retired. `:8443` is non-standard on purpose — avoids Aliyun mainland ICP filing (备案) for ports 80/443
 - Auth: `AUTH_USER` / `AUTH_PASS` loaded from the env file pointed to by `RSS_ENV_FILE` (default `~/Deploy/rss-reader/server/.env`, gitignored; the plist sets it). Empty/unset → auth disabled. When set, **every** request on the public listener requires a valid session cookie
-- Ports: networth.local → 3001, rss.royl.uk:8443 (public) → VPS → tunnel → 3002, dev client → 3000, **127.0.0.1:4002 → loopback-only no-auth API** (`LOCAL_API_PORT`, never tunneled — reserved as the future MCP host)
+- Ports: networth.local → 3001, rss.royl.uk:8443 (public) → VPS → tunnel → 3002, dev client → 3000, **127.0.0.1:4002 → loopback-only no-auth API** (`LOCAL_API_PORT`, never tunneled — also hosts the MCP server at `/mcp`)
 
 ## Architecture
 
@@ -90,6 +90,7 @@ server-go/          Go backend (single cgo binary, port 3002 — chi router, mat
   main.go           entrypoint — load config, open DB, build logger, start public + loopback listeners, then background jobs (gated by RSS_DISABLE_JOBS)
   internal/config   env config (Load / LoadEnvFile via RSS_ENV_FILE; PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, REFRESH_CONCURRENCY, CLIENT_DIST, LOG_DIR)
   internal/httpapi  Server struct + NewPublicRouter / NewLocalRouter; per-domain handlers (feeds.go, content.go, search.go, static.go) carrying full /api/... paths
+  internal/mcp      MCP server (Streamable HTTP, modelcontextprotocol/go-sdk) — 13 tools, mounted at /mcp on NewLocalRouter only; tools self-call the loopback API
   internal/db       SQLite open (WAL), schema + migrations
   internal/auth     session login/logout + per-request gate (auth.go) + login rate-limit (ratelimit.go)
   internal/articles id/enrich/dedup helpers over article_states
@@ -137,7 +138,7 @@ stale or redundant chrome. Every pixel should carry information the user doesn't
 The Go backend is a strict 1:1 port of the original Node server (see `docs/plan-go-backend-migration.md`) — same API, same SQLite schema, same behavior, enforced by differential "oracle" tests. The Node original is preserved on the `legacy_server_node` branch. The invariants below are the ported contract; only the language/module names changed.
 
 - Split into focused packages under `internal/` (see tree above); `main.go` is the thin entrypoint (load config → open DB → build logger → start both listeners → start jobs). `internal/httpapi` owns the `Server` struct and both router constructors, with per-domain handlers (`feeds.go`, `content.go`, `search.go`, `static.go`) carrying full `/api/...` paths on a chi router.
-  - **Two listeners share the same handlers.** `srv.NewPublicRouter()` (all interfaces, auth-gated, static + SPA) and `srv.NewLocalRouter()` (bound by `main.go` to `127.0.0.1:LOCAL_API_PORT`, **no auth**, no SPA). "Whether auth applies" is decided by which socket a request arrived on, not by a spoofable header. **MCP is not ported** — the loopback listener currently has no MCP consumer; it is kept and reserved as the future Go MCP host.
+  - **Two listeners share the same handlers.** `srv.NewPublicRouter()` (all interfaces, auth-gated, static + SPA) and `srv.NewLocalRouter()` (bound by `main.go` to `127.0.0.1:LOCAL_API_PORT`, **no auth**, no SPA). "Whether auth applies" is decided by which socket a request arrived on, not by a spoofable header. `NewLocalRouter` also mounts `/mcp` (`internal/mcp`), the MCP server — never mounted on the public router.
   - The `/api` auth gate is chi middleware on the public router only; `/api/login` `/api/logout` `/api/auth-check` are registered outside it and stay reachable.
 - Go 1.26, compiled to a single **cgo** binary (`mattn/go-sqlite3`, WAL mode) — must be built on the Mac (`CGO_ENABLED=1`). `make check` (fmt-check + `go vet` + `staticcheck` + tests) is the gate.
 - RSS fetched via `gofeed` (`internal/feed`) through the refresh chain (`internal/cache`): fetch upstream → persist all items into `article_states` (`internal/store`) → stamp `feeds.last_fetched_at` (epoch ms). Both writes run in one transaction. There is **no separate items cache** — the list endpoints read straight from `article_states`; `feeds.last_fetched_at` is only a 5-min TTL freshness signal. `ensureFresh` decides per request: fresh → serve as-is; stale-but-fetched-before → background refresh; brand-new feed with no rows → await one fetch. Every fetch path routes through the same chain — on-demand reads, startup warming, and the background poller (`internal/jobs`, every 15 min). The persist step **upserts** on the `article_id` PK: a new item inserts, a re-fetched item refreshes its content fields (title/summary/content/author/pub_date) so the local row tracks upstream edits, guarded by a `WHERE …<>excluded…` clause so unchanged rows aren't rewritten (no spurious `updated_at` bumps). `is_starred` is never touched, so the user's flag survives; `feed_id`/`feed_name`/`feed_url` are set only on insert (a live feed never re-homes an article; deleting a feed purges its non-starred rows — see `DELETE /api/feeds/:id`). Kept starred rows keep their `feed_url`, so re-adding the same URL re-adopts them (adopt-orphans, the one deliberate re-home path). When the update fires, content genuinely changed, so `content_updated_at` (epoch ms) is stamped — the reader shows an "更新于" time only when it is set. On-demand Readability full-text (`/api/fetch-content`, via `go-readability`) is **not** persisted, so the feed stays the sole `content` source. Article bodies live only in `article_states.content`; the content lookup reads from there, and `/api/search` is a single `article_states` `LIKE` query. Each row also carries `pub_ts` (sortable publish epoch-ms, parsed from `pub_date`) so list reads use `ORDER BY pub_ts DESC`. `article_id` is the global PRIMARY KEY (no cross-feed dupes), so the merged `latest` lists are a single global `ORDER BY pub_ts DESC LIMIT 500` served by a standalone `(pub_ts)` index; the `digest` lists fan out per-feed (each scan served by the `(feed_id, pub_ts)` index) and merge-sort in Go
@@ -178,14 +179,17 @@ The Go backend is a strict 1:1 port of the original Node server (see `docs/plan-
 | POST | `/api/login` `/api/logout` | session auth (when enabled) |
 | GET | `/api/auth-check` | whether the request is authed |
 
-### MCP server — not in the Go backend (pending)
+### MCP server (`internal/mcp`)
 
-> **Status:** the MCP server was **not** ported in the Go migration (explicitly out of scope —
-> see `docs/plan-go-backend-migration.md`). The current Go backend serves no `/mcp` endpoint. The
-> loopback-only, no-auth listener (`127.0.0.1:LOCAL_API_PORT`) is kept and **reserved as the future
-> Go MCP host**, but currently has no MCP consumer. The full Node MCP implementation (Streamable
-> HTTP transport, 13 tools) is preserved on the `legacy_server_node` branch.
-
-When MCP is ported to Go, it must mount on the loopback listener only (never the public port) and
-call the API over loopback at `http://127.0.0.1:${LOCAL_API_PORT}` — the no-auth listener — so
-internal calls pass even when `AUTH_USER`/`AUTH_PASS` are set, matching the original design.
+Ported from the Node original (`server/mcp.ts`, `legacy_server_node` branch), using the official
+`github.com/modelcontextprotocol/go-sdk` (`mcp` subpackage). Mounted at `POST /mcp` on
+`NewLocalRouter` only (`http://127.0.0.1:LOCAL_API_PORT/mcp`) — never on the public router; auth
+is by socket (loopback-only), same as every other route on that listener, so no separate MCP auth
+was added. Streamable HTTP transport, one shared `*mcp.Server` (the Go SDK handles concurrent
+sessions natively, unlike Node's stateless per-request rebuild). Same 13 tools as Node:
+`list_feeds`, `add_feed`, `rename_feed`, `delete_feed`, `import_opml`, `get_all_articles`,
+`get_today_articles`, `get_starred_articles`, `get_feed_articles`, `get_starred_count`,
+`toggle_star`, `get_current_article`, `fetch_article_content` — each a thin call into
+`http://127.0.0.1:LOCAL_API_PORT/api/...` (`internal/mcp/client.go`), same self-call design as
+Node: keeps MCP decoupled from `internal/httpapi`'s handler logic (digest quotas, `ensureFresh`
+triggers, article normalization) rather than duplicating it. See `docs/plan-go-mcp-server.md`.

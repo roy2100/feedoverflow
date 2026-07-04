@@ -1,7 +1,8 @@
 // Command server-go is the Go port of the RSS reader backend (see
-// docs/plan-go-backend-migration.md). Through Phase 4 it opens the DB and serves
-// the read API on two listeners: a public, auth-gated one on PORT and a
-// loopback-only, no-auth one on LOCAL_API_PORT.
+// docs/plan-go-backend-migration.md). It opens the DB and serves the API on
+// two listeners: a public, auth-gated one on PORT and a loopback-only,
+// no-auth one on LOCAL_API_PORT — the latter also hosts the MCP server
+// (POST /mcp, see internal/mcp).
 package main
 
 import (
@@ -62,6 +63,7 @@ func main() {
 	srv := &httpapi.Server{
 		DB: handle, Cache: c, Favicon: fav,
 		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,
+		LocalAPIPort: cfg.LocalAPIPort,
 	}
 
 	localAddr := "127.0.0.1:" + strconv.Itoa(cfg.LocalAPIPort)
