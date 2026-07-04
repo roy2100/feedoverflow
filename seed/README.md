@@ -17,7 +17,7 @@ hand; rebuild only when you want to change the demo's feed set or after a schema
 
    ```bash
    cd ~/Deploy/rss-demo
-   RSS_DB=data/demo-seed.db PORT=3003 LOCAL_API_PORT=4003 \
+   RSS_DB=data/demo-seed.db PORT=3013 LOCAL_API_PORT=4013 \
      CLIENT_DIST=client/dist ./rss-reader &
    ```
 
@@ -25,19 +25,21 @@ hand; rebuild only when you want to change the demo's feed set or after a schema
 
    ```bash
    # import an OPML…
-   curl -sS -F file=@$HOME/demo-feeds.opml http://127.0.0.1:4003/api/feeds/import-opml
+   curl -sS -F file=@$HOME/demo-feeds.opml http://127.0.0.1:4013/api/feeds/import-opml
    # …or add individually:
    curl -sS -H 'content-type: application/json' \
-     -d '{"url":"https://example.com/feed.xml"}' http://127.0.0.1:4003/api/feeds
+     -d '{"url":"https://example.com/feed.xml"}' http://127.0.0.1:4013/api/feeds
 
    # optional: point RSSHub at your instance so rsshub:// feeds resolve
    curl -sS -X PATCH -H 'content-type: application/json' \
-     -d '{"rsshub_base_url":"http://localhost:1200"}' http://127.0.0.1:4003/api/settings
+     -d '{"rsshub_base_url":"http://localhost:1200"}' http://127.0.0.1:4013/api/settings
 
-   # star a few nice articles so the Starred view isn't empty
-   curl -sS "http://127.0.0.1:4003/api/all-articles" | jq -r '.articles[0].id'
-   curl -sS -H 'content-type: application/json' \
-     -d '{"id":"<article_id>","starred":true}' http://127.0.0.1:4003/api/articles/star
+   # star a few nice articles so the Starred view isn't empty. The star endpoint
+   # wants the whole article object under "article", not a bare id:
+   curl -sS "http://127.0.0.1:4013/api/all-articles" \
+     | jq -c '{article: .articles[0], starred: true}' \
+     | curl -sS -H 'content-type: application/json' -d @- \
+         http://127.0.0.1:4013/api/articles/star
    ```
 
    Give the poller a couple of minutes to fill `article_states`.

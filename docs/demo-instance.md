@@ -16,15 +16,15 @@ Public ─HTTPS :8443─► Caddy (SNI: demo.royl.uk) ─► 127.0.0.1:5203
         │                                              │
         │                                        rathole(VPS) ══tunnel══► rathole(Mac)
         │                                                                     │
-        └────────────────────────────────────────────────► demo app :3003 ◄──┘
+        └────────────────────────────────────────────────► demo app :3013 ◄──┘
                                           (RSS_DB=demo.db, no auth, banner build)
 ```
 
 | thing | production | demo |
 |---|---|---|
 | launchd | `com.rss-reader.app` | `com.rss-reader.demo` + `com.rss-reader.demo-reset` |
-| app `PORT` | 3002 | 3003 |
-| `LOCAL_API_PORT` | 4002 | 4003 |
+| app `PORT` | 3002 | 3013 |
+| `LOCAL_API_PORT` | 4002 | 4013 |
 | deploy root | `~/Deploy/rss-reader` | `~/Deploy/rss-demo` |
 | `RSS_DB` | `.../server/rss.db` | `.../data/demo.db` (reset from `data/demo-seed.db`) |
 | auth | on | **off** (public) |
@@ -55,7 +55,7 @@ Build the seed DB (curated feeds/articles) per `seed/README.md`, landing it at
 ```bash
 scripts/demo-reset.sh                # copies the seed → demo.db and restarts
 
-curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:4003/healthz   # 200
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:4013/healthz   # 200
 ```
 
 ### 3. VPS — rathole server: add the demo service
@@ -101,7 +101,7 @@ Append to `~/Deploy/rathole/client.toml`:
 ```toml
 [client.services.demo]
 token = "<TUNNEL_TOKEN>"             # must match the VPS
-local_addr = "127.0.0.1:3003"        # the demo app
+local_addr = "127.0.0.1:3013"        # the demo app
 ```
 
 Restart the rathole client launchd job (see `docs/rathole-vps-tunnel.md` for its label).

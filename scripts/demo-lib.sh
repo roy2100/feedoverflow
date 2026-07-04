@@ -19,8 +19,8 @@ DEMO_PLIST="$HOME/Library/LaunchAgents/$DEMO_LABEL.plist"
 RESET_LABEL="com.rss-reader.demo-reset"
 RESET_PLIST="$HOME/Library/LaunchAgents/$RESET_LABEL.plist"
 
-DEMO_PORT="${DEMO_PORT:-3003}"              # tunneled to demo.royl.uk
-DEMO_LOCAL_API_PORT="${DEMO_LOCAL_API_PORT:-4003}"
+DEMO_PORT="${DEMO_PORT:-3013}"              # tunneled to demo.royl.uk (3003 is taken by book-reader)
+DEMO_LOCAL_API_PORT="${DEMO_LOCAL_API_PORT:-4013}"
 RESET_INTERVAL="${RESET_INTERVAL:-21600}"   # seconds between resets (6h)
 
 DEMO_BIN="$DEMO_ROOT/rss-reader"
