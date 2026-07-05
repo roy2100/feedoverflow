@@ -1,8 +1,8 @@
 {
   "name": "rss-reader-client",
   "version": "1.0.0",
-  "type": "module",
   "license": "AGPL-3.0-only",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
