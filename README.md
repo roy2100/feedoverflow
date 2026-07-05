@@ -113,4 +113,4 @@ tunnel. Leave them empty for localhost-only private use.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+AGPL-3.0 — see [LICENSE](LICENSE). If you run a modified version as a network service, you must offer its source to your users.
