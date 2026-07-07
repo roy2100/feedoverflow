@@ -1,0 +1,11 @@
+# Public demo — HTTPS on :8443 (443 is used by sing-box, so we avoid TLS-ALPN and
+# use the HTTP-01 challenge on :80 instead — no API token needed). Caddy issues
+# and auto-renews the cert for demo.royl.uk. Proxies to the loopback demo container.
+demo.royl.uk:8443 {
+	reverse_proxy 127.0.0.1:3013
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+		}
+	}
+}

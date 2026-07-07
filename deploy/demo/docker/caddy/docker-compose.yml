@@ -1,0 +1,11 @@
+services:
+  caddy:
+    image: caddy:2
+    # host networking: bind public :8443 (site) + :80 (ACME HTTP-01) and reach
+    # the loopback demo on :3013. No custom module / token needed.
+    network_mode: host
+    volumes:
+      - /root/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /root/caddy/data:/data
+      - /root/caddy/config:/config
+    restart: unless-stopped

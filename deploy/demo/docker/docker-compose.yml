@@ -1,0 +1,27 @@
+# Public demo instance on the RackNerd VPS (throwaway DB, reset every 6h), built
+# from the rss-reader repo checkout with the demo banner baked in. No auth by design.
+#
+# Deployed at ~/rss-demo/docker-compose.yml on the VPS. `build.context` points at the
+# repo checkout (~/rss-reader); the data dir must be owned by uid 10001 (the image's
+# non-root user) or SQLite opens read-only. Caddy (deploy/demo/docker/caddy) fronts
+# :8443 → this container's loopback :3013. See docs/demo-racknerd-docker.md.
+services:
+  demo:
+    build:
+      context: /root/rss-reader
+      dockerfile: Dockerfile
+      args:
+        VITE_DEMO_MODE: "1"
+    image: rss-reader:demo
+    # Loopback-only publish: the box has no firewall, so a public bind would expose
+    # an unauthenticated app. Only Caddy (same host) reaches :3013.
+    ports:
+      - "127.0.0.1:3013:3013"
+    environment:
+      PORT: "3013"
+      LOCAL_API_PORT: "4013"
+      RSS_DB: /data/demo.db
+      LOG_DIR: /data/logs
+    volumes:
+      - /root/rss-demo/data:/data
+    restart: unless-stopped
