@@ -10,7 +10,10 @@ WORKDIR /client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --legacy-peer-deps
 COPY client/ ./
-RUN npm run build
+# VITE_DEMO_MODE=1 bakes in the public-demo banner (DemoBanner.tsx). Empty by
+# default → production/open-source image is unaffected.
+ARG VITE_DEMO_MODE=""
+RUN VITE_DEMO_MODE="$VITE_DEMO_MODE" npm run build
 
 # --- Stage 2: build the Go backend (CGO_ENABLED=1) ----------------------------
 FROM golang:1.26-bookworm AS server
