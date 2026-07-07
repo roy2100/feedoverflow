@@ -101,6 +101,25 @@ npm run dev
 env 文件里），即可要求每个请求都登录——用于把阅读器暴露在公网隧道上。留空则仅限
 本地私有使用。
 
+## 用 Docker 运行
+
+无需安装 Go/Node 工具链，只要 Docker。镜像是多阶段构建（客户端 + cgo Go 二进制），
+SQLite 数据库和日志持久化在命名卷上。
+
+```bash
+cp .env.example .env        # 可选：设置 AUTH_USER/AUTH_PASS 及调优项
+docker compose up -d        # 在 http://localhost:3002 提供服务
+```
+
+若要使用 `rsshub://` 订阅源，可一并启动内置的 RSSHub（只用普通 RSS 则无需启动）：
+
+```bash
+docker compose --profile rsshub up -d
+```
+
+然后在设置里把 **rsshub_base_url** 设为 `http://rsshub:1200`。数据保存在 `rss-data`
+卷上；请做好备份（或 `docker compose down` 时**不要**加 `-v`），以保留文章和收藏。
+
 ## 技术栈
 
 - **前端：** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa

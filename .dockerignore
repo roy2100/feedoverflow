@@ -1,0 +1,30 @@
+# Keep the build context small and reproducible — the Dockerfile builds the
+# client and Go binary from source, so no built artifacts or local state belong
+# in the image.
+.git
+.github
+.claude
+.playwright-mcp
+
+# Dependencies / build outputs (rebuilt inside the image)
+node_modules
+client/node_modules
+client/dist
+server/node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# Local state — never bake a DB, logs, or env secrets into the image
+**/*.db
+**/*.db-shm
+**/*.db-wal
+logs
+server/.env
+.env
+
+# The legacy Node backend is not used by the Docker build (Go backend only)
+server
+
+# Editor / OS cruft
+.DS_Store

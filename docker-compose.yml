@@ -1,0 +1,34 @@
+# One-command run for the RSS reader.
+#
+#   docker compose up -d                 # app only (plain RSS feeds)
+#   docker compose --profile rsshub up -d # app + a local RSSHub for rsshub:// feeds
+#
+# Copy .env.example to .env first to set auth / tuning. The SQLite DB and logs
+# live on the named volume `rss-data` (survives container recreation).
+
+services:
+  app:
+    build: .
+    image: rss-reader:local
+    ports:
+      - "3002:3002"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - rss-data:/data
+    restart: unless-stopped
+
+  # Optional: self-hosted RSSHub for rsshub:// feeds. Only starts with
+  # `--profile rsshub`. When enabled, set the app's rsshub_base_url to
+  # http://rsshub:1200 in Settings (or leave the default and it resolves via
+  # this service name on the shared compose network).
+  rsshub:
+    image: diygod/rsshub:latest
+    profiles: ["rsshub"]
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+volumes:
+  rss-data:

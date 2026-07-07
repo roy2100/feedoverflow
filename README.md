@@ -104,6 +104,26 @@ Set `AUTH_USER` / `AUTH_PASS` (in the environment, or in an env file pointed to 
 `RSS_ENV_FILE`) to require login on every request — for exposing the reader over a public
 tunnel. Leave them empty for localhost-only private use.
 
+## Run with Docker
+
+No Go/Node toolchain needed — just Docker. The image is a multi-stage build (client +
+cgo Go binary), and the SQLite DB and logs persist on a named volume.
+
+```bash
+cp .env.example .env        # optional: set AUTH_USER/AUTH_PASS, tuning
+docker compose up -d        # serves the app on http://localhost:3002
+```
+
+For `rsshub://` feeds, start a bundled RSSHub too (leave it out if you only use plain RSS):
+
+```bash
+docker compose --profile rsshub up -d
+```
+
+Then set **rsshub_base_url** to `http://rsshub:1200` in Settings. Data lives on the
+`rss-data` volume; back it up (or `docker compose down` **without** `-v`) to keep your
+articles and stars.
+
 ## Tech stack
 
 - **Frontend:** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
