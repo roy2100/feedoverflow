@@ -37,6 +37,10 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // getSearch is the port of GET /api/search.
 func (s *Server) getSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"articles": []searchArticle{}, "query": q})
+		return
+	}
 	scope := r.URL.Query().Get("scope")
 	feedID := r.URL.Query().Get("feedId")
 

@@ -98,12 +98,13 @@ export default function FeedSidebar({
     debouncedSearch(value);
   };
 
-  const handleCompositonStart = () => {
+  const handleCompositionStart = () => {
     isComposing.current = true;
   };
 
   const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
     isComposing.current = false;
+    if (isMobile) return;
     debouncedSearch(e.currentTarget.value);
   };
 
@@ -210,7 +211,7 @@ export default function FeedSidebar({
             type="search"
             value={query}
             onChange={(e) => handleChange(e.target.value)}
-            onCompositionStart={handleCompositonStart}
+            onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
             placeholder={scopedSearch && scopeLabel ? `在「${scopeLabel}」中搜索…` : '搜索文章…'}
             enterKeyHint="search"

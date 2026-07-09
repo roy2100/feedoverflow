@@ -177,10 +177,15 @@ describe('loadArticles search URL', () => {
 // ─── search ──────────────────────────────────────────────────────────────────
 
 describe('search', () => {
-  it('query too short (<2) falls back to lastListView', () => {
+  it('empty query falls back to lastListView', () => {
     useStore.setState({ lastListView: { type: 'all' } });
-    useStore.getState().search('a');
+    useStore.getState().search('   ');
     expect(useStore.getState().selectedView.type).toBe('all');
+  });
+
+  it('one-character query sets selectedView to search', () => {
+    useStore.getState().search('a');
+    expect(useStore.getState().selectedView).toMatchObject({ type: 'search', query: 'a' });
   });
 
   it('normal query sets selectedView to search with the query', () => {
@@ -240,6 +245,16 @@ describe('toggleSearchScope', () => {
     });
     useStore.getState().toggleSearchScope();
     expect(useStore.getState().scopedSearch).toBe(true);
+    expect(useStore.getState().selectedView.scope).toMatchObject({ kind: 'feed', feedId: '7' });
+  });
+
+  it('toggling during a one-character search re-runs it with the scope', () => {
+    useStore.setState({
+      scopedSearch: false,
+      selectedView: { type: 'search', query: 'a' },
+      lastListView: { type: 'feed', feed: { id: '7', name: 'F' } as Feed },
+    });
+    useStore.getState().toggleSearchScope();
     expect(useStore.getState().selectedView.scope).toMatchObject({ kind: 'feed', feedId: '7' });
   });
 

@@ -16,7 +16,6 @@ export default function FeedsPage({ onOpenAddModal, onNavigate }: FeedsPageProps
   };
 
   const handleSearch = (query: string) => {
-    if (query.trim().length < 2) return;
     search(query);
     onNavigate('list');
   };

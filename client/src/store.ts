@@ -119,6 +119,10 @@ export const useStore = create<StoreState>((set, get) => ({
 
   search: (query) => {
     const q = query.trim();
+    if (!q) {
+      get().selectView(get().lastListView);
+      return;
+    }
     const scope = get().scopedSearch ? scopeFromView(get().lastListView) : undefined;
     set({ selectedView: { type: 'search', query: q, scope } });
     get().loadArticles({ type: 'search', query: q, scope });
@@ -129,7 +133,7 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ scopedSearch: next });
     // Re-run the active search so results update immediately.
     const view = get().selectedView;
-    if (view.type === 'search' && (view.query?.trim().length ?? 0) >= 2) {
+    if (view.type === 'search' && (view.query?.trim().length ?? 0) > 0) {
       get().search(view.query ?? '');
     }
   },

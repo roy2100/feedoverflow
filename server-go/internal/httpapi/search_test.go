@@ -31,16 +31,26 @@ func searchIDs(t *testing.T, h interface{}, body string) []string {
 	return ids
 }
 
-func TestSearchMinLength(t *testing.T) {
+func TestSearchEmptyQuery(t *testing.T) {
 	s := &Server{DB: testDB(t)}
 	h := s.NewLocalRouter()
-	// 1-char query → empty results, echoes the query.
-	rec := do(h, "GET", "/api/search?q=a", "", nil)
+	seedSearchRow(t, s, "a1", "fA", "Alpha", "body", 0)
+	rec := do(h, "GET", "/api/search?q=%20", "", nil)
 	if rec.Code != 200 {
 		t.Fatalf("status %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `"articles":[]`) || !strings.Contains(rec.Body.String(), `"query":"a"`) {
-		t.Fatalf("min-length body: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `"articles":[]`) || !strings.Contains(rec.Body.String(), `"query":""`) {
+		t.Fatalf("empty-query body: %s", rec.Body.String())
+	}
+}
+
+func TestSearchOneCharQuery(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	seedSearchRow(t, s, "a1", "fA", "Alpha", "body", 0)
+	ids := searchIDs(t, h, do(h, "GET", "/api/search?q=a", "", nil).Body.String())
+	if len(ids) != 1 || ids[0] != "a1" {
+		t.Fatalf("one-char search: got %v, want [a1]", ids)
 	}
 }
 
