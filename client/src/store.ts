@@ -119,11 +119,6 @@ export const useStore = create<StoreState>((set, get) => ({
 
   search: (query) => {
     const q = query.trim();
-    // Too short to be meaningful — fall back to the last list view.
-    if (q.length < 2) {
-      get().selectView(get().lastListView);
-      return;
-    }
     const scope = get().scopedSearch ? scopeFromView(get().lastListView) : undefined;
     set({ selectedView: { type: 'search', query: q, scope } });
     get().loadArticles({ type: 'search', query: q, scope });

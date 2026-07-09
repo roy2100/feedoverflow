@@ -72,17 +72,39 @@ export default function FeedSidebar({
   const [query, setQuery] = useState('');
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isComposing = useRef(false);
 
   // Keep the box in sync when search is exited from elsewhere (e.g. a feed click).
   useEffect(() => {
     if (selectedView.type !== 'search') setQuery('');
   }, [selectedView.type]);
 
+  // Clear the debounce timer on unmount to avoid calling `onSearch` after the component is gone.
+  useEffect(() => {
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, []);
+
+  const debouncedSearch = (value: string) => {
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => onSearch?.(value.trim()), 250);
+  };
+
   const handleChange = (value: string) => {
     setQuery(value);
     if (isMobile) return; // mobile searches on submit to avoid sliding away mid-typing
-    if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => onSearch?.(value.trim()), 250);
+    if (isComposing.current) return; // don't search while IME composing
+    debouncedSearch(value);
+  };
+
+  const handleCompositonStart = () => {
+    isComposing.current = true;
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    isComposing.current = false;
+    debouncedSearch(e.currentTarget.value);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -188,6 +210,8 @@ export default function FeedSidebar({
             type="search"
             value={query}
             onChange={(e) => handleChange(e.target.value)}
+            onCompositionStart={handleCompositonStart}
+            onCompositionEnd={handleCompositionEnd}
             placeholder={scopedSearch && scopeLabel ? `在「${scopeLabel}」中搜索…` : '搜索文章…'}
             enterKeyHint="search"
             style={{

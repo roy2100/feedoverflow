@@ -37,11 +37,6 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // getSearch is the port of GET /api/search.
 func (s *Server) getSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	// q.length in JS is a UTF-16 code-unit count.
-	if utf16Len(q) < 2 {
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"articles": []searchArticle{}, "query": q})
-		return
-	}
 	scope := r.URL.Query().Get("scope")
 	feedID := r.URL.Query().Get("feedId")
 
@@ -85,11 +80,6 @@ func (s *Server) getSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"articles": arts, "query": q})
-}
-
-// utf16Len counts UTF-16 code units (JS string .length).
-func utf16Len(s string) int {
-	return len(utf16.Encode([]rune(s)))
 }
 
 // utf16Slice returns the first n UTF-16 code units of s, decoded back to a string,
