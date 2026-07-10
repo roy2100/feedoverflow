@@ -21,7 +21,7 @@ WORKDIR /src
 COPY server-go/go.mod server-go/go.sum ./
 RUN go mod download
 COPY server-go/ ./
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/rss-reader .
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/feedoverflow .
 
 # --- Stage 3: runtime ---------------------------------------------------------
 FROM debian:bookworm-slim AS runtime
@@ -31,7 +31,7 @@ RUN apt-get update \
     && useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin rss
 
 WORKDIR /app
-COPY --from=server /out/rss-reader /app/rss-reader
+COPY --from=server /out/feedoverflow /app/feedoverflow
 COPY --from=client /client/dist /app/client/dist
 
 # Persist the SQLite DB and logs on a volume.
@@ -51,4 +51,4 @@ EXPOSE 3002
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${LOCAL_API_PORT}/healthz" || exit 1
 
-ENTRYPOINT ["/app/rss-reader"]
+ENTRYPOINT ["/app/feedoverflow"]

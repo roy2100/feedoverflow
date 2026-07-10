@@ -61,7 +61,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       >
         <div style={{ textAlign: 'center', marginBottom: 4 }}>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
-            RSS Reader
+            FeedOverflow
           </div>
         </div>
         <input

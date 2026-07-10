@@ -16,8 +16,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'RSS Reader',
-        short_name: 'RSS',
+        name: 'FeedOverflow',
+        short_name: 'FeedOverflow',
         description: '个人 RSS 阅读器',
         theme_color: '#2B5C5C',
         background_color: '#F5F2EE',

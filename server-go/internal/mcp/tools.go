@@ -18,12 +18,12 @@ func textResult(v any) (*mcp.CallToolResult, any, error) {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}, nil, nil
 }
 
-// NewServer builds the rss-reader MCP server: the same 13 tools as the Node
+// NewServer builds the FeedOverflow MCP server: the same 13 tools as the Node
 // original (server/mcp.ts, legacy_server_node branch), each a thin call into
 // the loopback API at 127.0.0.1:port.
 func NewServer(port int) *mcp.Server {
 	c := newClient(port)
-	server := mcp.NewServer(&mcp.Implementation{Name: "rss-reader", Version: "1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "feedoverflow", Version: "1.0.0"}, nil)
 
 	// --- Feeds ---
 

@@ -1,4 +1,4 @@
-# One-command run for the RSS reader.
+# One-command run for FeedOverflow.
 #
 #   docker compose up -d                 # app only (plain RSS feeds)
 #   docker compose --profile rsshub up -d # app + a local RSSHub for rsshub:// feeds
@@ -9,7 +9,7 @@
 services:
   app:
     build: .
-    image: rss-reader:local
+    image: feedoverflow:local
     ports:
       - "3002:3002"
     env_file:
