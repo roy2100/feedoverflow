@@ -1,6 +1,14 @@
-# FeedOverflow
+<p align="center">
+  <img src="client/public/pwa-512x512.png" alt="FeedOverflow logo" width="112" />
+</p>
 
-**English** | [简体中文](README.zh-CN.md)
+<h1 align="center">FeedOverflow</h1>
+
+<p align="center">A reading-first, self-hosted RSS reader.</p>
+
+<p align="center">
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 A self-hosted, full-stack RSS reader with a clean reading-first UI, full-text article
 extraction, and a podcast player. It also has a built-in **MCP server** that lets an LLM

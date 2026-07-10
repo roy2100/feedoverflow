@@ -1,6 +1,14 @@
-# FeedOverflow
+<p align="center">
+  <img src="client/public/pwa-512x512.png" alt="FeedOverflow 标志" width="112" />
+</p>
 
-[English](README.md) | **简体中文**
+<h1 align="center">FeedOverflow</h1>
+
+<p align="center">一个以阅读为先的自托管 RSS 阅读器。</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <strong>简体中文</strong>
+</p>
 
 一个自托管的全栈 RSS 阅读器，界面简洁、以阅读体验为核心，内置全文提取和播客播放器。
 它还内置了一个 **MCP 服务器**，让 LLM（Claude 等）能以工具的形式读取和管理你的订阅
