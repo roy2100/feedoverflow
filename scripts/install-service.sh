@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Register the Go backend as the launchd job `com.rss-reader.app`: write the
-# LaunchAgent plist pointing at the deployed binary, bootstrap it, and health-check.
-# Run this once on a fresh box (after deploy.sh has built the binary); thereafter
-# deploy.sh alone rolls out new builds by kickstarting the installed service.
+# Install the launchd plist for the Go backend job `com.feedoverflow.app`.
+# This script does not bootstrap or start the service; deploy.sh does that after
+# building the binary and client. Run this once before the first deploy.
 #
 # Usage: scripts/install-service.sh          # PORT 3002, LOCAL_API_PORT 4002
 #        PORT=8080 scripts/install-service.sh
@@ -12,12 +11,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$SCRIPT_DIR/lib.sh"
-
-[ -x "$BIN" ] || {
-  echo "error: binary not found at $BIN"
-  echo "       run scripts/deploy.sh first to build it, then re-run this script"
-  exit 1
-}
 
 echo "==> write launchd plist → $BIN"
 cat > "$PLIST" <<PLISTEOF
@@ -64,14 +57,5 @@ cat > "$PLIST" <<PLISTEOF
 </plist>
 PLISTEOF
 
-echo "==> bootstrap launchd service"
-reload_service "$LABEL" "$PLIST"
-
-echo "==> health check (loopback :$LOCAL_API_PORT)"
-if health_check "http://127.0.0.1:$LOCAL_API_PORT/healthz"; then
-  echo "OK: service installed, Go backend live on :$PORT (loopback :$LOCAL_API_PORT)"
-  echo "    logs: $DEPLOY_ROOT/logs/app.log (NDJSON)"
-  exit 0
-fi
-echo "!! HEALTH CHECK FAILED — inspect $DEPLOY_ROOT/logs/server.log"
-exit 1
+echo "OK: service plist installed; the service has not been started"
+echo "    run scripts/deploy.sh to build and start FeedOverflow"

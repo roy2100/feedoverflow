@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Unregister the Go backend launchd job: stop it and remove the LaunchAgent plist.
-# The deployed binary, DB, and client under ~/Deploy/rss-reader are left untouched —
+# The deployed binary, DB, and client under ~/Deploy/feedoverflow are left untouched —
 # re-register with scripts/install-service.sh.
 #
 # Usage: scripts/uninstall-service.sh

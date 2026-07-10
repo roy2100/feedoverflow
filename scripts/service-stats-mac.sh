@@ -16,9 +16,9 @@ set -euo pipefail
 #   LOG_DIR=/some/path ./scripts/service-stats-mac.sh
 #
 # Log dir mirrors internal/logger + the deploy layout (scripts/deploy.sh sets LOG_DIR):
-# $HOME/Deploy/rss-reader/logs. Override with LOG_DIR.
+# $HOME/Deploy/feedoverflow/logs. Override with LOG_DIR.
 
-LOG_DIR="${LOG_DIR:-$HOME/Deploy/rss-reader/logs}"
+LOG_DIR="${LOG_DIR:-$HOME/Deploy/feedoverflow/logs}"
 BASE="app"
 ACTIVE="$LOG_DIR/$BASE.log"
 

@@ -24,7 +24,7 @@ set -euo pipefail
 #   FAIL_MS=300 ./scripts/burst-latency.sh                  # exit 1 if any request exceeds 300ms
 #
 # Tip: to reproduce the stale-feed condition, run it immediately after a restart
-# (`launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"`) while startup warming is still in
+# (`launchctl kickstart -k "gui/$(id -u)/com.feedoverflow.app"`) while startup warming is still in
 # flight — that is when the old code stalled.
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:4002}"

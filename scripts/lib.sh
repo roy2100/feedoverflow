@@ -3,15 +3,15 @@
 # (install-service.sh / deploy.sh / uninstall-service.sh).
 
 # --- Shared config (env-overridable) ------------------------------------------
-DEPLOY_ROOT="$HOME/Deploy/rss-reader"
-LABEL="com.rss-reader.app"
+DEPLOY_ROOT="$HOME/Deploy/feedoverflow"
+LABEL="com.feedoverflow.app"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 PORT="${PORT:-3002}"
 LOCAL_API_PORT="${LOCAL_API_PORT:-4002}"
-# Name the deployed binary "rss-reader" so argv[0] — the process title shown by
+# Name the deployed binary "feedoverflow" so argv[0] — the process title shown by
 # ps/top/Activity Monitor — is meaningful. Go has no stdlib runtime setproctitle;
 # the binary name IS the process title, so no library is needed.
-BIN="$DEPLOY_ROOT/rss-reader"
+BIN="$DEPLOY_ROOT/feedoverflow"
 
 # reload_service LABEL PLIST — bootout + bootstrap + kickstart, hardened against
 # the `Bootstrap failed: 5: Input/output error` race: launchctl bootout is

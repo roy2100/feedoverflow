@@ -2,12 +2,11 @@
 set -euo pipefail
 
 # Roll out a new Go-backend build: build the client, build the cgo Go binary on the
-# Mac (no cross-compile), sync both into ~/Deploy/rss-reader, and kickstart the
+# Mac (no cross-compile), sync both into ~/Deploy/feedoverflow, and bootstrap the
 # installed launchd service so the new binary/client take effect.
 #
-# The launchd service must already be registered by scripts/install-service.sh —
-# deploy.sh never writes the plist. On a fresh box, run deploy.sh once (it builds the
-# binary, then tells you to install the service), then install-service.sh.
+# The launchd plist must already be written by scripts/install-service.sh — deploy.sh
+# never writes it. On a fresh box, run install-service.sh first, then deploy.sh.
 #
 # Usage: scripts/deploy.sh            # PORT 3002, LOCAL_API_PORT 4002
 #        PORT=8080 scripts/deploy.sh
@@ -35,8 +34,8 @@ echo "    $(ls -la "$BIN" | awk '{print $5" bytes"}')"
   exit 1
 }
 
-echo "==> kickstart launchd service"
-kickstart_service "$LABEL"
+echo "==> bootstrap and start launchd service"
+reload_service "$LABEL" "$PLIST"
 
 echo "==> health check (loopback :$LOCAL_API_PORT)"
 if health_check "http://127.0.0.1:$LOCAL_API_PORT/healthz"; then
