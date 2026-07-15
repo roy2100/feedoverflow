@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import ArticleReader, { stripMedia } from '../components/ArticleReader';
+import ArticleReader, { stripMedia, decodeEntities } from '../components/ArticleReader';
 import type { Article } from '../types';
 
 const noop = () => {};
@@ -187,6 +187,28 @@ describe('stripMedia', () => {
     const html =
       '<p><a href="/x">link</a></p><pre><code>code</code></pre><blockquote>quote</blockquote>';
     expect(stripMedia(html)).toBe(html);
+  });
+});
+
+describe('decodeEntities', () => {
+  it('decodes numeric character references in tag-less text', () => {
+    expect(decodeEntities('just&#160;don&#8217;t&#160;have')).toBe('just don’t have');
+  });
+
+  it('decodes an ellipsis entity', () => {
+    expect(decodeEntities('a [&#8230;]')).toBe('a […]');
+  });
+});
+
+describe('plain-text content renders decoded entities', () => {
+  it('decodes entities when content has no HTML tags', async () => {
+    const article: Article = {
+      ...BASE_ARTICLE,
+      content: 'just&#160;don&#8217;t&#160;have&#160;it',
+    };
+    renderReader(article);
+    await waitFor(() => expect(screen.getByText('just don’t have it')).toBeInTheDocument());
+    expect(screen.queryByText(/&#160;|&#8217;/)).not.toBeInTheDocument();
   });
 });
 

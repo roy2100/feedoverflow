@@ -768,7 +768,7 @@ export default function ArticleReader({
           />
         ) : (
           <div className="rss-article" style={articleContentStyle}>
-            {rawContent
+            {decodeEntities(rawContent)
               .split('\n')
               .filter(Boolean)
               .map((p, i) => (
@@ -801,6 +801,15 @@ function sanitizeHtml(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/on\w+="[^"]*"/gi, '')
     .replace(/on\w+='[^']*'/gi, '');
+}
+
+// Decode HTML entities (e.g. `&#160;`) in tag-less plain-text content — mirrors the
+// backend's html.UnescapeString pass on the summary field, which the raw content
+// field never goes through.
+export function decodeEntities(text: string): string {
+  if (typeof DOMParser === 'undefined') return text;
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  return doc.documentElement.textContent ?? text;
 }
 
 const articleContentStyle: React.CSSProperties = {
