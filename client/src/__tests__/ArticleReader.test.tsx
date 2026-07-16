@@ -212,6 +212,44 @@ describe('plain-text content renders decoded entities', () => {
   });
 });
 
+describe('WeChat-pasted inline styles', () => {
+  it('strips inline style attributes so the reader typography governs', async () => {
+    const article: Article = {
+      ...BASE_ARTICLE,
+      content:
+        '<p style="text-align: justify; letter-spacing: 1.5px; font-size: 15px; ' +
+        "font-family: 'PingFang SC'; color: rgba(0, 0, 0, 0.9); background-color: #ffffff;\">" +
+        '与此同时 <b>Bloomberg Index</b></p>',
+    };
+    const { container } = renderReader(article);
+    await waitFor(() => expect(screen.getByText(/与此同时/)).toBeInTheDocument());
+
+    const p = container.querySelector('.rss-article p')!;
+    // No inline styling survives — no justify stretch, no baked-in colors (dark-mode safe)
+    expect(p.getAttribute('style')).toBeNull();
+    // Text and tag-based emphasis are preserved
+    expect(p.querySelector('b')).not.toBeNull();
+    expect(p.textContent).toContain('Bloomberg Index');
+  });
+
+  it('keeps img width/height attributes for aspect-ratio while dropping inline style', async () => {
+    const article: Article = {
+      ...BASE_ARTICLE,
+      content:
+        '<p style="text-align:center"><img src="https://example.com/x.png" ' +
+        'style="width: 644.938px !important; height: auto !important;" width="1080" height="393"></p>',
+    };
+    const { container } = renderReader(article);
+    await waitFor(() => expect(container.querySelector('.rss-article img')).not.toBeNull());
+
+    const img = container.querySelector('.rss-article img')!;
+    expect(img.getAttribute('width')).toBe('1080');
+    expect(img.getAttribute('height')).toBe('393');
+    // The runaway inline pixel width is gone; the reader CSS (max-width:100%) can size it
+    expect(img.getAttribute('style')).not.toContain('644');
+  });
+});
+
 describe('text-only toggle', () => {
   beforeEach(() => localStorage.removeItem('text-only'));
   afterEach(() => localStorage.removeItem('text-only'));

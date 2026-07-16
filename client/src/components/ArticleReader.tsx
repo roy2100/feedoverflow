@@ -795,12 +795,23 @@ export function stripMedia(html: string): string {
 }
 
 function sanitizeHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/on\w+="[^"]*"/gi, '')
-    .replace(/on\w+='[^']*'/gi, '');
+  return (
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/on\w+="[^"]*"/gi, '')
+      .replace(/on\w+='[^']*'/gi, '')
+      // Drop inline style attributes. Feed HTML (esp. WeChat/公众号-pasted articles)
+      // ships every element with hardcoded typography — fixed font-size/line-height,
+      // letter-spacing, font-family, text-align: justify, pixel widths — and, worse,
+      // baked-in `color: rgba(0,0,0,.9)` / `background-color: #fff` that render as
+      // black-on-dark in dark mode. Stripping them lets the reader's own .rss-article
+      // stylesheet fully govern, so every article reads consistently and theme-correctly.
+      // (Emphasis via <b>/<strong>/<i>/<em>/<h2>… tags survives and gets themed.)
+      .replace(/\sstyle\s*=\s*"[^"]*"/gi, '')
+      .replace(/\sstyle\s*=\s*'[^']*'/gi, '')
+  );
 }
 
 // Decode HTML entities (e.g. `&#160;`) in tag-less plain-text content — mirrors the
