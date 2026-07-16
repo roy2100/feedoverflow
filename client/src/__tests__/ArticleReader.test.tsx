@@ -2,7 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import ArticleReader, { stripMedia, decodeEntities } from '../components/ArticleReader';
+import ArticleReader, { stripMedia } from '../components/ArticleReader';
+import { decodeEntities } from '../lib/decodeEntities';
 import type { Article } from '../types';
 
 const noop = () => {};
@@ -209,6 +210,23 @@ describe('plain-text content renders decoded entities', () => {
     renderReader(article);
     await waitFor(() => expect(screen.getByText('just don’t have it')).toBeInTheDocument());
     expect(screen.queryByText(/&#160;|&#8217;/)).not.toBeInTheDocument();
+  });
+});
+
+describe('article title renders decoded entities', () => {
+  it('decodes entities in the title heading', async () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    const article: Article = {
+      ...BASE_ARTICLE,
+      title: 'Samsung&#8217;s Galaxy Z Flip 8 leaks',
+    };
+    renderReader(article);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Samsung’s Galaxy Z Flip 8 leaks' }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/&#8217;/)).not.toBeInTheDocument();
   });
 });
 

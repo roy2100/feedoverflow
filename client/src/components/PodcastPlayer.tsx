@@ -2,6 +2,7 @@ import { Play, Pause, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 import { useIsMobile } from '../hooks/useIsMobile';
+import { decodeEntities } from '../lib/decodeEntities';
 import type { Article } from '../types';
 
 interface PodcastPlayerProps {
@@ -109,7 +110,7 @@ export default function PodcastPlayer({
                 lineHeight: 1.4,
               }}
             >
-              {episode.title}
+              {decodeEntities(episode.title)}
             </div>
             {episode.feedName && (
               <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
@@ -228,7 +229,7 @@ export default function PodcastPlayer({
             lineHeight: 1.4,
           }}
         >
-          {episode.title}
+          {decodeEntities(episode.title)}
         </div>
         {episode.feedName && (
           <div

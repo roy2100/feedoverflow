@@ -1,6 +1,7 @@
 import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { decodeEntities } from '../lib/decodeEntities';
 import type { Article, ListMode } from '../types';
 
 // pubDate is canonical ISO-8601 from the server (it owns date parsing), so native
@@ -383,7 +384,9 @@ function ArticleItem({
                 marginBottom: article.audioUrl ? 4 : 0,
               }}
             >
-              <div style={{ ...titleStyle, flex: 1, minWidth: 0 }}>{article.title}</div>
+              <div style={{ ...titleStyle, flex: 1, minWidth: 0 }}>
+                {decodeEntities(article.title)}
+              </div>
               <span style={{ ...timeStyle, marginTop: 1 }}>{formatDate(article.pubDate)}</span>
             </div>
           ) : (
@@ -412,7 +415,7 @@ function ArticleItem({
                 </span>
               </div>
               <div style={{ ...titleStyle, marginBottom: article.audioUrl ? 4 : 0 }}>
-                {article.title}
+                {decodeEntities(article.title)}
               </div>
             </>
           )}

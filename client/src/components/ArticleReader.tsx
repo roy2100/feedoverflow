@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
+import { decodeEntities } from '../lib/decodeEntities';
 import type { Article } from '../types';
 
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
@@ -339,7 +340,7 @@ export default function ArticleReader({
             letterSpacing: '-0.01em',
           }}
         >
-          {article.title}
+          {decodeEntities(article.title)}
         </h1>
 
         {/* Meta */}
@@ -812,15 +813,6 @@ function sanitizeHtml(html: string): string {
       .replace(/\sstyle\s*=\s*"[^"]*"/gi, '')
       .replace(/\sstyle\s*=\s*'[^']*'/gi, '')
   );
-}
-
-// Decode HTML entities (e.g. `&#160;`) in tag-less plain-text content — mirrors the
-// backend's html.UnescapeString pass on the summary field, which the raw content
-// field never goes through.
-export function decodeEntities(text: string): string {
-  if (typeof DOMParser === 'undefined') return text;
-  const doc = new DOMParser().parseFromString(text, 'text/html');
-  return doc.documentElement.textContent ?? text;
 }
 
 const articleContentStyle: React.CSSProperties = {
