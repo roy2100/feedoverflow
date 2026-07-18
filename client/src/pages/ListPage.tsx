@@ -18,7 +18,7 @@ export default function ListPage({ onNavigate }: ListPageProps) {
     listMode,
     setListMode,
   } = useStore();
-  const { currentEpisode, isPlaying, onPlay } = useAudio();
+  const { currentEpisode, isPlaying, isBuffering, onPlay } = useAudio();
 
   const viewTitle =
     selectedView.type === 'all'
@@ -51,6 +51,7 @@ export default function ListPage({ onNavigate }: ListPageProps) {
       onPlay={onPlay}
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
+      isBuffering={isBuffering}
       hideFeedName={selectedView.type === 'feed'}
       showModeToggle={selectedView.type === 'all' || selectedView.type === 'today'}
       listMode={listMode}

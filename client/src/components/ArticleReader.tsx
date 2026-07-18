@@ -10,6 +10,7 @@ import {
   Image,
   ImageOff,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
@@ -61,6 +62,7 @@ interface ArticleReaderProps {
   onPlay: (article: Article) => void;
   currentEpisode: Article | null;
   isPlaying: boolean;
+  isBuffering: boolean;
   scrollRef?: React.RefObject<HTMLDivElement>;
   readingMode?: boolean;
   onToggleReadingMode?: () => void;
@@ -74,6 +76,7 @@ export default function ArticleReader({
   onPlay,
   currentEpisode,
   isPlaying,
+  isBuffering,
   scrollRef,
   readingMode,
   onToggleReadingMode,
@@ -699,7 +702,16 @@ export default function ArticleReader({
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
             >
-              {currentEpisode?.id === article.id && isPlaying ? (
+              {currentEpisode?.id === article.id && isBuffering ? (
+                <>
+                  <Loader2
+                    size={11}
+                    strokeWidth={2}
+                    style={{ animation: 'spin 0.8s linear infinite' }}
+                  />{' '}
+                  加载中
+                </>
+              ) : currentEpisode?.id === article.id && isPlaying ? (
                 <>
                   <Pause size={11} strokeWidth={2} /> 暂停
                 </>

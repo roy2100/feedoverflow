@@ -38,6 +38,7 @@ function renderReader(
       onPlay={noop}
       currentEpisode={null}
       isPlaying={false}
+      isBuffering={false}
       {...overrides}
     />,
   );

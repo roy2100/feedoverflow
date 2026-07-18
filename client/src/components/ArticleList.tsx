@@ -1,4 +1,4 @@
-import { ChevronLeft, Mic, PanelLeft } from 'lucide-react';
+import { ChevronLeft, Mic, PanelLeft, Loader2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { decodeEntities } from '../lib/decodeEntities';
@@ -34,6 +34,7 @@ interface ArticleListProps {
   onPlay: (article: Article) => void;
   currentEpisode: Article | null;
   isPlaying: boolean;
+  isBuffering: boolean;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
   hideFeedName?: boolean;
@@ -55,6 +56,7 @@ export default function ArticleList({
   onPlay,
   currentEpisode,
   isPlaying,
+  isBuffering,
   sidebarCollapsed,
   onToggleSidebar,
   hideFeedName,
@@ -241,6 +243,7 @@ export default function ArticleList({
               }}
               onPlay={onPlay}
               episodePlaying={currentEpisode?.id === article.id && isPlaying}
+              episodeBuffering={currentEpisode?.id === article.id && isBuffering}
               isMobile={isMobile}
               hideFeedName={hideFeedName}
               style={{ animationDelay: `${Math.min(i * 20, 300)}ms` }}
@@ -323,6 +326,7 @@ interface ArticleItemProps {
   onClick: () => void;
   onPlay?: (article: Article) => void;
   episodePlaying: boolean;
+  episodeBuffering: boolean;
   isMobile?: boolean;
   hideFeedName?: boolean;
   style?: React.CSSProperties;
@@ -335,6 +339,7 @@ function ArticleItem({
   onClick,
   onPlay,
   episodePlaying,
+  episodeBuffering,
   isMobile,
   hideFeedName,
   style,
@@ -431,15 +436,27 @@ function ArticleItem({
                 gap: 3,
                 fontSize: 11,
                 fontWeight: 500,
-                color: episodePlaying ? 'var(--accent)' : 'var(--accent-light)',
+                color: episodePlaying || episodeBuffering ? 'var(--accent)' : 'var(--accent-light)',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
                 padding: 0,
               }}
             >
-              <Mic size={10} strokeWidth={episodePlaying ? 2.5 : 2} />
-              {episodePlaying ? '播放中' : article.audioDuration || '播客'}
+              {episodeBuffering ? (
+                <Loader2
+                  size={10}
+                  strokeWidth={2}
+                  style={{ animation: 'spin 0.8s linear infinite' }}
+                />
+              ) : (
+                <Mic size={10} strokeWidth={episodePlaying ? 2.5 : 2} />
+              )}
+              {episodeBuffering
+                ? '加载中'
+                : episodePlaying
+                  ? '播放中'
+                  : article.audioDuration || '播客'}
             </button>
           )}
         </div>

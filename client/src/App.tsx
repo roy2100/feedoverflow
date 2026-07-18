@@ -30,6 +30,7 @@ export default function App() {
   );
   const [currentEpisode, setCurrentEpisode] = useState<Article | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null) audioRef.current = new Audio();
   const readerRef = useRef<HTMLDivElement>(null);
@@ -141,15 +142,29 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio) return;
     const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
+    const onPause = () => {
+      setIsPlaying(false);
+      setIsBuffering(false);
+    };
+    const onEnded = () => {
+      setIsPlaying(false);
+      setIsBuffering(false);
+    };
+    // `waiting` fires while audio stalls to buffer; `playing` fires once real
+    // playback (sound) begins — the gap between them is the blank-audio wait.
+    const onWaiting = () => setIsBuffering(true);
+    const onPlaying = () => setIsBuffering(false);
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('waiting', onWaiting);
+    audio.addEventListener('playing', onPlaying);
     return () => {
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('waiting', onWaiting);
+      audio.removeEventListener('playing', onPlaying);
     };
   }, []);
 
@@ -157,10 +172,15 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio) return;
     if (currentEpisode?.id === article.id) {
-      if (audio.paused) audio.play().catch(console.error);
-      else audio.pause();
+      if (audio.paused) {
+        setIsBuffering(true);
+        audio.play().catch(console.error);
+      } else {
+        audio.pause();
+      }
     } else {
       audio.src = article.audioUrl;
+      setIsBuffering(true);
       audio.play().catch(console.error);
       setCurrentEpisode(article);
     }
@@ -181,12 +201,14 @@ export default function App() {
     }
     setCurrentEpisode(null);
     setIsPlaying(false);
+    setIsBuffering(false);
   };
 
   const audioCtx: AudioCtxValue = {
     audioRef,
     currentEpisode,
     isPlaying,
+    isBuffering,
     onPlay: handlePlay,
     onTogglePlay: handleTogglePlay,
     onClosePlayer: handleClosePlayer,
@@ -287,6 +309,7 @@ export default function App() {
                 episode={currentEpisode}
                 audioRef={audioRef}
                 isPlaying={isPlaying}
+                isBuffering={isBuffering}
                 onTogglePlay={handleTogglePlay}
                 onClose={handleClosePlayer}
               />
@@ -335,6 +358,7 @@ export default function App() {
             onPlay={handlePlay}
             currentEpisode={currentEpisode}
             isPlaying={isPlaying}
+            isBuffering={isBuffering}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
             hideFeedName={selectedView.type === 'feed'}
@@ -358,6 +382,7 @@ export default function App() {
             onPlay={handlePlay}
             currentEpisode={currentEpisode}
             isPlaying={isPlaying}
+            isBuffering={isBuffering}
             scrollRef={readerRef}
             readingMode={readingMode}
             onToggleReadingMode={() => setReadingMode((v) => !v)}
@@ -368,6 +393,7 @@ export default function App() {
                 episode={currentEpisode}
                 audioRef={audioRef}
                 isPlaying={isPlaying}
+                isBuffering={isBuffering}
                 onTogglePlay={handleTogglePlay}
                 onClose={handleClosePlayer}
               />

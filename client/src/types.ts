@@ -54,6 +54,7 @@ export interface AudioCtxValue {
   audioRef: React.RefObject<HTMLAudioElement>;
   currentEpisode: Article | null;
   isPlaying: boolean;
+  isBuffering: boolean;
   onPlay: (article: Article) => void;
   onTogglePlay: () => void;
   onClosePlayer: () => void;

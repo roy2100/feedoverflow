@@ -1,4 +1,4 @@
-import { Play, Pause, X } from 'lucide-react';
+import { Play, Pause, X, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -9,6 +9,7 @@ interface PodcastPlayerProps {
   episode: Article;
   audioRef: React.RefObject<HTMLAudioElement>;
   isPlaying: boolean;
+  isBuffering: boolean;
   onTogglePlay: () => void;
   onClose: () => void;
 }
@@ -17,6 +18,7 @@ export default function PodcastPlayer({
   episode,
   audioRef,
   isPlaying,
+  isBuffering,
   onTogglePlay,
   onClose,
 }: PodcastPlayerProps) {
@@ -96,7 +98,17 @@ export default function PodcastPlayer({
             onClick={onTogglePlay}
             style={{ ...btnStyle, padding: 4, color: 'var(--accent)' }}
           >
-            {isPlaying ? <Pause size={18} strokeWidth={2} /> : <Play size={18} strokeWidth={2} />}
+            {isBuffering ? (
+              <Loader2
+                size={18}
+                strokeWidth={2}
+                style={{ animation: 'spin 0.8s linear infinite' }}
+              />
+            ) : isPlaying ? (
+              <Pause size={18} strokeWidth={2} />
+            ) : (
+              <Play size={18} strokeWidth={2} />
+            )}
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
@@ -214,7 +226,13 @@ export default function PodcastPlayer({
         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
       >
-        {isPlaying ? <Pause size={17} strokeWidth={2} /> : <Play size={17} strokeWidth={2} />}
+        {isBuffering ? (
+          <Loader2 size={17} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} />
+        ) : isPlaying ? (
+          <Pause size={17} strokeWidth={2} />
+        ) : (
+          <Play size={17} strokeWidth={2} />
+        )}
       </button>
 
       <div style={{ minWidth: 0, width: 180, flexShrink: 0 }}>
