@@ -26,6 +26,10 @@ tail -f ~/Deploy/rss-reader/logs/app.log      # structured NDJSON (slog)
 Do not silence lint errors or rewrite business logic just to make `lint` pass — if a correctness
 rule flags real intent, surface it rather than auto-suppressing.
 
+## Workflow
+
+Single-person project — edit and commit directly on `main`. No feature branches or PRs required.
+
 ## Deployment
 
 Single-user macOS app, publicly reachable at `https://rss.royl.uk:8443` via a rathole tunnel to
