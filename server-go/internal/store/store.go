@@ -130,12 +130,12 @@ func Starred(db *sql.DB) ([]articles.Row, error) {
 	return scanArticleRows(rows)
 }
 
-// Podcasts — GET /api/podcasts: audio-bearing rows, coarse pub_date sort, cap 200.
+// Podcasts — GET /api/podcasts: audio-bearing rows, newest by pub_ts, cap 200.
 func Podcasts(db *sql.DB) ([]articles.Row, error) {
 	rows, err := db.Query(
 		`SELECT ` + articleCols + ` FROM article_states
 		 WHERE audio_url IS NOT NULL AND audio_url != ''
-		 ORDER BY pub_date DESC LIMIT 200`)
+		 ORDER BY pub_ts DESC LIMIT 200`)
 	if err != nil {
 		return nil, err
 	}
@@ -205,9 +205,12 @@ func ResolveURL(db *sql.DB, url string) (string, error) {
 }
 
 // Search — GET /api/search: LIKE across title/summary/content, optionally scoped
-// to starred or one feed, newest-by-text-pub_date first, cap 200 (the caller
-// re-sorts by parsed date and slices to 100). Port of routes/search.ts. `like` is
-// the already-escaped pattern (ESCAPE '\'); scope is "starred" | "feed" | "".
+// to starred or one feed, newest by pub_ts first, cap 200 (the caller re-sorts by
+// parsed date and slices to 100). Ordering must key on the numeric pub_ts, not the
+// raw text pub_date: pub_date is normalized to ISO only on the response, so a text
+// sort here would pick the wrong 200 rows and drop genuinely-newest matches before
+// the caller ever re-sorts. Port of routes/search.ts. `like` is the already-escaped
+// pattern (ESCAPE '\'); scope is "starred" | "feed" | "".
 func Search(r *sql.DB, like, scope, feedID string) ([]articles.Row, error) {
 	q := `SELECT ` + articleCols + ` FROM article_states
 		WHERE (title LIKE ? ESCAPE '\' OR summary LIKE ? ESCAPE '\' OR content LIKE ? ESCAPE '\')`
@@ -219,7 +222,7 @@ func Search(r *sql.DB, like, scope, feedID string) ([]articles.Row, error) {
 		q += ` AND feed_id = ?`
 		args = append(args, feedID)
 	}
-	q += ` ORDER BY pub_date DESC LIMIT 200`
+	q += ` ORDER BY pub_ts DESC LIMIT 200`
 	rows, err := r.Query(q, args...)
 	if err != nil {
 		return nil, err
