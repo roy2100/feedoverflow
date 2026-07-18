@@ -219,15 +219,19 @@ func TestStarredAndCount(t *testing.T) {
 func TestPodcasts(t *testing.T) {
 	h := newTestDB(t)
 	w := h.Writer()
-	insertArticle(t, w, af{id: "p_new", link: "l1", pubDate: "2021-05-01", audioURL: "http://a/2.mp3"})
-	insertArticle(t, w, af{id: "p_old", link: "l2", pubDate: "2020-05-01", audioURL: "http://a/1.mp3"})
-	insertArticle(t, w, af{id: "noaudio", link: "l3", pubDate: "2022-05-01"}) // empty audio_url
+	// pub_date is the raw RFC1123 feed string; pub_ts is the parsed epoch. p_new is
+	// chronologically newer (larger pub_ts) but its "Thu, ..." string sorts lexically
+	// BEFORE p_old's "Wed, ..." string, so a text-sort would flip the order. Ordering
+	// must key on pub_ts so the newest episode comes first.
+	insertArticle(t, w, af{id: "p_new", link: "l1", pubDate: "Thu, 17 Jul 2025 00:00:00 GMT", pubTs: 1000, audioURL: "http://a/2.mp3"})
+	insertArticle(t, w, af{id: "p_old", link: "l2", pubDate: "Wed, 01 Jan 2025 00:00:00 GMT", pubTs: 500, audioURL: "http://a/1.mp3"})
+	insertArticle(t, w, af{id: "noaudio", link: "l3", pubDate: "Fri, 01 Aug 2025 00:00:00 GMT", pubTs: 2000}) // empty audio_url
 
 	pods, err := store.Podcasts(h.Reader())
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Only audio-bearing rows, ordered by pub_date DESC (string sort).
+	// Only audio-bearing rows, newest by pub_ts first.
 	eqStrings(t, articleIDs(pods), []string{"p_new", "p_old"})
 }
 
@@ -326,13 +330,13 @@ func TestResolveURL(t *testing.T) {
 func TestSearch(t *testing.T) {
 	h := newTestDB(t)
 	w := h.Writer()
-	insertArticle(t, w, af{id: "t", feedID: "f1", link: "l1", title: "golang tips", pubDate: "2021-01-03", isStarred: 1})
-	insertArticle(t, w, af{id: "s", feedID: "f1", link: "l2", title: "x", summary: "about golang", pubDate: "2021-01-02"})
-	insertArticle(t, w, af{id: "c", feedID: "f2", link: "l3", title: "y", content: "deep golang dive", pubDate: "2021-01-01"})
-	insertArticle(t, w, af{id: "u_hit", feedID: "f2", link: "l4", title: "a_b literal", pubDate: "2020-01-01"})
-	insertArticle(t, w, af{id: "u_miss", feedID: "f2", link: "l5", title: "axb other", pubDate: "2020-01-02"})
+	insertArticle(t, w, af{id: "t", feedID: "f1", link: "l1", title: "golang tips", pubDate: "2021-01-03", pubTs: 300, isStarred: 1})
+	insertArticle(t, w, af{id: "s", feedID: "f1", link: "l2", title: "x", summary: "about golang", pubDate: "2021-01-02", pubTs: 200})
+	insertArticle(t, w, af{id: "c", feedID: "f2", link: "l3", title: "y", content: "deep golang dive", pubDate: "2021-01-01", pubTs: 100})
+	insertArticle(t, w, af{id: "u_hit", feedID: "f2", link: "l4", title: "a_b literal", pubDate: "2020-01-01", pubTs: 20})
+	insertArticle(t, w, af{id: "u_miss", feedID: "f2", link: "l5", title: "axb other", pubDate: "2020-01-02", pubTs: 30})
 
-	// Unscoped: matches title/summary/content, newest pub_date first.
+	// Unscoped: matches title/summary/content, newest pub_ts first.
 	res, err := store.Search(h.Reader(), "%golang%", "", "")
 	if err != nil {
 		t.Fatal(err)

@@ -171,11 +171,16 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("idx starred: %w", err)
 	}
 	// Partial index over audio-bearing rows only: GET /api/podcasts filters on a
-	// non-empty audio_url (a small slice of the table) and orders by pub_date. Without
+	// non-empty audio_url (a small slice of the table) and orders by pub_ts. Without
 	// it that query full-scans the table and builds a temp B-tree to sort (~800ms on a
-	// 440MB DB). Keying the podcast rows by pub_date makes the read index-only, no sort.
+	// 440MB DB). Keying the podcast rows by pub_ts makes the read index-only, no sort.
+	// The old idx_article_states_podcast keyed on the text pub_date column, which sorts
+	// day-of-week-first and buried the newest episodes; drop it in favor of the pub_ts key.
+	if _, err := db.Exec(`DROP INDEX IF EXISTS idx_article_states_podcast`); err != nil {
+		return fmt.Errorf("drop old idx podcast: %w", err)
+	}
 	if _, err := db.Exec(
-		`CREATE INDEX IF NOT EXISTS idx_article_states_podcast ON article_states (pub_date DESC) WHERE audio_url IS NOT NULL AND audio_url != ''`,
+		`CREATE INDEX IF NOT EXISTS idx_article_states_podcast_ts ON article_states (pub_ts DESC) WHERE audio_url IS NOT NULL AND audio_url != ''`,
 	); err != nil {
 		return fmt.Errorf("idx podcast: %w", err)
 	}
