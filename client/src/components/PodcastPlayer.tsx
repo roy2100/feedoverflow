@@ -67,6 +67,19 @@ export default function PodcastPlayer({
     return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   };
 
+  // Parse the feed-provided clock duration ("33:56" / "1:29:55") to seconds.
+  const parseClock = (s: string | undefined): number => {
+    if (!s) return 0;
+    const parts = s.split(':').map(Number);
+    if (parts.some((n) => isNaN(n))) return 0;
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  };
+
+  // Streaming sources often expose no `duration` on the audio element (stays 0
+  // or Infinity), which would strand the seek bar at full and show 0:00. Fall
+  // back to the feed's own duration so the player matches the reader.
+  const effectiveDuration = duration || parseClock(episode.audioDuration);
+
   const btnStyle: React.CSSProperties = {
     background: 'none',
     border: 'none',
@@ -168,7 +181,7 @@ export default function PodcastPlayer({
           <input
             type="range"
             min={0}
-            max={duration || 100}
+            max={effectiveDuration || 100}
             value={currentTime}
             step={1}
             onChange={(e) => {
@@ -308,7 +321,7 @@ export default function PodcastPlayer({
       />
 
       <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 32 }}>
-        {fmt(duration)}
+        {fmt(effectiveDuration)}
       </span>
 
       <button
