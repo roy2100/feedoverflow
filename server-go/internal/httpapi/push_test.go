@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
+	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/push"
 	"rss-reader/server-go/internal/store"
 )
@@ -142,5 +144,49 @@ func TestPushKeyWithoutSender(t *testing.T) {
 	s := newFeedsServer(t, fakeParse("F"))
 	if rec := do(s.NewLocalRouter(), "GET", "/api/push/key", "", nil); rec.Code != 503 {
 		t.Fatalf("want 503, got %d", rec.Code)
+	}
+}
+
+// The push deep link needs one article by id, content included — the article a
+// notification names is usually not in whatever list the app has loaded.
+func TestGetArticleByID(t *testing.T) {
+	s := newFeedsServer(t, fakeParse("F"))
+	h := s.NewLocalRouter()
+	if _, err := s.DB.Writer().Exec(
+		`INSERT INTO article_states (article_id, feed_id, feed_name, title, link, pub_date, pub_ts, summary, content, is_starred)
+		 VALUES ('a1','f1','Feed','Title','https://x/a1','Fri, 01 Aug 2025 00:30:00 GMT',1754008200000,'Sum','Body',1)`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := do(h, "GET", "/api/articles/a1", "", nil)
+	if rec.Code != 200 {
+		t.Fatalf("got %d", rec.Code)
+	}
+	var body struct {
+		Article model.Article `json:"article"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Article.ID != "a1" || body.Article.Title != "Title" {
+		t.Fatalf("article: %+v", body.Article)
+	}
+	// Content is included: the reader pane renders straight from this response,
+	// unlike the list endpoints which strip it.
+	if body.Article.Content != "Body" {
+		t.Fatalf("content: %q", body.Article.Content)
+	}
+	if !body.Article.IsStarred {
+		t.Fatal("is_starred lost")
+	}
+	// pub_date is normalized like every other article response.
+	if !strings.HasPrefix(body.Article.PubDate, "2025-08-01T") {
+		t.Fatalf("pubDate not normalized: %q", body.Article.PubDate)
+	}
+
+	// A stale notification (or an article the size cap trimmed) must 404, not 500.
+	if rec = do(h, "GET", "/api/articles/gone", "", nil); rec.Code != 404 {
+		t.Fatalf("missing article: want 404, got %d", rec.Code)
 	}
 }

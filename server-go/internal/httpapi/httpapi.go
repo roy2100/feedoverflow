@@ -121,6 +121,7 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/podcasts", s.getPodcasts)
 	r.Get("/api/starred/count", s.getStarredCount)
 	r.Post("/api/articles/star", s.postStar)
+	r.Get("/api/articles/{id}", s.getArticle)
 	r.Get("/api/articles/{id}/content", s.getArticleContent)
 	r.Get("/api/search", s.getSearch)
 	r.Get("/api/fetch-content", s.getFetchContent)
@@ -295,6 +296,24 @@ func (s *Server) getStarredCount(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "private, max-age=10")
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"count": n})
+}
+
+// getArticle serves one article by id, content included. It exists for the push
+// deep link (client/public/push-sw.js → App.tsx): a notification carries only an
+// article id, and the article it names is usually not in whatever list the app
+// happens to have loaded. Nothing in the normal browsing path uses it.
+func (s *Server) getArticle(w http.ResponseWriter, r *http.Request) {
+	row, ok, err := store.ArticleByID(s.DB.Reader(), chi.URLParam(r, "id"))
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if !ok {
+		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
+		return
+	}
+	arts := articles.NormalizePubDates([]model.Article{articles.RowToArticle(row, true)})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"article": arts[0]})
 }
 
 func (s *Server) getArticleContent(w http.ResponseWriter, r *http.Request) {

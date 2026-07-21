@@ -110,8 +110,11 @@ func (s *Sender) NotifyFeed(ctx context.Context, feedID, feedName string, arts [
 		s.broadcast(ctx, payload{
 			Title: feedName,
 			Body:  truncate(a.Title, maxTitleRunes),
-			URL:   a.Link,
-			Tag:   "article-" + a.ArticleID,
+			// Deep link into the app, not out to the publisher: the service worker
+			// hands the id to an already-open app window, and only falls back to
+			// opening this URL when there is no window to hand it to.
+			URL: "/?article=" + a.ArticleID,
+			Tag: "article-" + a.ArticleID,
 		})
 	}
 }

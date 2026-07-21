@@ -45,6 +45,7 @@ export default function App() {
     selectView,
     search,
     selectArticle,
+    openArticleById,
     toggleStar,
     addFeed,
     importFeeds,
@@ -137,6 +138,38 @@ export default function App() {
         loadArticles({ type: 'today' });
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push deep link. A notification names one article, and it is usually not in
+  // whatever list the app has loaded, so it is opened by id. Two arrival paths:
+  // `?article=<id>` when the tap cold-started the app, and a service-worker
+  // message when a window was already open (see client/public/push-sw.js —
+  // messaging rather than navigating keeps podcast playback and scroll alive).
+  // Nothing in the normal browsing path runs through here.
+  useEffect(() => {
+    if (authed !== true) return;
+
+    const open = async (id: string) => {
+      if (await openArticleById(id)) setMobilePage('article');
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const initial = params.get('article');
+    if (initial) {
+      // Strip the param straight away: leaving it would re-open the article on
+      // every reload, and it would follow anything the user bookmarks or shares.
+      params.delete('article');
+      const rest = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''));
+      void open(initial);
+    }
+
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: string; id?: unknown } | null;
+      if (data?.type === 'open-article' && typeof data.id === 'string') void open(data.id);
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+  }, [authed, openArticleById]);
 
   useEffect(() => {
     const audio = audioRef.current;

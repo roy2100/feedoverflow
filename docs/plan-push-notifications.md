@@ -128,11 +128,8 @@ Deviations from the plan:
   `*push.Sender` directly, so its notify decisions (which feeds, which articles, capped
   vs. summary) are testable without a push service. Five lines, and it removed the need
   for any network-touching test.
-- **Notification click opens the article's original link, not an in-app deep link.** The
-  app has no router (`store.ts` holds `selectedArticle` in state) and no
-  get-article-by-id endpoint, so an in-app deep link would have meant a new endpoint plus
-  URL-param handling in `App.tsx` — scope beyond this feature. The service worker focuses
-  an already-open app window when there is one, and otherwise opens the link.
+- **Notification click deep-links into the app** (added after the first round, which
+  opened the article's original publisher link instead). See "Push deep link" below.
 - **`window.matchMedia` is optional-chained** in `pushBlocker()`. A test surfaced that
   jsdom lacks it; some embedded webviews do too, and the crash would have taken out the
   whole modal.
@@ -145,6 +142,23 @@ sender), 11 vitest cases for the client helper. `make check`, `npm test`, `tsc -
 `oxlint`, `oxfmt --check`, and `vite build` all pass; the built `sw.js` carries
 `importScripts("push-sw.js")`.
 
+### Push deep link (follow-up)
+
+A notification names one article, and that article is usually not in whatever list the app
+has loaded — so it is opened by id, via a new `GET /api/articles/:id` (content included;
+404 when the size cap has trimmed it). Two arrival paths:
+
+- **App already open** — the service worker focuses the window and `postMessage`s
+  `{type:'open-article', id}`. Deliberately *not* `client.navigate`: navigating reloads the
+  app, which tears down any podcast currently playing and loses scroll position.
+  `client.navigate` is also unimplemented in some iOS versions.
+- **Cold start** — the notification's `/?article=<id>` URL opens a window; `App.tsx` reads
+  the param, strips it via `history.replaceState` (otherwise it re-opens on every reload
+  and follows anything the user bookmarks), and opens the article.
+
+Only these two paths use it. Ordinary clicks already hold the `Article` object and go
+straight through `selectArticle` as before — the existing interaction is untouched.
+
 Not verified from here (needs real devices):
 
 1. **macOS** — open `https://rss.royl.uk:8443` in Safari or Chrome, 管理订阅源 → click a
@@ -152,6 +166,10 @@ Not verified from here (needs real devices):
 2. **iOS** — Safari → Share → 添加到主屏幕, open the installed icon, then the same bell.
    Tapping the bell in a plain Safari tab should say 请先将本站添加到主屏幕. Requires iOS
    16.4+.
+   1. Tap a notification with the app **already open** — the named article should open in
+      place, with any playing podcast still playing.
+   2. Fully close the app, then tap a notification — it should cold-start straight into
+      that article, and the URL bar should not keep `?article=`.
 3. Check `SELECT endpoint, user_agent FROM push_subscriptions` to confirm the device
    registered, and `SELECT id, push_enabled, last_notified_ts FROM feeds` to watch the
    watermark advance.

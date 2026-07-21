@@ -88,6 +88,46 @@ describe('selectArticle', () => {
   });
 });
 
+// ─── openArticleById ─────────────────────────────────────────────────────────
+
+describe('openArticleById', () => {
+  it('fetches the article by id and selects it', async () => {
+    const article = { id: 'a1', title: 'Pushed' } as Article;
+    const fetchMock = mockFetch({ article });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const opened = await useStore.getState().openArticleById('a1');
+
+    expect(opened).toBe(true);
+    expect(useStore.getState().selectedArticle).toEqual(article);
+    // The article a notification names is usually absent from the loaded list,
+    // so it must be fetched by id rather than looked up locally.
+    expect(fetchMock).toHaveBeenCalledWith('/api/articles/a1', undefined);
+  });
+
+  it('encodes the id rather than splicing it into the path raw', async () => {
+    const fetchMock = mockFetch({ article: { id: 'x' } as Article });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await useStore.getState().openArticleById('a/b?c');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/articles/a%2Fb%3Fc', undefined);
+  });
+
+  it('resolves false and selects nothing when the article is gone', async () => {
+    // A stale notification, or an article the size cap trimmed.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) })),
+    );
+
+    const opened = await useStore.getState().openArticleById('missing');
+
+    expect(opened).toBe(false);
+    expect(useStore.getState().selectedArticle).toBeNull();
+  });
+});
+
 // ─── deleteFeed ──────────────────────────────────────────────────────────────
 
 describe('deleteFeed', () => {

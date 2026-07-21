@@ -96,6 +96,23 @@ func SinceGlobal(db *sql.DB, since int64, limit int) ([]articles.Row, error) {
 	return scanArticleRows(rows)
 }
 
+// ArticleByID fetches one article row — GET /api/articles/:id, which exists so a
+// push notification can open its article directly. Every other list endpoint
+// returns rows in bulk; this is the only by-id lookup. ok=false when no row
+// matches (the article was trimmed by the size cap, or the id is stale).
+func ArticleByID(db *sql.DB, id string) (articles.Row, bool, error) {
+	rows, err := db.Query(
+		`SELECT `+articleCols+` FROM article_states WHERE article_id = ?`, id)
+	if err != nil {
+		return articles.Row{}, false, err
+	}
+	out, err := scanArticleRows(rows)
+	if err != nil || len(out) == 0 {
+		return articles.Row{}, false, err
+	}
+	return out[0], true, nil
+}
+
 // NewestByFeed — digest mode: newest quota rows for one feed.
 func NewestByFeed(db *sql.DB, feedID string, limit int) ([]articles.Row, error) {
 	rows, err := db.Query(

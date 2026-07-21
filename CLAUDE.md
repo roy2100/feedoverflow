@@ -143,6 +143,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/podcasts` | episodes with a non-empty `audio_url` |
 | GET | `/api/starred/count` | badge count |
 | POST | `/api/articles/star` | upsert `is_starred` |
+| GET | `/api/articles/:id` | one article (content included) — used only by the push deep link |
 | GET | `/api/articles/:id/content` | cached full content |
 | GET | `/api/fetch-content?url=` | Readability extraction |
 | GET | `/api/favicon?domain=` | cached feed favicon (BLOB) |

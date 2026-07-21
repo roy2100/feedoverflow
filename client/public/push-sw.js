@@ -6,7 +6,8 @@
 //
 // The payload shape is produced by server-go/internal/push (payload struct):
 //   { title, body, url, tag }
-// Keep the two in sync.
+// Keep the two in sync. `url` for a per-article notification is an in-app deep
+// link, `/?article=<id>` — see notificationclick below for how it is delivered.
 
 self.addEventListener('push', (event) => {
   let data = {};
@@ -31,6 +32,13 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Pull the article id back out of the `/?article=<id>` deep link. The id is the
+// only part the running app needs; the URL form exists for the cold-start case.
+function articleIdOf(url) {
+  const match = /[?&]article=([^&]+)/.exec(url || '');
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || '/';
@@ -45,14 +53,12 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of clientList) {
         if (client.url.includes(self.registration.scope) && 'focus' in client) {
           await client.focus();
-          if (target !== '/' && 'navigate' in client) {
-            try {
-              await client.navigate(target);
-            } catch {
-              // Cross-origin article links can't be navigated to from here; the
-              // focused app is a reasonable landing spot on its own.
-            }
-          }
+          // postMessage rather than client.navigate: navigating reloads the app,
+          // which would tear down any podcast playing and lose scroll position.
+          // The app opens the article in place (see App.tsx). client.navigate is
+          // also unimplemented in some iOS versions.
+          const id = articleIdOf(target);
+          if (id) client.postMessage({ type: 'open-article', id });
           return;
         }
       }

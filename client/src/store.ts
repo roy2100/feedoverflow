@@ -50,6 +50,7 @@ interface StoreState {
   importFeeds: (newFeeds: Feed[]) => void;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  openArticleById: (id: string) => Promise<boolean>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -145,6 +146,24 @@ export const useStore = create<StoreState>((set, get) => ({
     // Re-fetch only when the active list actually honors the mode.
     const view = get().selectedView;
     if (view.type === 'all' || view.type === 'today') get().loadArticles(view);
+  },
+
+  // Open an article the current list may not contain, by id. Only the push deep
+  // link uses this (notification → App.tsx); ordinary clicks already hold the
+  // Article object and go straight through selectArticle. Resolves false when the
+  // article is gone (trimmed by the size cap, or a stale notification).
+  openArticleById: async (id) => {
+    try {
+      const r = await apiFetch(`${API}/articles/${encodeURIComponent(id)}`);
+      if (!r.ok) return false;
+      const { article } = (await r.json()) as { article: Article };
+      if (!article) return false;
+      get().selectArticle(article);
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
   },
 
   selectArticle: (article) => {
