@@ -6,11 +6,12 @@ import ArticleReader from './components/ArticleReader';
 import FeedSidebar from './components/FeedSidebar';
 import LoginForm from './components/LoginForm';
 import { useIsMobile } from './hooks/useIsMobile';
+import { PANEL_DEPTH, useMobilePanelHistory } from './hooks/useMobilePanelHistory';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
 import { useStore } from './store';
-import type { AudioCtxValue, Article, MobilePage } from './types';
+import type { AudioCtxValue, Article } from './types';
 
 const AddFeedModal = lazy(() => import('./components/AddFeedModal'));
 const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
@@ -20,7 +21,11 @@ const PodcastPlayer = lazy(() => import('./components/PodcastPlayer'));
 export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null); // null=checking, false=unauthed, true=authed
   const isMobile = useIsMobile();
-  const [mobilePage, setMobilePage] = useState<MobilePage>('feeds');
+  const {
+    page: mobilePage,
+    navigate: navigateMobile,
+    openDeepLinked,
+  } = useMobilePanelHistory(isMobile);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -28,6 +33,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('sidebar-collapsed') === '1',
   );
+  // Article id handed over by a push notification, awaiting the feed list.
+  const [pendingArticleId, setPendingArticleId] = useState<string | null>(null);
   const [currentEpisode, setCurrentEpisode] = useState<Article | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -45,6 +52,7 @@ export default function App() {
     selectView,
     search,
     selectArticle,
+    fetchArticleById,
     toggleStar,
     addFeed,
     importFeeds,
@@ -137,6 +145,60 @@ export default function App() {
         loadArticles({ type: 'today' });
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push deep link. A notification names one article, and it is usually not in
+  // whatever list the app has loaded, so it is fetched by id. Two arrival paths:
+  // `?article=<id>` when the tap cold-started the app, and a service-worker
+  // message when a window was already open (see client/public/push-sw.js —
+  // messaging rather than navigating keeps podcast playback and scroll alive).
+  // Nothing in the normal browsing path runs through here.
+  // Capture the id both arrival paths carry, then open it in a second step: the
+  // feed list is still loading during a cold start, and opening immediately
+  // would miss the lookup on exactly the path this exists for.
+  useEffect(() => {
+    if (authed !== true) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const initial = params.get('article');
+    if (initial) {
+      // Strip the param straight away: leaving it would re-open the article on
+      // every reload, and it would follow anything the user bookmarks or shares.
+      params.delete('article');
+      const rest = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''));
+      setPendingArticleId(initial);
+    }
+
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: string; id?: unknown } | null;
+      if (data?.type === 'open-article' && typeof data.id === 'string')
+        setPendingArticleId(data.id);
+    };
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
+  }, [authed]);
+
+  useEffect(() => {
+    // Wait for feeds: without them the article's own feed can't be resolved, and
+    // back would fall through to whatever list happened to be loaded. A user with
+    // no feeds can't receive a push in the first place, so this never stalls.
+    if (!pendingArticleId || feeds.length === 0) return;
+    const id = pendingArticleId;
+    setPendingArticleId(null);
+    void (async () => {
+      const article = await fetchArticleById(id);
+      if (!article) return;
+      // Synthesize the path the user never walked: put the article's own feed
+      // behind the reader, so back lands where the article actually came from.
+      // The web equivalent of Android's TaskStackBuilder parent stack / iOS's
+      // setViewControllers on a deep link.
+      const feed = feeds.find((f) => f.id === article.feedId);
+      if (feed) selectView({ type: 'feed', feed });
+      // Must follow selectView: loadArticles clears selectedArticle as it starts.
+      selectArticle(article);
+      openDeepLinked();
+    })();
+  }, [pendingArticleId, feeds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -233,6 +295,19 @@ export default function App() {
     </Suspense>
   );
 
+  // Shared by both layouts: 管理订阅源 is also the only place to switch a feed's
+  // update notifications on, and phones are where those matter most.
+  const manageModal = showManageModal && (
+    <Suspense fallback={null}>
+      <ManageFeedsModal
+        feeds={feeds}
+        onClose={() => setShowManageModal(false)}
+        onDelete={deleteFeed}
+        onUpdate={updateFeed}
+      />
+    </Suspense>
+  );
+
   if (authed === null)
     return <div style={{ height: 'var(--app-height, 100dvh)', background: 'var(--bg)' }} />;
   if (authed === false)
@@ -247,8 +322,7 @@ export default function App() {
     );
 
   if (isMobile) {
-    const depthByPage: Record<MobilePage, number> = { feeds: 0, list: 1, article: 2 };
-    const depth = depthByPage[mobilePage];
+    const depth = PANEL_DEPTH[mobilePage];
     const transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
 
     // Every panel stays mounted; translateX drives visibility. A parent panel
@@ -298,10 +372,14 @@ export default function App() {
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
             {panel(
               0,
-              <FeedsPage onOpenAddModal={() => setShowAddModal(true)} onNavigate={setMobilePage} />,
+              <FeedsPage
+                onOpenAddModal={() => setShowAddModal(true)}
+                onOpenManageModal={() => setShowManageModal(true)}
+                onNavigate={navigateMobile}
+              />,
             )}
-            {panel(1, <ListPage onNavigate={setMobilePage} />)}
-            {panel(2, <ReaderPage onNavigate={setMobilePage} />)}
+            {panel(1, <ListPage onNavigate={navigateMobile} />)}
+            {panel(2, <ReaderPage onNavigate={navigateMobile} />)}
           </div>
           {currentEpisode && (
             <Suspense fallback={null}>
@@ -317,6 +395,7 @@ export default function App() {
           )}
         </div>
         {addModal}
+        {manageModal}
       </AudioContext.Provider>
     );
   }
@@ -401,16 +480,7 @@ export default function App() {
           )}
         </div>
         {addModal}
-        {showManageModal && (
-          <Suspense fallback={null}>
-            <ManageFeedsModal
-              feeds={feeds}
-              onClose={() => setShowManageModal(false)}
-              onDelete={deleteFeed}
-              onUpdate={updateFeed}
-            />
-          </Suspense>
-        )}
+        {manageModal}
         {showSettingsModal && (
           <Suspense fallback={null}>
             <SettingsModal onClose={() => setShowSettingsModal(false)} />

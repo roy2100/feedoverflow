@@ -3,6 +3,7 @@ package cache_test
 import (
 	"context"
 	"database/sql"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -202,16 +203,23 @@ func TestSingleFlight(t *testing.T) {
 	c := cache.New(handle, blocking)
 	f := model.Feed{ID: "f1", Name: "Feed", URL: "https://x/feed"}
 
+	const callers = 5
 	var wg sync.WaitGroup
-	for range 5 {
+	for range callers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			_, _ = c.RefreshFeed(context.Background(), f)
 		}()
 	}
-	// Give the goroutines time to coalesce onto one flight, then release.
-	for c.InflightLen() == 0 {
+	// Wait until the other callers have actually coalesced onto the leader's
+	// flight. A mere non-empty inflight map is not enough: it only proves the
+	// leader registered, and releasing there lets it finish and clear the entry
+	// before the stragglers arrive — each then starts its own fetch and the test
+	// fails with "fetch called 5 times". This terminates because the leader is
+	// parked in fetch until release, so its flight cannot disappear underneath.
+	for c.InflightJoined(f.ID) < callers-1 {
+		runtime.Gosched()
 	}
 	close(release)
 	wg.Wait()

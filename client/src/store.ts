@@ -49,7 +49,8 @@ interface StoreState {
   addFeed: (input: { url: string }) => Promise<void>;
   importFeeds: (newFeeds: Feed[]) => void;
   deleteFeed: (feedId: string) => Promise<void>;
-  updateFeed: (feedId: string, input: { name: string }) => Promise<void>;
+  updateFeed: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  fetchArticleById: (id: string) => Promise<Article | null>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -147,6 +148,26 @@ export const useStore = create<StoreState>((set, get) => ({
     if (view.type === 'all' || view.type === 'today') get().loadArticles(view);
   },
 
+  // Fetch an article the current list may not contain, by id. Only the push deep
+  // link uses this (notification → App.tsx); ordinary clicks already hold the
+  // Article object and go straight through selectArticle. Resolves null when the
+  // article is gone (trimmed by the size cap, or a stale notification).
+  //
+  // It deliberately does not select: the caller has to switch to the article's
+  // feed first, and loadArticles clears selectedArticle as it starts — selecting
+  // here would just be undone.
+  fetchArticleById: async (id) => {
+    try {
+      const r = await apiFetch(`${API}/articles/${encodeURIComponent(id)}`);
+      if (!r.ok) return null;
+      const { article } = (await r.json()) as { article: Article };
+      return article ?? null;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  },
+
   selectArticle: (article) => {
     apiFetch(`${API}/current-article`, {
       method: 'POST',
@@ -203,12 +224,16 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  updateFeed: async (feedId, { name }) => {
+  // Both fields are optional and only sent when present: the server applies just
+  // what it receives, so a rename never clears the push opt-in and vice versa.
+  updateFeed: async (feedId, patch) => {
     await apiFetch(`${API}/feeds/${feedId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(patch),
     });
-    set((state) => ({ feeds: state.feeds.map((f) => (f.id === feedId ? { ...f, name } : f)) }));
+    set((state) => ({
+      feeds: state.feeds.map((f) => (f.id === feedId ? { ...f, ...patch } : f)),
+    }));
   },
 }));

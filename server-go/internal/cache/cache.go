@@ -59,6 +59,11 @@ type flight struct {
 	done chan struct{}
 	res  Result
 	err  error
+	// joined counts the callers that coalesced onto this flight rather than
+	// starting their own (the leader excluded). Guarded by Cache.mu. Nothing in
+	// production reads it; it exists so a test can wait for coalescing to have
+	// actually happened instead of inferring it from timing.
+	joined int
 }
 
 // Option customizes a Cache at construction. Unset options keep the defaults.
@@ -98,6 +103,7 @@ func New(handle *db.DB, fetch FetchFunc, opts ...Option) *Cache {
 func (c *Cache) RefreshFeed(ctx context.Context, f model.Feed) (Result, error) {
 	c.mu.Lock()
 	if fl, ok := c.inflight[f.ID]; ok {
+		fl.joined++
 		c.mu.Unlock()
 		<-fl.done
 		return fl.res, fl.err

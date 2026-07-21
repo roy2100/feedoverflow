@@ -35,7 +35,8 @@ func scanArticleRows(rows *sql.Rows) ([]articles.Row, error) {
 
 // ListFeeds — GET /api/feeds: raw feed rows ordered by rowid (category omitted).
 func ListFeeds(db *sql.DB) ([]model.Feed, error) {
-	rows, err := db.Query(`SELECT id, name, url, last_fetched_at FROM feeds ORDER BY rowid`)
+	rows, err := db.Query(
+		`SELECT id, name, url, last_fetched_at, COALESCE(push_enabled, 0) FROM feeds ORDER BY rowid`)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func ListFeeds(db *sql.DB) ([]model.Feed, error) {
 	for rows.Next() {
 		var f model.Feed
 		var last sql.NullInt64
-		if err := rows.Scan(&f.ID, &f.Name, &f.URL, &last); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.URL, &last, &f.PushEnabled); err != nil {
 			return nil, err
 		}
 		if last.Valid {
@@ -93,6 +94,23 @@ func SinceGlobal(db *sql.DB, since int64, limit int) ([]articles.Row, error) {
 		return nil, err
 	}
 	return scanArticleRows(rows)
+}
+
+// ArticleByID fetches one article row — GET /api/articles/:id, which exists so a
+// push notification can open its article directly. Every other list endpoint
+// returns rows in bulk; this is the only by-id lookup. ok=false when no row
+// matches (the article was trimmed by the size cap, or the id is stale).
+func ArticleByID(db *sql.DB, id string) (articles.Row, bool, error) {
+	rows, err := db.Query(
+		`SELECT `+articleCols+` FROM article_states WHERE article_id = ?`, id)
+	if err != nil {
+		return articles.Row{}, false, err
+	}
+	out, err := scanArticleRows(rows)
+	if err != nil || len(out) == 0 {
+		return articles.Row{}, false, err
+	}
+	return out[0], true, nil
 }
 
 // NewestByFeed — digest mode: newest quota rows for one feed.

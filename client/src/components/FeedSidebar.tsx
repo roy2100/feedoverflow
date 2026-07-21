@@ -175,9 +175,9 @@ export default function FeedSidebar({
           <IconBtn onClick={onRefresh} title="刷新" isMobile={isMobile}>
             <RefreshCw size={isMobile ? 17 : 13} />
           </IconBtn>
-          {!isMobile && onOpenManageModal && (
-            <IconBtn onClick={onOpenManageModal} title="管理订阅源">
-              <Settings size={13} />
+          {onOpenManageModal && (
+            <IconBtn onClick={onOpenManageModal} title="管理订阅源" isMobile={isMobile}>
+              <Settings size={isMobile ? 17 : 13} />
             </IconBtn>
           )}
           <IconBtn onClick={onOpenAddModal} title="添加订阅" isMobile={isMobile}>

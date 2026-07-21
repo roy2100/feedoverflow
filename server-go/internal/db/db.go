@@ -115,6 +115,18 @@ func InitSchema(db *sql.DB) error {
     content_type TEXT,
     fetched_at   INTEGER
   );
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint   TEXT PRIMARY KEY,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    user_agent TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS push_keys (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    public_key  TEXT NOT NULL,
+    private_key TEXT NOT NULL
+  );
 `); err != nil {
 		return fmt.Errorf("base schema: %w", err)
 	}
@@ -135,6 +147,11 @@ func InitSchema(db *sql.DB) error {
 	// Star-action time (epoch ms); NULL until first starred. Drives the /api/starred
 	// order (newest-starred first) independent of publish date.
 	execIgnore(db, `ALTER TABLE article_states ADD COLUMN starred_at INTEGER`)
+	// Per-feed Web Push opt-in (default off) and the notification watermark: the
+	// highest pub_ts already pushed for this feed. NULL means "never notified" —
+	// the poller seeds it to now rather than replaying the backlog.
+	execIgnore(db, `ALTER TABLE feeds ADD COLUMN push_enabled INTEGER DEFAULT 0`)
+	execIgnore(db, `ALTER TABLE feeds ADD COLUMN last_notified_ts INTEGER`)
 
 	if _, err := db.Exec(
 		`CREATE INDEX IF NOT EXISTS idx_article_states_feed_pub ON article_states (feed_id, pub_ts)`,

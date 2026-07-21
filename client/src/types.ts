@@ -4,6 +4,8 @@ export interface Feed {
   id: string;
   name: string;
   url: string;
+  /** Per-feed Web Push opt-in. Absent on responses from an older server. */
+  push_enabled?: boolean;
 }
 
 export interface Article {

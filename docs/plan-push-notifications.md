@@ -1,0 +1,228 @@
+# Plan: per-feed Web Push notifications
+
+## Goal
+
+Add an opt-in, per-feed "更新推送" switch (default off). When a polled feed yields new
+articles, push a Web Push notification to every subscribed device. Must work on macOS
+(Safari/Chrome) and iOS (PWA installed to home screen, iOS 16.4+).
+
+## Scope
+
+In:
+- `feeds.push_enabled` + `feeds.last_notified_ts` columns; toggle via PATCH `/api/feeds/:id`.
+- VAPID keypair generated once on first use, stored in its own table.
+- `push_subscriptions` table + subscribe/unsubscribe endpoints.
+- Notification fan-out from the poller only, using a pub_ts watermark (see Decisions).
+- Encrypted send via `github.com/SherClockHolmes/webpush-go`; prune subscriptions on 404/410.
+- Service-worker `push` / `notificationclick` handlers, added via workbox `importScripts`
+  so the existing generateSW config stays as-is.
+- UI: a bell toggle per feed row in ManageFeedsModal — the single entry point, which also
+  requests permission + registers the device the first time one is switched on.
+
+Out:
+- Push for starred/search/podcast events; digest scheduling; quiet hours.
+- Any non-Web-Push transport (APNs direct, email, Bark, …).
+- Notification history UI.
+- A second UI surface in SettingsModal (deliberately dropped — see Decisions).
+
+## Decisions
+
+**Granularity.** One notification per new article (tapping opens that article), capped at
+3 per feed per poll. Anything past the newest 3 is dropped silently.
+
+The cap originally collapsed the overflow into one `《源名》有 N 篇新文章`, which was wrong
+on the app's own terms: that is an unread count, delivered to the lock screen, and this
+reader deliberately has no unread concept — it was removed precisely because a growing
+count turns reading into debt. Worse, only high-volume feeds could trigger it, so the
+design punished a bad choice (push on a firehose) by handing the user a counter. A
+notification's job is "here is something worth reading now", not "here is how far behind
+you are". The surplus articles are in the app, one scroll away, owing the reader nothing.
+
+**New-article detection: a pub_ts watermark, not a persist-chain change.** The obvious
+approach — make `persistRows` report which rows were inserted vs. updated and thread that
+through `cache.Result` + a notifier hook — touches the one transaction every fetch path
+runs through, and couples four packages. Instead `feeds.last_notified_ts` holds the
+highest `pub_ts` this feed has already notified about, and after a poll refresh:
+
+```sql
+SELECT article_id, title, link, pub_ts FROM article_states
+WHERE feed_id = ? AND pub_ts > ? AND pub_ts <= ?   -- watermark, now
+ORDER BY pub_ts DESC LIMIT 4
+```
+
+then stamp the watermark to the max `pub_ts` **of the rows actually selected**.
+`internal/store/persist.go` and all of `internal/cache` stay untouched, and the whole
+feature lives in the poller — which is also exactly where it belongs, since an on-demand
+refresh triggered by the user reading the app must not notify.
+
+Two consequences, both deliberate:
+- *Backdated items don't notify.* An item that appears with a `pub_ts` older than the
+  feed's newest already-seen article is skipped. That is a back-fill, not news.
+- *Future-dated items can't poison the watermark.* `dates.PubTs` (`internal/dates/dates.go:100`)
+  passes an upstream date through unclamped, so a timezone-mangled or deliberately
+  scheduled item can carry a `pub_ts` days ahead. Without the `pub_ts <= now` bound and
+  the "max of selected rows" stamp, one such item would push the watermark into the future
+  and silently swallow every genuine update until real time caught up. With them, the item
+  simply waits until its own timestamp is due, and is notified then — exactly once.
+
+**Watermark initialization.** A feed's watermark is seeded to `now` when push is switched
+on (and for a brand-new feed on first fetch), so enabling push never replays the backlog.
+
+**VAPID key storage: its own table, not `settings`.** `store.Settings` (`internal/store/store.go:234`)
+returns *every* row and `GET /api/settings` serializes the lot, so a private key in that
+table would be handed to any authed client. `push_keys` is a dedicated single-row table
+that no generic endpoint reads.
+
+**Subscriptions** are device-scoped rows keyed by endpoint; a device that revokes
+permission or reinstalls is pruned lazily when its endpoint returns 404/410.
+
+**Feed opt-in and device registration are separate controls** (added after review). The
+bell is global — it says the source is worth a notification, which is a property of the
+source, not of the device you happen to be holding. Whether a given device receives is a
+second, independent question, and it was initially only settable as a *side effect* of the
+bell: enabling a feed subscribed the current device, disabling the last one deregistered
+it. That produced two silent failures:
+
+- A second device (the PC, when push was enabled from the phone) showed every bell as on
+  and received nothing, with no way to notice or fix it — the only affordance was a bell
+  that already read "on", so clicking it would have disabled the feed globally.
+- Reinstalling the PWA destroys the subscription but leaves `push_enabled` untouched, so
+  the reinstalled app showed everything as on and delivered nothing. Same dead end.
+
+ManageFeedsModal now carries an explicit device row above the list (本设备：接收中／不接收
+推送, with the matching action). Enabling a feed still subscribes the device, since the
+single-device case should stay one click, but disabling never deregisters — that would let
+one device silently cut off every other.
+
+**A deleted PWA** is pruned server-side on the next send (404/410), not proactively; until
+then the row is stale but harmless. Reinstalling produces a *new* endpoint and therefore a
+new row. The VAPID keypair is never rotated, so re-subscribing after a reinstall works
+against the same key.
+
+## Steps
+
+1. `internal/db`: add `feeds.push_enabled`, `feeds.last_notified_ts`; create
+   `push_subscriptions` and `push_keys`.
+2. `internal/model`: `Feed.PushEnabled`.
+3. `internal/store/push.go`: feed toggle + watermark read/stamp, the new-articles query,
+   subscription CRUD, VAPID key get-or-create.
+4. `internal/push`: `Sender` — build payload, encrypt + send to every subscription, prune
+   dead endpoints. The 3-per-feed cap is the query's `LIMIT`; nothing beyond it is sent or
+   counted.
+5. `internal/jobs/poller.go`: after a successful refresh of a push-enabled feed, notify.
+6. `internal/httpapi`: `GET /api/push/key`, `POST /api/push/subscribe`,
+   `POST /api/push/unsubscribe`; `patchFeed` accepts `push_enabled` (name becomes optional
+   so the existing rename client + MCP `rename_feed` keep working unchanged).
+7. Client: `public/push-sw.js` + workbox `importScripts`; `src/lib/push.ts`; `types.ts`
+   `Feed.push_enabled`; store `updateFeed`; the ManageFeedsModal bell.
+8. Tests: Go — watermark selection (incl. future-dated and backdated cases), subscription
+   store, feed toggle round-trip, payload capping. Vitest — the push helper's key
+   conversion + subscribe flow.
+9. `make check`, `npm test`, `npm run typecheck`, `npm run fmt && npm run lint`.
+
+## Risks / open questions
+
+- **iOS cannot be verified from here.** Web Push requires the PWA installed to the home
+  screen, iOS 16.4+, HTTPS, and a permission request inside a user gesture. Manual test
+  steps ship with the final report.
+- Payload size limit (~4KB encrypted): truncate title/summary before sending.
+- The Mac needs outbound access to Apple/Google push endpoints. Nothing new is exposed
+  inbound — the push service calls the *browser*, not this server.
+- Sending happens inside the poller's goroutine per feed; a slow push endpoint must not
+  stall the poll. Bound it with a per-send timeout.
+
+## Complexity
+
+Medium-High (crypto dependency + schema + service worker + UI, ~10 files, no changes to
+the fetch/persist hot path).
+
+## Outcome
+
+Implemented on `feat/push-notifications`, following the plan. Files:
+
+| File | Change |
+|---|---|
+| `server-go/internal/db/db.go` | `feeds.push_enabled`, `feeds.last_notified_ts`, `push_subscriptions`, `push_keys` |
+| `server-go/internal/store/push.go` | new — toggle, watermark, notify-window queries, subscription CRUD, VAPID keys |
+| `server-go/internal/push/push.go` | new — VAPID lifecycle, payload, fan-out, dead-endpoint pruning |
+| `server-go/internal/jobs/poller.go` | `notifyNewArticles` after a successful poll refresh; `Notifier` interface |
+| `server-go/internal/httpapi/push.go` | new — `GET /api/push/key`, `POST /api/push/{subscribe,unsubscribe}` |
+| `server-go/internal/httpapi/feeds.go` | `patchFeed` takes optional `name` / `push_enabled` |
+| `server-go/internal/{model,config}` | `Feed.PushEnabled`; `PUSH_SUBJECT` |
+| `client/public/push-sw.js` | new — `push` + `notificationclick` |
+| `client/src/lib/push.ts` | new — permission, subscribe, unsubscribe, key decoding |
+| `client/src/components/ManageFeedsModal.tsx` | per-row bell toggle + inline error |
+| `client/src/{types,store}.ts` | `push_enabled` through the store |
+
+Deviations from the plan:
+
+- **`jobs.Notifier` interface.** The poller depends on an interface rather than
+  `*push.Sender` directly, so its notify decisions (which feeds, which articles, capped
+  vs. dropped) are testable without a push service. Five lines, and it removed the need
+  for any network-touching test.
+- **Notification click deep-links into the app** (added after the first round, which
+  opened the article's original publisher link instead). See "Push deep link" below.
+- **`window.matchMedia` is optional-chained** in `pushBlocker()`. A test surfaced that
+  jsdom lacks it; some embedded webviews do too, and the crash would have taken out the
+  whole modal.
+
+Tests: 4 store tests (watermark window incl. future-dated + back-fill, monotonic stamping,
+subscription upsert, key stability), 5 poller tests (default-off, no backlog replay,
+notify + no re-notify, cap drops the surplus for good, missing-watermark seeding), 4 httpapi
+tests (PATCH field independence, key stability + subscribe round-trip, 503 without a
+sender), 11 vitest cases for the client helper. `make check`, `npm test`, `tsc --noEmit`,
+`oxlint`, `oxfmt --check`, and `vite build` all pass; the built `sw.js` carries
+`importScripts("push-sw.js")`.
+
+### Push deep link (follow-up)
+
+A notification names one article, and that article is usually not in whatever list the app
+has loaded — so it is opened by id, via a new `GET /api/articles/:id` (content included;
+404 when the size cap has trimmed it). Two arrival paths:
+
+- **App already open** — the service worker focuses the window and `postMessage`s
+  `{type:'open-article', id}`. Deliberately *not* `client.navigate`: navigating reloads the
+  app, which tears down any podcast currently playing and loses scroll position.
+  `client.navigate` is also unimplemented in some iOS versions.
+- **Cold start** — the notification's `/?article=<id>` URL opens a window; `App.tsx` reads
+  the param, strips it via `history.replaceState` (otherwise it re-opens on every reload
+  and follows anything the user bookmarks), and opens the article.
+
+Only these two paths use it. Ordinary clicks already hold the `Article` object and go
+straight through `selectArticle` as before — the existing interaction is untouched.
+
+**Landing deep needs a back stack (follow-up).** Arriving on the article panel in one tap
+left the user visually three levels deep with zero history, so the system back button exited
+the app on the first press — and the in-app 文章列表 arrow returned to whatever list happened
+to be loaded (今日), which usually does not contain the article just read.
+
+Both native platforms solve this the same way, by synthesizing the path the user never
+walked rather than special-casing the back control: Android builds the parent chain with
+`TaskStackBuilder`/`NavDeepLinkBuilder` so Back behaves like Up, and iOS sets the whole
+`UINavigationController` stack so the back button and edge-swipe pop through it. The
+alternative native idiom — modal presentation with a close button returning to the root —
+was rejected because a feed article belongs to the app's hierarchy rather than being a
+self-contained interruption.
+
+So `useMobilePanelHistory` mirrors the panel stack into browser history (deeper pushes,
+shallower pops via `history.back()`, `popstate` is the only place a panel change applies),
+and a deep link lays down 订阅源 → 列表 → 文章 before showing the reader. The list behind is
+switched to the article's *own* feed, so back lands where the article actually came from.
+That lookup needs `feeds` loaded, which races the cold start, so the id is captured first and
+opened in a second effect once the feed list arrives.
+
+Not verified from here (needs real devices):
+
+1. **macOS** — open `https://rss.royl.uk:8443` in Safari or Chrome, 管理订阅源 → click a
+   feed's bell → allow notifications. Wait for a poll (≤15 min) or restart the server.
+2. **iOS** — Safari → Share → 添加到主屏幕, open the installed icon, then the same bell.
+   Tapping the bell in a plain Safari tab should say 请先将本站添加到主屏幕. Requires iOS
+   16.4+.
+   1. Tap a notification with the app **already open** — the named article should open in
+      place, with any playing podcast still playing.
+   2. Fully close the app, then tap a notification — it should cold-start straight into
+      that article, and the URL bar should not keep `?article=`.
+3. Check `SELECT endpoint, user_agent FROM push_subscriptions` to confirm the device
+   registered, and `SELECT id, push_enabled, last_notified_ts FROM feeds` to watch the
+   watermark advance.
+4. The Mac needs outbound HTTPS to `*.push.apple.com` / `fcm.googleapis.com`.

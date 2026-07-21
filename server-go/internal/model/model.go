@@ -10,6 +10,10 @@ type Feed struct {
 	Name          string `json:"name"`
 	URL           string `json:"url"`
 	LastFetchedAt *int64 `json:"last_fetched_at"`
+	// PushEnabled is the per-feed Web Push opt-in (default off). The notification
+	// watermark (feeds.last_notified_ts) is deliberately not exposed — it is
+	// poller bookkeeping, not something a client acts on.
+	PushEnabled bool `json:"push_enabled"`
 }
 
 // Article is the enriched article shape returned by the list/detail endpoints.

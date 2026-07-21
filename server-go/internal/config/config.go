@@ -30,6 +30,10 @@ type Config struct {
 	ClientDist string
 	// LogDir is where NDJSON logs are written (rotated). Empty → jobs/log to stderr.
 	LogDir string
+	// PushSubject is the VAPID `sub` claim identifying this deployment to the push
+	// services (PUSH_SUBJECT) — an https URL or a mailto: URI. Apple in particular
+	// rejects malformed values, so the default is the real public origin.
+	PushSubject string
 }
 
 // Load reads config from the environment. If RSS_ENV_FILE is set (or server/.env
@@ -49,6 +53,7 @@ func Load() Config {
 		DisableJobs:        os.Getenv("RSS_DISABLE_JOBS") != "",
 		ClientDist:         envStr("CLIENT_DIST", "client/dist"),
 		LogDir:             os.Getenv("LOG_DIR"),
+		PushSubject:        envStr("PUSH_SUBJECT", "https://rss.royl.uk"),
 	}
 }
 

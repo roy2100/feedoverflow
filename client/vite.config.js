@@ -47,6 +47,10 @@ export default defineConfig({
       workbox: {
         // 缓存应用 shell（JS/CSS/HTML）
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Web Push 的 push/notificationclick 监听器（public/push-sw.js）。用
+        // importScripts 挂进生成的 SW，避免为两个监听器改用 injectManifest 而要自己
+        // 维护预缓存清单。
+        importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
             // Article feeds: show cached content immediately, refresh in background

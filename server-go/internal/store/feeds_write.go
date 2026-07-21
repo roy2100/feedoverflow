@@ -12,8 +12,9 @@ import (
 func GetFeed(r *sql.DB, id string) (model.Feed, bool, error) {
 	var f model.Feed
 	var last sql.NullInt64
-	err := r.QueryRow(`SELECT id, name, url, last_fetched_at FROM feeds WHERE id = ?`, id).
-		Scan(&f.ID, &f.Name, &f.URL, &last)
+	err := r.QueryRow(
+		`SELECT id, name, url, last_fetched_at, COALESCE(push_enabled, 0) FROM feeds WHERE id = ?`, id).
+		Scan(&f.ID, &f.Name, &f.URL, &last, &f.PushEnabled)
 	if err == sql.ErrNoRows {
 		return model.Feed{}, false, nil
 	}

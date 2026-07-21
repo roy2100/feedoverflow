@@ -4,10 +4,15 @@ import type { MobilePage, View } from '../types';
 
 interface FeedsPageProps {
   onOpenAddModal: () => void;
+  onOpenManageModal: () => void;
   onNavigate: (page: MobilePage) => void;
 }
 
-export default function FeedsPage({ onOpenAddModal, onNavigate }: FeedsPageProps) {
+export default function FeedsPage({
+  onOpenAddModal,
+  onOpenManageModal,
+  onNavigate,
+}: FeedsPageProps) {
   const { feeds, selectedView, selectView, search, loadArticles } = useStore();
 
   const handleSelectView = (view: View) => {
@@ -28,7 +33,7 @@ export default function FeedsPage({ onOpenAddModal, onNavigate }: FeedsPageProps
       onSelectView={handleSelectView}
       onRefresh={() => loadArticles(selectedView)}
       onOpenAddModal={onOpenAddModal}
-      onOpenManageModal={null}
+      onOpenManageModal={onOpenManageModal}
       onOpenSettings={null}
       onSearch={handleSearch}
     />
