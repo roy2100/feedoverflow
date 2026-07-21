@@ -40,7 +40,7 @@ type Runner struct {
 // poller's notify decisions (which feeds, which articles, how many) can be tested
 // without a push service — *push.Sender is the only production implementation.
 type Notifier interface {
-	NotifyFeed(ctx context.Context, feedID, feedName string, arts []store.NewArticle, total int)
+	NotifyFeed(ctx context.Context, feedID, feedName string, arts []store.NewArticle)
 }
 
 // Start launches every background worker (poller + maintenance + checkpoint +
@@ -137,25 +137,20 @@ func (r *Runner) notifyNewArticles(ctx context.Context, feedID string) {
 	if len(arts) == 0 {
 		return
 	}
-	total := len(arts)
-	if total > push.MaxPerFeed {
-		if total, err = store.CountArticlesToNotify(
-			r.DB.Reader(), feedID, f.LastNotifiedTs.Int64, now); err != nil {
-			r.Log.Warn("push: count new articles failed", "feedId", feedID, "err", err)
-			return
-		}
-	}
 	// Advance the watermark before sending, not after: a push service that errors
 	// or times out must not leave the batch eligible again on the next poll, which
 	// would re-notify the same articles every 15 minutes. Dropping a notification
 	// is recoverable; a repeating one is what makes users turn the feature off.
 	// arts[0] is the newest *selected* row — stamping from the selection (never a
 	// bare MAX(pub_ts)) is what stops a future-dated item poisoning the watermark.
+	// When a poll brought in more than the cap, the surplus is passed over here
+	// for good: it is never notified, never counted, and the reader meets it in
+	// the list like any other article.
 	if err := store.StampNotified(r.DB.Writer(), feedID, arts[0].PubTs); err != nil {
 		r.Log.Warn("push: stamp watermark failed", "feedId", feedID, "err", err)
 		return
 	}
-	r.Push.NotifyFeed(ctx, feedID, f.Name, arts, total)
+	r.Push.NotifyFeed(ctx, feedID, f.Name, arts)
 }
 
 // pollAllFeeds refreshes every feed concurrently and waits for the batch to

@@ -28,7 +28,15 @@ Out:
 ## Decisions
 
 **Granularity.** One notification per new article (tapping opens that article), capped at
-3 per feed per poll; a 4th or beyond collapses into one `《源名》有 N 篇新文章`.
+3 per feed per poll. Anything past the newest 3 is dropped silently.
+
+The cap originally collapsed the overflow into one `《源名》有 N 篇新文章`, which was wrong
+on the app's own terms: that is an unread count, delivered to the lock screen, and this
+reader deliberately has no unread concept — it was removed precisely because a growing
+count turns reading into debt. Worse, only high-volume feeds could trigger it, so the
+design punished a bad choice (push on a firehose) by handing the user a counter. A
+notification's job is "here is something worth reading now", not "here is how far behind
+you are". The surplus articles are in the app, one scroll away, owing the reader nothing.
 
 **New-article detection: a pub_ts watermark, not a persist-chain change.** The obvious
 approach — make `persistRows` report which rows were inserted vs. updated and thread that
@@ -76,7 +84,8 @@ permission or reinstalls is pruned lazily when its endpoint returns 404/410.
 3. `internal/store/push.go`: feed toggle + watermark read/stamp, the new-articles query,
    subscription CRUD, VAPID key get-or-create.
 4. `internal/push`: `Sender` — build payload, encrypt + send to every subscription, prune
-   dead endpoints, apply the 3-per-feed cap.
+   dead endpoints. The 3-per-feed cap is the query's `LIMIT`; nothing beyond it is sent or
+   counted.
 5. `internal/jobs/poller.go`: after a successful refresh of a push-enabled feed, notify.
 6. `internal/httpapi`: `GET /api/push/key`, `POST /api/push/subscribe`,
    `POST /api/push/unsubscribe`; `patchFeed` accepts `push_enabled` (name becomes optional
@@ -126,7 +135,7 @@ Deviations from the plan:
 
 - **`jobs.Notifier` interface.** The poller depends on an interface rather than
   `*push.Sender` directly, so its notify decisions (which feeds, which articles, capped
-  vs. summary) are testable without a push service. Five lines, and it removed the need
+  vs. dropped) are testable without a push service. Five lines, and it removed the need
   for any network-touching test.
 - **Notification click deep-links into the app** (added after the first round, which
   opened the article's original publisher link instead). See "Push deep link" below.
@@ -134,9 +143,9 @@ Deviations from the plan:
   jsdom lacks it; some embedded webviews do too, and the crash would have taken out the
   whole modal.
 
-Tests: 5 store tests (watermark window incl. future-dated + back-fill, monotonic stamping,
-count parity, subscription upsert, key stability), 5 poller tests (default-off, no backlog
-replay, notify + no re-notify, cap vs. true total, missing-watermark seeding), 3 httpapi
+Tests: 4 store tests (watermark window incl. future-dated + back-fill, monotonic stamping,
+subscription upsert, key stability), 5 poller tests (default-off, no backlog replay,
+notify + no re-notify, cap drops the surplus for good, missing-watermark seeding), 4 httpapi
 tests (PATCH field independence, key stability + subscribe round-trip, 503 without a
 sender), 11 vitest cases for the client helper. `make check`, `npm test`, `tsc --noEmit`,
 `oxlint`, `oxfmt --check`, and `vite build` all pass; the built `sw.js` carries

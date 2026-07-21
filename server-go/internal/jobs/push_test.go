@@ -24,13 +24,12 @@ type notifyCall struct {
 	feedID   string
 	feedName string
 	arts     []store.NewArticle
-	total    int
 }
 
 func (f *fakeNotifier) NotifyFeed(
-	_ context.Context, feedID, feedName string, arts []store.NewArticle, total int,
+	_ context.Context, feedID, feedName string, arts []store.NewArticle,
 ) {
-	f.calls = append(f.calls, notifyCall{feedID, feedName, arts, total})
+	f.calls = append(f.calls, notifyCall{feedID, feedName, arts})
 }
 
 // pollOnce runs one poll over a single feed whose fetch returns items.
@@ -119,7 +118,7 @@ func TestPollNotifiesNewArticles(t *testing.T) {
 		t.Fatalf("want 1 notification batch, got %d: %+v", len(n.calls), n.calls)
 	}
 	got := n.calls[0]
-	if got.feedID != "f1" || got.total != 1 || len(got.arts) != 1 {
+	if got.feedID != "f1" || len(got.arts) != 1 {
 		t.Fatalf("batch: %+v", got)
 	}
 	if got.arts[0].Title != "Fresh" {
@@ -138,9 +137,10 @@ func TestPollNotifiesNewArticles(t *testing.T) {
 	}
 }
 
-// More new articles than the per-feed cap: the poller hands the sender FetchLimit
-// rows plus the true total, which is what the collapsed summary needs.
-func TestPollCapsBatchButReportsTrueTotal(t *testing.T) {
+// More new articles than the per-feed cap: only the newest MaxPerFeed are pushed
+// and the surplus is dropped silently. No count is computed or sent anywhere — a
+// "有 N 篇新文章" summary is an unread count, which this reader has no concept of.
+func TestPollCapsBatchAndDropsTheSurplusSilently(t *testing.T) {
 	handle := oneFeedDB(t)
 	now := time.Now()
 	if _, err := store.SetFeedPush(
@@ -159,11 +159,16 @@ func TestPollCapsBatchButReportsTrueTotal(t *testing.T) {
 	if len(n.calls) != 1 {
 		t.Fatalf("want 1 batch, got %d", len(n.calls))
 	}
-	if len(n.calls[0].arts) != push.FetchLimit {
-		t.Fatalf("arts: got %d, want FetchLimit=%d", len(n.calls[0].arts), push.FetchLimit)
+	if len(n.calls[0].arts) != push.MaxPerFeed {
+		t.Fatalf("arts: got %d, want MaxPerFeed=%d", len(n.calls[0].arts), push.MaxPerFeed)
 	}
-	if n.calls[0].total != fresh {
-		t.Fatalf("total: got %d, want %d", n.calls[0].total, fresh)
+
+	// The surplus is passed over for good: the watermark moved past all of it, so
+	// the next poll is silent rather than delivering the leftovers late.
+	n2 := &fakeNotifier{}
+	pollOnce(t, handle, n2, items)
+	if len(n2.calls) != 0 {
+		t.Fatalf("surplus resurfaced on the next poll: %+v", n2.calls)
 	}
 }
 

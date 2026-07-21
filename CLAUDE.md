@@ -112,9 +112,10 @@ language, drop stale/redundant chrome.
   (`watermark < pub_ts <= now`) and the watermark is stamped from the rows actually selected:
   `dates.PubTs` passes upstream dates through unclamped, so a future-dated item would otherwise
   push the watermark ahead and swallow every real update until real time caught up. Enabling push
-  seeds the watermark to now, so switching it on never replays the backlog. Up to 3 articles per
-  feed per poll notify individually; more collapse into one summary. Rationale + manual test
-  steps: `docs/plan-push-notifications.md`.
+  seeds the watermark to now, so switching it on never replays the backlog. At most 3 articles
+  per feed per poll are pushed, one notification each; a busier poll simply drops the surplus —
+  never a "有 N 篇新文章" summary, which is an unread count, the one thing this reader has no
+  concept of. Rationale + manual test steps: `docs/plan-push-notifications.md`.
 - Auth: when `AUTH_USER`/`AUTH_PASS` are set, every `/api/*` request on the public router requires
   a valid session cookie (no localhost bypass — gated by socket, not IP). Login is rate-limited.
 

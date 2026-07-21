@@ -100,17 +100,6 @@ func ArticlesToNotify(r *sql.DB, feedID string, after, now int64, limit int) ([]
 	return out, rows.Err()
 }
 
-// CountArticlesToNotify counts what ArticlesToNotify would return unbounded —
-// only needed when the batch overflows the per-feed cap and collapses into a
-// "有 N 篇新文章" summary, which needs the true N.
-func CountArticlesToNotify(r *sql.DB, feedID string, after, now int64) (int, error) {
-	var n int
-	err := r.QueryRow(
-		`SELECT COUNT(*) FROM article_states WHERE feed_id = ? AND pub_ts > ? AND pub_ts <= ?`,
-		feedID, after, now).Scan(&n)
-	return n, err
-}
-
 // StampNotified advances a feed's watermark. Callers pass the max pub_ts of the
 // rows they actually notified about (never a bare MAX(pub_ts) over the table —
 // see ArticlesToNotify). Monotonic: never moves the watermark backwards.

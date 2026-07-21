@@ -147,26 +147,6 @@ func TestStampNotifiedIsMonotonic(t *testing.T) {
 	}
 }
 
-func TestCountArticlesToNotifyMatchesWindow(t *testing.T) {
-	h := newTestDB(t)
-	w := h.Writer()
-	insertFeed(t, w, "f1", "Feed", "http://f", nil)
-	insertArticle(t, w, af{id: "a", feedID: "f1", pubTs: 1100})
-	insertArticle(t, w, af{id: "b", feedID: "f1", pubTs: 1200})
-	insertArticle(t, w, af{id: "c", feedID: "f1", pubTs: 1300})
-	insertArticle(t, w, af{id: "old", feedID: "f1", pubTs: 100})
-	insertArticle(t, w, af{id: "ahead", feedID: "f1", pubTs: 9000})
-
-	n, err := store.CountArticlesToNotify(h.Reader(), "f1", 1000, 2000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The summary's "有 N 篇新文章" must count the same window the list query uses.
-	if n != 3 {
-		t.Fatalf("count: got %d, want 3", n)
-	}
-}
-
 func TestSubscriptionRoundTrip(t *testing.T) {
 	h := newTestDB(t)
 	sub := store.Subscription{

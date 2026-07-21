@@ -25,13 +25,16 @@ import (
 )
 
 const (
-	// MaxPerFeed caps how many individual article notifications one feed may emit
-	// per poll. Past that the batch collapses into a single summary so a
-	// high-volume feed can't bury the notification centre.
+	// MaxPerFeed caps how many notifications one feed may emit per poll. Anything
+	// past the newest 3 is dropped silently — deliberately not collapsed into a
+	// "有 N 篇新文章" summary, which is an unread count, the one thing this reader
+	// has no concept of. A notification's job is "here is something worth reading
+	// now", not "here is how far behind you are"; the remaining articles are in
+	// the app, one scroll away, owing the reader nothing.
 	MaxPerFeed = 3
-	// FetchLimit is what the caller should ask ArticlesToNotify for: one more than
-	// the cap, so the sender can tell "exactly at the cap" from "over it".
-	FetchLimit = MaxPerFeed + 1
+	// FetchLimit is what the caller should ask ArticlesToNotify for. It equals the
+	// cap: nothing beyond it is ever sent, or counted.
+	FetchLimit = MaxPerFeed
 	// sendTimeout bounds one endpoint's POST. The poller calls into here inline,
 	// so an unresponsive push service must not stall the poll.
 	sendTimeout = 10 * time.Second
@@ -59,8 +62,8 @@ type payload struct {
 	Body  string `json:"body"`
 	// URL is what a click opens. Empty means "just open the app".
 	URL string `json:"url"`
-	// Tag collapses same-tag notifications on the device: per-article tags are
-	// unique (so several updates stack), the summary reuses the feed's tag.
+	// Tag collapses same-tag notifications on the device. Per-article tags are
+	// unique, so several updates stack rather than replacing each other.
 	Tag string `json:"tag"`
 }
 
@@ -88,22 +91,11 @@ func (s *Sender) PublicKey() (string, error) {
 	return pub, err
 }
 
-// NotifyFeed pushes a feed's new articles to every device. arts must be newest
-// first, as ArticlesToNotify returns them, and may hold up to FetchLimit entries;
-// more than MaxPerFeed collapses into one summary. total is how many new articles
-// there actually are (arts is capped at FetchLimit, so it can't carry the count).
-func (s *Sender) NotifyFeed(ctx context.Context, feedID, feedName string, arts []store.NewArticle, total int) {
-	if len(arts) == 0 {
-		return
-	}
-	if len(arts) > MaxPerFeed {
-		s.broadcast(ctx, payload{
-			Title: feedName,
-			Body:  fmt.Sprintf("有 %d 篇新文章", total),
-			Tag:   "feed-" + feedID,
-		})
-		return
-	}
+// NotifyFeed pushes a feed's new articles to every device, one notification per
+// article. arts must be newest first, as ArticlesToNotify returns them, and is
+// capped at MaxPerFeed by the query itself — a busier poll is simply not reported
+// in full, and the reader is never told a count (see MaxPerFeed).
+func (s *Sender) NotifyFeed(ctx context.Context, feedID, feedName string, arts []store.NewArticle) {
 	// Oldest first, so the newest article ends up on top of the stack.
 	for i := len(arts) - 1; i >= 0; i-- {
 		a := arts[i]
