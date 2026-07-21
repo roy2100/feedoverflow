@@ -112,6 +112,62 @@ Set `AUTH_USER` / `AUTH_PASS` (in the environment, or in an env file pointed to 
 `RSS_ENV_FILE`) to require login on every request — for exposing the reader over a public
 tunnel. Leave them empty for localhost-only private use.
 
+## Configuration
+
+Every setting is an environment variable, all of them optional — with no environment at
+all the server runs on `:3002` against `./rss.db`. Only `AUTH_USER`/`AUTH_PASS` become
+effectively required, and only once you expose the app beyond localhost.
+
+Runtime settings that belong to *content* rather than deployment — the RSSHub base URL,
+per-feed push — live in the app's Settings UI and the database, not here.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `3002` | Public listener, bound to all interfaces. Auth-gated when `AUTH_USER`/`AUTH_PASS` are set. |
+| `LOCAL_API_PORT` | `4002` | Loopback-only companion listener (`127.0.0.1`), never authenticated and never exposed. Also serves the MCP endpoint at `/mcp`. |
+| `AUTH_USER` | *(empty)* | Login username. **Set both this and `AUTH_PASS`** to gate the public listener; leaving either empty disables auth entirely. |
+| `AUTH_PASS` | *(empty)* | Login password. See above — half-configured auth is no auth. |
+| `RSS_DB` | `rss.db` | SQLite file path. Created if absent; the parent directory must already exist. |
+| `DB_MAX_SIZE_MB` | `2048` | Size cap. Past it, maintenance trims the oldest **non-starred** articles down to 90% and `VACUUM`s. Starred articles are never deleted. |
+| `REFRESH_CONCURRENCY` | `6` | How many feed fetch+persist chains may run at once — the single throttle across every fetch path (poll fan-out, startup warming, on-demand reads). |
+| `LOG_DIR` | *(empty)* | Directory for rotated NDJSON logs (`app.log`). Empty logs to stderr instead. The directory must exist. |
+| `CLIENT_DIST` | `client/dist` | Built client served on the public listener. Empty disables static serving (API only). |
+| `PUSH_SUBJECT` | `https://rss.royl.uk` | VAPID `sub` claim for Web Push — a contact identifier for the push service operator, not an endpoint anyone connects to. Any valid `https:` URL or `mailto:` URI works; it need not match your origin. |
+| `RSS_ENV_FILE` | *(unset)* | Path to a `KEY=VALUE` file to load before reading the rest. See below. |
+| `RSS_DISABLE_JOBS` | *(unset)* | Any non-empty value skips **all** background work — polling, maintenance, WAL checkpoints, cache warming. For tests and contract diffing; not for production. |
+
+### How to set them
+
+**Directly**, for a one-off run:
+
+```bash
+AUTH_USER=me AUTH_PASS=secret npm run server
+```
+
+**Via an env file**, for a persistent install. `RSS_ENV_FILE` itself must come from the
+real environment — it names the file, so it cannot live inside it:
+
+```bash
+RSS_ENV_FILE=/path/to/.env npm run server
+```
+
+Values already present in the environment **win over the file** — the file fills gaps, it
+never overrides. That way a shell variable or a systemd/launchd `Environment=` entry can
+override one setting without editing the file.
+
+**With Docker**, through `.env` (see [Run with Docker](#run-with-docker)). `PORT`,
+`LOCAL_API_PORT`, `RSS_DB`, `LOG_DIR`, and `CLIENT_DIST` are already set in the image to
+container-appropriate paths — override them only if you know why.
+
+### Client build-time variables
+
+The client is a static bundle, so its variables are read by Vite at **build** time and
+baked in; setting them at runtime does nothing.
+
+| Variable | Purpose |
+|---|---|
+| `VITE_DEMO_MODE` | Non-empty renders the public demo instance's banner. A no-op in a normal build. |
+
 ## Run with Docker
 
 No Go/Node toolchain needed — just Docker. The image is a multi-stage build (client +
