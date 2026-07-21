@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -44,6 +45,11 @@ const (
 	// maxTitleRunes truncates a title so the encrypted payload stays well under
 	// the 4KB every push service enforces.
 	maxTitleRunes = 120
+	// maxBodyBytes bounds how much of a rejection response is read, and
+	// maxBodyRunes how much of it reaches the log. Error bodies are a short JSON
+	// object; anything longer is a push service misbehaving, not a diagnosis.
+	maxBodyBytes = 512
+	maxBodyRunes = 200
 )
 
 // Sender fans a feed's new articles out to every registered device.
@@ -145,7 +151,7 @@ func (s *Sender) sendOne(ctx context.Context, sub store.Subscription, body []byt
 		Endpoint: sub.Endpoint,
 		Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
 	}, &webpush.Options{
-		Subscriber:      s.Subject,
+		Subscriber:      vapidSubscriber(s.Subject),
 		VAPIDPublicKey:  pub,
 		VAPIDPrivateKey: priv,
 		TTL:             ttl,
@@ -156,6 +162,7 @@ func (s *Sender) sendOne(ctx context.Context, sub store.Subscription, body []byt
 		return
 	}
 	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	// 404/410 is the push service saying this subscription is permanently gone
@@ -171,8 +178,21 @@ func (s *Sender) sendOne(ctx context.Context, sub store.Subscription, body []byt
 	}
 	if resp.StatusCode >= 300 {
 		s.Log.Warn("push: endpoint rejected",
-			"endpoint", endpointHost(sub.Endpoint), "status", resp.StatusCode)
+			"endpoint", endpointHost(sub.Endpoint), "status", resp.StatusCode,
+			// The body carries the only machine-readable reason a push service ever
+			// gives (Apple's {"reason":"BadJwtToken"}, for one). Without it a
+			// rejection is a bare status code and the cause has to be guessed at.
+			"body", truncate(string(respBody), maxBodyRunes))
 	}
+}
+
+// vapidSubscriber normalises the configured `sub` claim for webpush-go, which
+// prefixes "mailto:" onto anything that is not an https URL — including a value
+// that already is a mailto: URI, producing "mailto:mailto:you@example.com". Apple
+// rejects that JWT with 403 BadJwtToken and drops every notification, so the
+// scheme is stripped here and handed over as the bare address.
+func vapidSubscriber(subject string) string {
+	return strings.TrimPrefix(subject, "mailto:")
 }
 
 // truncate shortens s to at most n runes, marking the cut with an ellipsis.
