@@ -191,6 +191,26 @@ has loaded — so it is opened by id, via a new `GET /api/articles/:id` (content
 Only these two paths use it. Ordinary clicks already hold the `Article` object and go
 straight through `selectArticle` as before — the existing interaction is untouched.
 
+**Landing deep needs a back stack (follow-up).** Arriving on the article panel in one tap
+left the user visually three levels deep with zero history, so the system back button exited
+the app on the first press — and the in-app 文章列表 arrow returned to whatever list happened
+to be loaded (今日), which usually does not contain the article just read.
+
+Both native platforms solve this the same way, by synthesizing the path the user never
+walked rather than special-casing the back control: Android builds the parent chain with
+`TaskStackBuilder`/`NavDeepLinkBuilder` so Back behaves like Up, and iOS sets the whole
+`UINavigationController` stack so the back button and edge-swipe pop through it. The
+alternative native idiom — modal presentation with a close button returning to the root —
+was rejected because a feed article belongs to the app's hierarchy rather than being a
+self-contained interruption.
+
+So `useMobilePanelHistory` mirrors the panel stack into browser history (deeper pushes,
+shallower pops via `history.back()`, `popstate` is the only place a panel change applies),
+and a deep link lays down 订阅源 → 列表 → 文章 before showing the reader. The list behind is
+switched to the article's *own* feed, so back lands where the article actually came from.
+That lookup needs `feeds` loaded, which races the cold start, so the id is captured first and
+opened in a second effect once the feed list arrives.
+
 Not verified from here (needs real devices):
 
 1. **macOS** — open `https://rss.royl.uk:8443` in Safari or Chrome, 管理订阅源 → click a

@@ -69,6 +69,8 @@ client/             Vite + React + TypeScript (port 3000)
   src/types.ts      shared client types, mirrors server-go/internal/model
   src/components/   FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, SettingsModal, PodcastPlayer, LoginForm
   src/pages/        mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
+  src/hooks/useMobilePanelHistory.ts  mobile panel stack ↔ browser history (system back walks
+                    订阅源 → 列表 → 文章; a push deep link synthesizes the stack it skipped)
 ```
 
 TypeScript, type-stripped by Vite/Vitest. `npm run typecheck` (`tsc --noEmit`, in `client/`) is

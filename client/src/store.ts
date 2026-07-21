@@ -50,7 +50,7 @@ interface StoreState {
   importFeeds: (newFeeds: Feed[]) => void;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
-  openArticleById: (id: string) => Promise<boolean>;
+  fetchArticleById: (id: string) => Promise<Article | null>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -148,21 +148,23 @@ export const useStore = create<StoreState>((set, get) => ({
     if (view.type === 'all' || view.type === 'today') get().loadArticles(view);
   },
 
-  // Open an article the current list may not contain, by id. Only the push deep
+  // Fetch an article the current list may not contain, by id. Only the push deep
   // link uses this (notification → App.tsx); ordinary clicks already hold the
-  // Article object and go straight through selectArticle. Resolves false when the
+  // Article object and go straight through selectArticle. Resolves null when the
   // article is gone (trimmed by the size cap, or a stale notification).
-  openArticleById: async (id) => {
+  //
+  // It deliberately does not select: the caller has to switch to the article's
+  // feed first, and loadArticles clears selectedArticle as it starts — selecting
+  // here would just be undone.
+  fetchArticleById: async (id) => {
     try {
       const r = await apiFetch(`${API}/articles/${encodeURIComponent(id)}`);
-      if (!r.ok) return false;
+      if (!r.ok) return null;
       const { article } = (await r.json()) as { article: Article };
-      if (!article) return false;
-      get().selectArticle(article);
-      return true;
+      return article ?? null;
     } catch (e) {
       console.error(e);
-      return false;
+      return null;
     }
   },
 
