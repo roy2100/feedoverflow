@@ -4,7 +4,13 @@ import { createPortal } from 'react-dom';
 
 import { faviconDomain } from '../faviconDomain';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { ensureSubscribed, unsubscribeDevice } from '../lib/push';
+import {
+  currentSubscription,
+  deviceCount,
+  ensureSubscribed,
+  pushBlocker,
+  unsubscribeDevice,
+} from '../lib/push';
 import type { Feed } from '../types';
 
 function fallbackCopy(text: string, onDone: () => void) {
@@ -36,6 +42,12 @@ function FeedIcon({ url }: { url: string }) {
   );
 }
 
+// Whether *this* device receives pushes — distinct from any feed's push_enabled,
+// which is global. A device that never subscribed (a second browser, or the same
+// phone after reinstalling the PWA) sees every bell as on and receives nothing;
+// without this row there would be no way to notice, let alone fix it.
+type DeviceState = 'checking' | 'unsupported' | 'needs-install' | 'on' | 'off';
+
 interface ManageFeedsModalProps {
   feeds: Feed[];
   onClose: () => void;
@@ -49,23 +61,59 @@ export default function ManageFeedsModal({
   onDelete,
   onUpdate,
 }: ManageFeedsModalProps) {
-  // Only one row can be mid-toggle or showing a push error at a time — this modal
-  // is the single entry point for the whole feature, permission included.
+  // Only one row can be mid-toggle or showing a push error at a time.
   const [pushBusy, setPushBusy] = useState<string | null>(null);
   const [pushError, setPushError] = useState<{ feedId: string; message: string } | null>(null);
+  const [device, setDevice] = useState<DeviceState>('checking');
+  const [devices, setDevices] = useState<number | null>(null);
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [deviceError, setDeviceError] = useState('');
 
-  // Turning a feed's bell on also registers this device (asking for notification
-  // permission on the first one) — there is no separate "enable notifications"
-  // setting to keep in sync. Turning off the last one deregisters it again.
+  const refreshDevice = async () => {
+    const blocker = pushBlocker();
+    if (blocker) {
+      setDevice(blocker);
+      return;
+    }
+    const sub = await currentSubscription();
+    setDevice(sub ? 'on' : 'off');
+    // Only ask once this device is registered: the count endpoint also mints the
+    // VAPID keypair, and opening this modal shouldn't do that on its own.
+    setDevices(sub ? await deviceCount() : null);
+  };
+
+  useEffect(() => {
+    void refreshDevice();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleDevice = async () => {
+    setDeviceError('');
+    setDeviceBusy(true);
+    try {
+      if (device === 'on') await unsubscribeDevice();
+      else await ensureSubscribed();
+      await refreshDevice();
+    } catch (e) {
+      setDeviceError((e as Error).message || '操作失败');
+    } finally {
+      setDeviceBusy(false);
+    }
+  };
+
+  // A feed's bell is global state — it says this source is worth a notification,
+  // not that this particular device wants one. Enabling still registers the
+  // device as a convenience (so the common single-device case is one click), but
+  // disabling never deregisters: that would let one device silently cut off every
+  // other. Deregistering is the device control's job, above the list.
   const handleTogglePush = async (feed: Feed, next: boolean) => {
     setPushError(null);
     setPushBusy(feed.id);
     try {
-      if (next) await ensureSubscribed();
-      await onUpdate(feed.id, { push_enabled: next });
-      if (!next && !feeds.some((f) => f.id !== feed.id && f.push_enabled)) {
-        await unsubscribeDevice();
+      if (next) {
+        await ensureSubscribed();
+        await refreshDevice();
       }
+      await onUpdate(feed.id, { push_enabled: next });
     } catch (e) {
       setPushError({ feedId: feed.id, message: (e as Error).message || '开启推送失败' });
     } finally {
@@ -150,6 +198,48 @@ export default function ManageFeedsModal({
           </button>
         </div>
 
+        {/* This device's push registration */}
+        <div
+          style={{
+            padding: '10px 20px',
+            borderBottom: '1px solid var(--border-light)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexShrink: 0,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
+            {deviceLabel(device, devices)}
+          </span>
+          {(device === 'on' || device === 'off') && (
+            <button
+              onClick={handleToggleDevice}
+              disabled={deviceBusy}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                background: device === 'on' ? 'var(--bg-selected)' : 'var(--accent)',
+                color: device === 'on' ? 'var(--text-secondary)' : '#fff',
+                border: 'none',
+                cursor: deviceBusy ? 'default' : 'pointer',
+                opacity: deviceBusy ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {device === 'on' ? '不再接收' : '在本设备接收'}
+            </button>
+          )}
+          {deviceError && (
+            <p style={{ flexBasis: '100%', margin: 0, fontSize: 11.5, color: 'var(--red)' }}>
+              {deviceError}
+            </p>
+          )}
+        </div>
+
         {/* Feed list */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0 12px' }}>
           {feeds.length === 0 ? (
@@ -186,6 +276,23 @@ export default function ManageFeedsModal({
     </div>,
     document.body,
   );
+}
+
+function deviceLabel(state: DeviceState, devices: number | null): string {
+  switch (state) {
+    case 'checking':
+      return '正在检查本设备…';
+    case 'needs-install':
+      return '本设备：需先添加到主屏幕才能接收推送';
+    case 'unsupported':
+      return '本设备：浏览器不支持推送';
+    case 'off':
+      // The bells below may well be on: they are global, and say nothing about
+      // whether this device is among the recipients.
+      return '本设备：不接收推送';
+    case 'on':
+      return devices && devices > 1 ? `本设备：接收中 · 共 ${devices} 台设备` : '本设备：接收中';
+  }
 }
 
 interface FeedRowProps {

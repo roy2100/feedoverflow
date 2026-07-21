@@ -76,6 +76,29 @@ that no generic endpoint reads.
 **Subscriptions** are device-scoped rows keyed by endpoint; a device that revokes
 permission or reinstalls is pruned lazily when its endpoint returns 404/410.
 
+**Feed opt-in and device registration are separate controls** (added after review). The
+bell is global — it says the source is worth a notification, which is a property of the
+source, not of the device you happen to be holding. Whether a given device receives is a
+second, independent question, and it was initially only settable as a *side effect* of the
+bell: enabling a feed subscribed the current device, disabling the last one deregistered
+it. That produced two silent failures:
+
+- A second device (the PC, when push was enabled from the phone) showed every bell as on
+  and received nothing, with no way to notice or fix it — the only affordance was a bell
+  that already read "on", so clicking it would have disabled the feed globally.
+- Reinstalling the PWA destroys the subscription but leaves `push_enabled` untouched, so
+  the reinstalled app showed everything as on and delivered nothing. Same dead end.
+
+ManageFeedsModal now carries an explicit device row above the list (本设备：接收中／不接收
+推送, with the matching action). Enabling a feed still subscribes the device, since the
+single-device case should stay one click, but disabling never deregisters — that would let
+one device silently cut off every other.
+
+**A deleted PWA** is pruned server-side on the next send (404/410), not proactively; until
+then the row is stale but harmless. Reinstalling produces a *new* endpoint and therefore a
+new row. The VAPID keypair is never rotated, so re-subscribing after a reinstall works
+against the same key.
+
 ## Steps
 
 1. `internal/db`: add `feeds.push_enabled`, `feeds.last_notified_ts`; create

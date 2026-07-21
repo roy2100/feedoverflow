@@ -2,14 +2,23 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import ManageFeedsModal from '../components/ManageFeedsModal';
-import { ensureSubscribed } from '../lib/push';
+import {
+  currentSubscription,
+  deviceCount,
+  ensureSubscribed,
+  pushBlocker,
+  unsubscribeDevice,
+} from '../lib/push';
 import type { Feed } from '../types';
 
-// jsdom has no Push API, so the real ensureSubscribed always rejects — which
-// would make the toggle assertions below vacuous (onUpdate never reached).
+// jsdom has no Push API, so the real helpers all bail out early — which would
+// make the toggle assertions below vacuous (onUpdate never reached).
 vi.mock('../lib/push', () => ({
   ensureSubscribed: vi.fn().mockResolvedValue(undefined),
   unsubscribeDevice: vi.fn().mockResolvedValue(undefined),
+  currentSubscription: vi.fn().mockResolvedValue(null),
+  deviceCount: vi.fn().mockResolvedValue(1),
+  pushBlocker: vi.fn().mockReturnValue(null),
 }));
 
 const feeds = [{ id: '1', name: 'HN', url: 'https://hn.example/rss' } as Feed];
@@ -32,7 +41,14 @@ function renderModal(overrides: Partial<Parameters<typeof ManageFeedsModal>[0]> 
 }
 
 beforeEach(() => {
+  // The module mock's vi.fn()s live across tests; restoreAllMocks does not reset
+  // their call history, so a later "was never called" assertion would see an
+  // earlier test's call.
+  vi.clearAllMocks();
   vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.mocked(pushBlocker).mockReturnValue(null);
+  vi.mocked(currentSubscription).mockResolvedValue(null);
+  vi.mocked(deviceCount).mockResolvedValue(1);
 });
 
 afterEach(() => {
@@ -125,5 +141,93 @@ describe('ManageFeedsModal push toggle', () => {
     // Which feeds notify must be answerable by scanning the list, not by
     // hovering 53 rows one at a time.
     expect(screen.getByTitle('关闭更新推送')).toBeInTheDocument();
+  });
+});
+
+describe('ManageFeedsModal device registration', () => {
+  it('says this device is not receiving even when a feed is enabled', async () => {
+    // The trap this row exists for: push_enabled is global, so a device that
+    // never subscribed (another browser, or the same phone after reinstalling
+    // the PWA) shows every bell as on and receives nothing.
+    render(
+      <ManageFeedsModal
+        feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('本设备：不接收推送')).toBeInTheDocument();
+    expect(screen.getByText('在本设备接收')).toBeInTheDocument();
+    expect(screen.getByTitle('关闭更新推送')).toBeInTheDocument();
+  });
+
+  it('registers this device without touching any feed', async () => {
+    const onUpdate = vi.fn();
+    render(
+      <ManageFeedsModal feeds={feeds} onClose={vi.fn()} onDelete={vi.fn()} onUpdate={onUpdate} />,
+    );
+    await screen.findByText('本设备：不接收推送');
+    vi.mocked(currentSubscription).mockResolvedValue({ endpoint: 'x' } as PushSubscription);
+
+    fireEvent.click(screen.getByText('在本设备接收'));
+
+    expect(await screen.findByText('本设备：接收中')).toBeInTheDocument();
+    expect(ensureSubscribed).toHaveBeenCalled();
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('deregisters this device without disabling the feed for the others', async () => {
+    vi.mocked(currentSubscription).mockResolvedValue({ endpoint: 'x' } as PushSubscription);
+    vi.mocked(deviceCount).mockResolvedValue(2);
+    const onUpdate = vi.fn();
+    render(
+      <ManageFeedsModal
+        feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+    expect(await screen.findByText('本设备：接收中 · 共 2 台设备')).toBeInTheDocument();
+    vi.mocked(currentSubscription).mockResolvedValue(null);
+
+    fireEvent.click(screen.getByText('不再接收'));
+
+    expect(await screen.findByText('本设备：不接收推送')).toBeInTheDocument();
+    expect(unsubscribeDevice).toHaveBeenCalled();
+    // The feed stays enabled: one device opting out must not silently cut off
+    // every other device.
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('turning a feed off no longer deregisters the device', async () => {
+    vi.mocked(currentSubscription).mockResolvedValue({ endpoint: 'x' } as PushSubscription);
+    render(
+      <ManageFeedsModal
+        feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onUpdate={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    await screen.findByText(/本设备：接收中/);
+
+    fireEvent.click(screen.getByTitle('关闭更新推送'));
+
+    await waitFor(() => expect(screen.getByTitle('关闭更新推送')).toBeInTheDocument());
+    expect(unsubscribeDevice).not.toHaveBeenCalled();
+  });
+
+  it('explains an iOS device that has not been installed to the home screen', async () => {
+    vi.mocked(pushBlocker).mockReturnValue('needs-install');
+    render(
+      <ManageFeedsModal feeds={feeds} onClose={vi.fn()} onDelete={vi.fn()} onUpdate={vi.fn()} />,
+    );
+
+    expect(await screen.findByText('本设备：需先添加到主屏幕才能接收推送')).toBeInTheDocument();
+    // No control to click: installing is a step only the user can take.
+    expect(screen.queryByText('在本设备接收')).not.toBeInTheDocument();
   });
 });

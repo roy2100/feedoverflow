@@ -29,11 +29,38 @@ export function pushBlocker(): PushBlocker | null {
   return iOS && !standalone ? 'needs-install' : 'unsupported';
 }
 
+/**
+ * navigator.serviceWorker.ready never settles when no service worker is
+ * registered — which is the normal state in `npm run dev`, where the PWA plugin
+ * does not install one. Awaiting it bare would hang the caller forever, so every
+ * await goes through this bounded wait; null means "no worker".
+ */
+const SW_READY_TIMEOUT_MS = 3000;
+
+function swReady(): Promise<ServiceWorkerRegistration | null> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), SW_READY_TIMEOUT_MS)),
+  ]);
+}
+
 /** The active subscription for this device, or null if it isn't subscribed. */
 export async function currentSubscription(): Promise<PushSubscription | null> {
   if (pushBlocker()) return null;
-  const reg = await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
+  const reg = await swReady();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+/** How many devices the server currently has registered. */
+export async function deviceCount(): Promise<number | null> {
+  try {
+    const r = await fetch(`${API}/push/key`);
+    if (!r.ok) return null;
+    const { devices } = (await r.json()) as { devices?: number };
+    return typeof devices === 'number' ? devices : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -62,7 +89,8 @@ export async function ensureSubscribed(): Promise<void> {
   const { publicKey } = (await r.json()) as { publicKey: string };
   if (!publicKey) throw new Error('无法获取推送密钥');
 
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await swReady();
+  if (!reg) throw new Error('推送服务未就绪，请刷新后重试');
   const existing = await reg.pushManager.getSubscription();
   const sub =
     existing ??
@@ -81,8 +109,11 @@ export async function ensureSubscribed(): Promise<void> {
 }
 
 /**
- * Unregister this device. Called when the last push-enabled feed is switched off,
- * so a user who turns everything off stops being a live endpoint on the server.
+ * Unregister this device. Driven only by the explicit device control in
+ * ManageFeedsModal — never as a side effect of toggling a feed, since which
+ * feeds are worth notifying about and which devices receive are separate
+ * questions, and one device must not be able to silently deregister itself by
+ * changing a setting that is global.
  */
 export async function unsubscribeDevice(): Promise<void> {
   const sub = await currentSubscription();

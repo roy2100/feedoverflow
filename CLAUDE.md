@@ -104,6 +104,13 @@ language, drop stale/redundant chrome.
   `VACUUM`s). Starred articles are never deleted.
 - Article IDs: `md5(link || title+pubDate)` truncated to 12 chars.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).
+- Push has two independent axes, deliberately not merged: `feeds.push_enabled` says *this source
+  is worth a notification* (global — one row, every device shares it), while `push_subscriptions`
+  says *this device receives* (one row per device; the sender fans out to all of them). A device
+  that never subscribed — a second browser, or the same phone after reinstalling the PWA — sees
+  every bell as on and receives nothing, which is why ManageFeedsModal carries an explicit
+  device row above the list. Deregistering is only ever that control's job: it must not be a side
+  effect of toggling a feed, or one device could silently cut off all the others.
 - Push notifications are opt-in per feed (`feeds.push_enabled`, default off) and are sent **only
   from the poller** — an on-demand refresh triggered by someone reading the app must never notify
   about the article they are looking at. "New" is decided by the `feeds.last_notified_ts`
