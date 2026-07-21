@@ -35,7 +35,8 @@ func scanArticleRows(rows *sql.Rows) ([]articles.Row, error) {
 
 // ListFeeds — GET /api/feeds: raw feed rows ordered by rowid (category omitted).
 func ListFeeds(db *sql.DB) ([]model.Feed, error) {
-	rows, err := db.Query(`SELECT id, name, url, last_fetched_at FROM feeds ORDER BY rowid`)
+	rows, err := db.Query(
+		`SELECT id, name, url, last_fetched_at, COALESCE(push_enabled, 0) FROM feeds ORDER BY rowid`)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func ListFeeds(db *sql.DB) ([]model.Feed, error) {
 	for rows.Next() {
 		var f model.Feed
 		var last sql.NullInt64
-		if err := rows.Scan(&f.ID, &f.Name, &f.URL, &last); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.URL, &last, &f.PushEnabled); err != nil {
 			return nil, err
 		}
 		if last.Valid {

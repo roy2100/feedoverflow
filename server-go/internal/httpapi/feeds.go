@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -130,27 +131,54 @@ func (s *Server) postImportOPML(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// patchFeed is the port of PATCH /api/feeds/:id: rename a feed (404 if missing).
+// patchFeed is PATCH /api/feeds/:id: rename a feed and/or flip its push opt-in
+// (404 if missing). Both fields are optional pointers so each is only applied
+// when the client actually sent it — a rename-only body (the original contract,
+// still what the MCP rename_feed tool sends) must not clear push_enabled, and a
+// push-only body must not have to echo the name back.
 func (s *Server) patchFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
+		Name        *string `json:"name"`
+		PushEnabled *bool   `json:"push_enabled"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	// feeds.name is NOT NULL, so an empty rename must be rejected up front rather
-	// than reaching the UPDATE (which would 500 on the constraint).
-	name := strings.TrimSpace(body.Name)
-	if name == "" {
+	if body.Name == nil && body.PushEnabled == nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "name required"})
 		return
 	}
-	changes, err := store.RenameFeed(s.DB.Writer(), chi.URLParam(r, "id"), name)
-	if err != nil {
-		serverError(w, err)
-		return
+	id := chi.URLParam(r, "id")
+
+	if body.Name != nil {
+		// feeds.name is NOT NULL, so an empty rename must be rejected up front rather
+		// than reaching the UPDATE (which would 500 on the constraint).
+		name := strings.TrimSpace(*body.Name)
+		if name == "" {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "name required"})
+			return
+		}
+		changes, err := store.RenameFeed(s.DB.Writer(), id, name)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		if changes == 0 {
+			httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
+			return
+		}
 	}
-	if changes == 0 {
-		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
-		return
+
+	if body.PushEnabled != nil {
+		// Enabling seeds the notification watermark to now (store.SetFeedPush), so
+		// switching push on never replays the feed's existing backlog.
+		changes, err := store.SetFeedPush(s.DB.Writer(), id, *body.PushEnabled, time.Now().UnixMilli())
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		if changes == 0 {
+			httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
+			return
+		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

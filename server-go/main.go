@@ -20,6 +20,7 @@ import (
 	"rss-reader/server-go/internal/httpapi"
 	"rss-reader/server-go/internal/jobs"
 	applog "rss-reader/server-go/internal/logger"
+	"rss-reader/server-go/internal/push"
 )
 
 func main() {
@@ -60,8 +61,9 @@ func main() {
 
 	c := cache.New(handle, nil, cache.WithConcurrency(cfg.RefreshConcurrency)) // nil fetch → feed.ParseURL
 	fav := favicon.New(handle, nil)                                            // nil fetch → Google s2
+	pusher := &push.Sender{DB: handle, Log: appLogger, Subject: cfg.PushSubject}
 	srv := &httpapi.Server{
-		DB: handle, Cache: c, Favicon: fav,
+		DB: handle, Cache: c, Favicon: fav, Push: pusher,
 		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,
 		LocalAPIPort: cfg.LocalAPIPort,
 	}
@@ -83,7 +85,7 @@ func main() {
 			appLogger.Warn("cache warming failed to start", "err", err)
 		}
 		runner := &jobs.Runner{
-			DB: handle, Cache: c, Log: appLogger,
+			DB: handle, Cache: c, Log: appLogger, Push: pusher,
 			CapBytes: cfg.DBMaxSizeBytes, DBPath: cfg.DBPath,
 		}
 		runner.Start(context.Background())

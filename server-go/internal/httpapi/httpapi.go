@@ -30,6 +30,7 @@ import (
 	"rss-reader/server-go/internal/httpx"
 	"rss-reader/server-go/internal/mcp"
 	"rss-reader/server-go/internal/model"
+	"rss-reader/server-go/internal/push"
 	"rss-reader/server-go/internal/store"
 )
 
@@ -51,6 +52,9 @@ type Server struct {
 	Parse cache.FetchFunc
 	// Favicon is the read-through favicon cache (GET /api/favicon).
 	Favicon *favicon.Cache
+	// Push owns the VAPID keypair the subscribe flow needs. nil disables the
+	// /api/push/* routes (they answer 503) and, in jobs.Runner, notifications.
+	Push *push.Sender
 	// AuthUser/AuthPass gate the public listener when both are set (auth disabled
 	// otherwise), matching registerAuth.
 	AuthUser string
@@ -125,6 +129,9 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Patch("/api/settings", s.patchSettings)
 	r.Get("/api/current-article", s.getCurrentArticle)
 	r.Post("/api/current-article", s.postCurrentArticle)
+	r.Get("/api/push/key", s.getPushKey)
+	r.Post("/api/push/subscribe", s.postPushSubscribe)
+	r.Post("/api/push/unsubscribe", s.postPushUnsubscribe)
 }
 
 // cacheReady reports the warming state for the all-articles/today envelope: the

@@ -1,8 +1,9 @@
-import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck } from 'lucide-react';
+import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck, Bell, BellOff } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { faviconDomain } from '../faviconDomain';
+import { ensureSubscribed, unsubscribeDevice } from '../lib/push';
 import type { Feed } from '../types';
 
 function fallbackCopy(text: string, onDone: () => void) {
@@ -38,7 +39,7 @@ interface ManageFeedsModalProps {
   feeds: Feed[];
   onClose: () => void;
   onDelete: (feedId: string) => Promise<void>;
-  onUpdate: (feedId: string, input: { name: string }) => Promise<void>;
+  onUpdate: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
 }
 
 export default function ManageFeedsModal({
@@ -47,6 +48,30 @@ export default function ManageFeedsModal({
   onDelete,
   onUpdate,
 }: ManageFeedsModalProps) {
+  // Only one row can be mid-toggle or showing a push error at a time — this modal
+  // is the single entry point for the whole feature, permission included.
+  const [pushBusy, setPushBusy] = useState<string | null>(null);
+  const [pushError, setPushError] = useState<{ feedId: string; message: string } | null>(null);
+
+  // Turning a feed's bell on also registers this device (asking for notification
+  // permission on the first one) — there is no separate "enable notifications"
+  // setting to keep in sync. Turning off the last one deregisters it again.
+  const handleTogglePush = async (feed: Feed, next: boolean) => {
+    setPushError(null);
+    setPushBusy(feed.id);
+    try {
+      if (next) await ensureSubscribed();
+      await onUpdate(feed.id, { push_enabled: next });
+      if (!next && !feeds.some((f) => f.id !== feed.id && f.push_enabled)) {
+        await unsubscribeDevice();
+      }
+    } catch (e) {
+      setPushError({ feedId: feed.id, message: (e as Error).message || '开启推送失败' });
+    } finally {
+      setPushBusy(null);
+    }
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -137,7 +162,15 @@ export default function ManageFeedsModal({
             </p>
           ) : (
             feeds.map((feed) => (
-              <FeedRow key={feed.id} feed={feed} onDelete={onDelete} onUpdate={onUpdate} />
+              <FeedRow
+                key={feed.id}
+                feed={feed}
+                onDelete={onDelete}
+                onUpdate={onUpdate}
+                onTogglePush={handleTogglePush}
+                pushBusy={pushBusy === feed.id}
+                pushError={pushError?.feedId === feed.id ? pushError.message : null}
+              />
             ))
           )}
         </div>
@@ -155,10 +188,13 @@ export default function ManageFeedsModal({
 interface FeedRowProps {
   feed: Feed;
   onDelete: (feedId: string) => Promise<void>;
-  onUpdate: (feedId: string, input: { name: string }) => Promise<void>;
+  onUpdate: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  onTogglePush: (feed: Feed, next: boolean) => Promise<void>;
+  pushBusy: boolean;
+  pushError: string | null;
 }
 
-function FeedRow({ feed, onDelete, onUpdate }: FeedRowProps) {
+function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }: FeedRowProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(feed.name);
   const [hovered, setHovered] = useState(false);
@@ -279,6 +315,8 @@ function FeedRow({ feed, onDelete, onUpdate }: FeedRowProps) {
     );
   }
 
+  const pushOn = feed.push_enabled === true;
+
   return (
     <div
       onMouseEnter={() => setHovered(true)}
@@ -286,6 +324,7 @@ function FeedRow({ feed, onDelete, onUpdate }: FeedRowProps) {
       style={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
         padding: '7px 20px',
         gap: 8,
         background: hovered ? 'var(--bg-hover)' : 'transparent',
@@ -307,6 +346,20 @@ function FeedRow({ feed, onDelete, onUpdate }: FeedRowProps) {
       >
         {feed.name}
       </span>
+      {/* The bell stays visible once on: an active push subscription is state the
+          user must be able to see without hovering (and without a mouse at all). */}
+      {(hovered || pushOn) && (
+        <ActionBtn
+          onClick={() => {
+            if (!pushBusy) void onTogglePush(feed, !pushOn);
+          }}
+          title={pushOn ? '关闭更新推送' : '开启更新推送'}
+          color={pushOn ? 'var(--accent)' : 'var(--text-tertiary)'}
+          hoverColor="var(--accent)"
+        >
+          {pushOn ? <Bell size={11} /> : <BellOff size={11} />}
+        </ActionBtn>
+      )}
       {hovered && (
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <ActionBtn
@@ -334,6 +387,19 @@ function FeedRow({ feed, onDelete, onUpdate }: FeedRowProps) {
             <Trash2 size={11} />
           </ActionBtn>
         </div>
+      )}
+      {pushError && (
+        <p
+          style={{
+            flexBasis: '100%',
+            margin: '2px 0 0 22px',
+            fontSize: 11.5,
+            color: 'var(--red)',
+            lineHeight: 1.5,
+          }}
+        >
+          {pushError}
+        </p>
       )}
     </div>
   );

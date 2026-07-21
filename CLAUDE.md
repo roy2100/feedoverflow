@@ -51,7 +51,7 @@ starred flag.
 ```
 server-go/          Go backend (cgo binary, port 3002 — chi router, mattn/go-sqlite3)
   main.go           entrypoint: config → DB → logger → both listeners → background jobs
-  internal/config   env config (PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, ...)
+  internal/config   env config (PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, PUSH_SUBJECT, ...)
   internal/httpapi  Server struct + NewPublicRouter / NewLocalRouter; per-domain handlers
   internal/mcp      MCP server (Streamable HTTP) — 13 tools, mounted on NewLocalRouter only
   internal/db       SQLite open (WAL), schema + migrations
@@ -60,6 +60,7 @@ server-go/          Go backend (cgo binary, port 3002 — chi router, mattn/go-s
   internal/cache    refreshFeed fetch chain + ensureFresh (TTL) + startup warming
   internal/favicon  favicon_cache read-through
   internal/jobs     poller, maintenance (orphan cleanup + size-cap + VACUUM), resource monitor
+  internal/push     Web Push (VAPID) sender for per-feed update notifications
   internal/feed     gofeed RSS wrapper
   internal/ssrf     SSRF guard for outbound content/favicon fetches
 client/             Vite + React + TypeScript (port 3000)
@@ -103,15 +104,29 @@ language, drop stale/redundant chrome.
   `VACUUM`s). Starred articles are never deleted.
 - Article IDs: `md5(link || title+pubDate)` truncated to 12 chars.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).
+- Push notifications are opt-in per feed (`feeds.push_enabled`, default off) and are sent **only
+  from the poller** — an on-demand refresh triggered by someone reading the app must never notify
+  about the article they are looking at. "New" is decided by the `feeds.last_notified_ts`
+  watermark, not by inspecting what the persist chain inserted, so the fetch/persist transaction
+  and `internal/cache` are untouched by the feature. The selection is bounded at both ends
+  (`watermark < pub_ts <= now`) and the watermark is stamped from the rows actually selected:
+  `dates.PubTs` passes upstream dates through unclamped, so a future-dated item would otherwise
+  push the watermark ahead and swallow every real update until real time caught up. Enabling push
+  seeds the watermark to now, so switching it on never replays the backlog. Up to 3 articles per
+  feed per poll notify individually; more collapse into one summary. Rationale + manual test
+  steps: `docs/plan-push-notifications.md`.
 - Auth: when `AUTH_USER`/`AUTH_PASS` are set, every `/api/*` request on the public router requires
   a valid session cookie (no localhost bypass — gated by socket, not IP). Login is rate-limited.
 
 **SQLite tables:**
-- `feeds(id, name, url, last_fetched_at)`
+- `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts)`
 - `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at)` — durable record of every fetched article
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `sessions(token, created_at)` — 30-day TTL
 - `favicon_cache(domain, image, content_type, fetched_at)` — 30-day positive / 1-day negative TTL
+- `push_subscriptions(endpoint, p256dh, auth, user_agent, created_at)` — one row per registered device
+- `push_keys(id, public_key, private_key)` — the single VAPID keypair; deliberately *not* in
+  `settings`, which `GET /api/settings` serializes wholesale
 
 **API:**
 | Method | Path | Description |
@@ -119,7 +134,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/feeds` | list feeds |
 | POST | `/api/feeds` | add feed |
 | POST | `/api/feeds/import-opml` | bulk import from OPML |
-| PATCH | `/api/feeds/:id` | rename feed |
+| PATCH | `/api/feeds/:id` | rename feed and/or toggle `push_enabled` (both fields optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
 | GET | `/api/feeds/:id/articles` | articles for one feed, up to 500 |
 | GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest` |
@@ -135,6 +150,8 @@ language, drop stale/redundant chrome.
 | GET\|PATCH | `/api/settings` | read/update settings |
 | POST | `/api/login` `/api/logout` | session auth |
 | GET | `/api/auth-check` | whether the request is authed |
+| GET | `/api/push/key` | VAPID public key (generated on first call) + device count |
+| POST | `/api/push/subscribe` `/api/push/unsubscribe` | register/drop this device's push endpoint |
 
 ### MCP server (`internal/mcp`)
 

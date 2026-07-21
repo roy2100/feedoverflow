@@ -49,7 +49,7 @@ interface StoreState {
   addFeed: (input: { url: string }) => Promise<void>;
   importFeeds: (newFeeds: Feed[]) => void;
   deleteFeed: (feedId: string) => Promise<void>;
-  updateFeed: (feedId: string, input: { name: string }) => Promise<void>;
+  updateFeed: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -203,12 +203,16 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  updateFeed: async (feedId, { name }) => {
+  // Both fields are optional and only sent when present: the server applies just
+  // what it receives, so a rename never clears the push opt-in and vice versa.
+  updateFeed: async (feedId, patch) => {
     await apiFetch(`${API}/feeds/${feedId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(patch),
     });
-    set((state) => ({ feeds: state.feeds.map((f) => (f.id === feedId ? { ...f, name } : f)) }));
+    set((state) => ({
+      feeds: state.feeds.map((f) => (f.id === feedId ? { ...f, ...patch } : f)),
+    }));
   },
 }));
