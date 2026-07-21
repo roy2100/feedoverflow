@@ -206,7 +206,13 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
   const [hovered, setHovered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Deleting a feed also purges its non-starred articles, so it is two-step:
+  // the first click arms, the second commits. The icons sit 24px apart, appear
+  // under a cursor that is already moving, and 删除 is next to 编辑 — a single
+  // misclick should not be able to destroy anything.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+  const disarmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = () => {
     const done = () => {
@@ -226,6 +232,31 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
   useEffect(() => {
     setName(feed.name);
   }, [feed.name]);
+
+  // Never leave a row armed: an unattended armed delete is exactly the state
+  // where the next stray click destroys something.
+  const disarm = () => {
+    if (disarmTimer.current) clearTimeout(disarmTimer.current);
+    disarmTimer.current = null;
+    setConfirmingDelete(false);
+  };
+
+  const handleDelete = () => {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      disarmTimer.current = setTimeout(() => setConfirmingDelete(false), 3000);
+      return;
+    }
+    disarm();
+    void onDelete(feed.id);
+  };
+
+  useEffect(
+    () => () => {
+      if (disarmTimer.current) clearTimeout(disarmTimer.current);
+    },
+    [],
+  );
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -326,7 +357,10 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
   return (
     <div
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => {
+        setHovered(false);
+        disarm();
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -367,8 +401,10 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           {pushOn ? <Bell size={11} /> : <BellOff size={11} />}
         </ActionBtn>
       )}
+      {/* Gap, not just spacing: the bell is a state toggle, the three that follow
+          are actions. Crowding them into one strip read as a single group. */}
       {(hovered || isMobile) && (
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 6 }}>
           <ActionBtn
             onClick={handleCopy}
             title={copied ? '已复制' : '复制链接'}
@@ -388,13 +424,14 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
             <Pencil size={11} />
           </ActionBtn>
           <ActionBtn
-            onClick={() => onDelete(feed.id)}
-            title="删除"
-            color="var(--text-tertiary)"
+            onClick={handleDelete}
+            title={confirmingDelete ? '再点一次确认删除' : '删除'}
+            color={confirmingDelete ? 'var(--red)' : 'var(--text-tertiary)'}
             hoverColor="var(--red)"
             isMobile={isMobile}
+            armed={confirmingDelete}
           >
-            <Trash2 size={11} />
+            {confirmingDelete ? <Check size={11} /> : <Trash2 size={11} />}
           </ActionBtn>
         </div>
       )}
@@ -421,10 +458,20 @@ interface ActionBtnProps {
   color: string;
   hoverColor: string;
   isMobile?: boolean;
+  /** Armed buttons keep their highlight instead of fading back on mouse-out. */
+  armed?: boolean;
   children: React.ReactNode;
 }
 
-function ActionBtn({ onClick, title, color, hoverColor, isMobile, children }: ActionBtnProps) {
+function ActionBtn({
+  onClick,
+  title,
+  color,
+  hoverColor,
+  isMobile,
+  armed,
+  children,
+}: ActionBtnProps) {
   return (
     <button
       onClick={onClick}
@@ -439,7 +486,7 @@ function ActionBtn({ onClick, title, color, hoverColor, isMobile, children }: Ac
         alignItems: 'center',
         justifyContent: 'center',
         color,
-        background: 'none',
+        background: armed ? 'var(--bg-selected)' : 'none',
         border: 'none',
         cursor: 'pointer',
         transition: 'color 0.12s, background 0.12s',
@@ -450,7 +497,7 @@ function ActionBtn({ onClick, title, color, hoverColor, isMobile, children }: Ac
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.color = color;
-        e.currentTarget.style.background = 'none';
+        e.currentTarget.style.background = armed ? 'var(--bg-selected)' : 'none';
       }}
     >
       {children}
