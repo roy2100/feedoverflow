@@ -211,7 +211,11 @@ export default function ManageFeedsModal({
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
-            {deviceLabel(device, devices)}
+            {deviceLabel(
+              device,
+              devices,
+              feeds.some((f) => f.push_enabled),
+            )}
           </span>
           {(device === 'on' || device === 'off') && (
             <button
@@ -278,20 +282,30 @@ export default function ManageFeedsModal({
   );
 }
 
-function deviceLabel(state: DeviceState, devices: number | null): string {
+// Every string names 更新推送 explicitly — the same term the bells' tooltips use.
+// "接收中" alone has no object, and the surrounding context (a modal titled
+// 管理订阅源) supplies the wrong one: it reads as receiving *articles*. The row is
+// also the only place the concept is stated in plain sight, since the tooltips
+// below need a hover to appear.
+function deviceLabel(state: DeviceState, devices: number | null, anyFeedOn: boolean): string {
   switch (state) {
     case 'checking':
-      return '正在检查本设备…';
+      return '正在检查本设备的推送状态…';
     case 'needs-install':
-      return '本设备：需先添加到主屏幕才能接收推送';
+      return '本设备需先添加到主屏幕，才能接收更新推送';
     case 'unsupported':
-      return '本设备：浏览器不支持推送';
+      return '本设备的浏览器不支持更新推送';
     case 'off':
-      // The bells below may well be on: they are global, and say nothing about
-      // whether this device is among the recipients.
-      return '本设备：不接收推送';
+      // Spell out the trap only when the user is actually in it: a bell is on
+      // (global) while this device receives nothing. With no feed enabled the
+      // clause would just be noise.
+      return anyFeedOn
+        ? '本设备不接收更新推送 · 已开启的订阅源不会推送到这里'
+        : '本设备不接收更新推送';
     case 'on':
-      return devices && devices > 1 ? `本设备：接收中 · 共 ${devices} 台设备` : '本设备：接收中';
+      return devices && devices > 1
+        ? `本设备正在接收更新推送 · 共 ${devices} 台设备`
+        : '本设备正在接收更新推送';
   }
 }
 

@@ -158,7 +158,11 @@ describe('ManageFeedsModal device registration', () => {
       />,
     );
 
-    expect(await screen.findByText('本设备：不接收推送')).toBeInTheDocument();
+    // Names 更新推送 outright: inside a modal titled 管理订阅源, a bare "不接收"
+    // reads as "not receiving articles".
+    expect(
+      await screen.findByText('本设备不接收更新推送 · 已开启的订阅源不会推送到这里'),
+    ).toBeInTheDocument();
     expect(screen.getByText('在本设备接收')).toBeInTheDocument();
     expect(screen.getByTitle('关闭更新推送')).toBeInTheDocument();
   });
@@ -168,12 +172,13 @@ describe('ManageFeedsModal device registration', () => {
     render(
       <ManageFeedsModal feeds={feeds} onClose={vi.fn()} onDelete={vi.fn()} onUpdate={onUpdate} />,
     );
-    await screen.findByText('本设备：不接收推送');
+    // No feed is enabled here, so the "已开启的订阅源…" clause would be noise.
+    await screen.findByText('本设备不接收更新推送');
     vi.mocked(currentSubscription).mockResolvedValue({ endpoint: 'x' } as PushSubscription);
 
     fireEvent.click(screen.getByText('在本设备接收'));
 
-    expect(await screen.findByText('本设备：接收中')).toBeInTheDocument();
+    expect(await screen.findByText('本设备正在接收更新推送')).toBeInTheDocument();
     expect(ensureSubscribed).toHaveBeenCalled();
     expect(onUpdate).not.toHaveBeenCalled();
   });
@@ -190,12 +195,14 @@ describe('ManageFeedsModal device registration', () => {
         onUpdate={onUpdate}
       />,
     );
-    expect(await screen.findByText('本设备：接收中 · 共 2 台设备')).toBeInTheDocument();
+    expect(await screen.findByText('本设备正在接收更新推送 · 共 2 台设备')).toBeInTheDocument();
     vi.mocked(currentSubscription).mockResolvedValue(null);
 
     fireEvent.click(screen.getByText('不再接收'));
 
-    expect(await screen.findByText('本设备：不接收推送')).toBeInTheDocument();
+    expect(
+      await screen.findByText('本设备不接收更新推送 · 已开启的订阅源不会推送到这里'),
+    ).toBeInTheDocument();
     expect(unsubscribeDevice).toHaveBeenCalled();
     // The feed stays enabled: one device opting out must not silently cut off
     // every other device.
@@ -212,7 +219,7 @@ describe('ManageFeedsModal device registration', () => {
         onUpdate={vi.fn().mockResolvedValue(undefined)}
       />,
     );
-    await screen.findByText(/本设备：接收中/);
+    await screen.findByText(/本设备正在接收更新推送/);
 
     fireEvent.click(screen.getByTitle('关闭更新推送'));
 
@@ -226,7 +233,7 @@ describe('ManageFeedsModal device registration', () => {
       <ManageFeedsModal feeds={feeds} onClose={vi.fn()} onDelete={vi.fn()} onUpdate={vi.fn()} />,
     );
 
-    expect(await screen.findByText('本设备：需先添加到主屏幕才能接收推送')).toBeInTheDocument();
+    expect(await screen.findByText('本设备需先添加到主屏幕，才能接收更新推送')).toBeInTheDocument();
     // No control to click: installing is a step only the user can take.
     expect(screen.queryByText('在本设备接收')).not.toBeInTheDocument();
   });
