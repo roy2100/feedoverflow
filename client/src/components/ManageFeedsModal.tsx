@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { faviconDomain } from '../faviconDomain';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { ensureSubscribed, unsubscribeDevice } from '../lib/push';
 import type { Feed } from '../types';
 
@@ -102,7 +103,9 @@ export default function ManageFeedsModal({
           background: 'var(--bg-reader)',
           border: '1px solid var(--border)',
           borderRadius: 12,
-          width: 500,
+          // Fixed 500 would overflow a phone; this modal is reachable on mobile
+          // because it owns the per-feed notification toggle.
+          width: 'min(500px, calc(100vw - 32px))',
           maxHeight: '80vh',
           display: 'flex',
           flexDirection: 'column',
@@ -195,6 +198,9 @@ interface FeedRowProps {
 }
 
 function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }: FeedRowProps) {
+  // Touch devices have no hover, so the row actions can never reveal themselves
+  // there — on mobile they are simply always visible.
+  const isMobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(feed.name);
   const [hovered, setHovered] = useState(false);
@@ -348,7 +354,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
       </span>
       {/* The bell stays visible once on: an active push subscription is state the
           user must be able to see without hovering (and without a mouse at all). */}
-      {(hovered || pushOn) && (
+      {(hovered || pushOn || isMobile) && (
         <ActionBtn
           onClick={() => {
             if (!pushBusy) void onTogglePush(feed, !pushOn);
@@ -356,17 +362,19 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           title={pushOn ? '关闭更新推送' : '开启更新推送'}
           color={pushOn ? 'var(--accent)' : 'var(--text-tertiary)'}
           hoverColor="var(--accent)"
+          isMobile={isMobile}
         >
           {pushOn ? <Bell size={11} /> : <BellOff size={11} />}
         </ActionBtn>
       )}
-      {hovered && (
+      {(hovered || isMobile) && (
         <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <ActionBtn
             onClick={handleCopy}
             title={copied ? '已复制' : '复制链接'}
             color={copied ? 'var(--accent)' : 'var(--text-tertiary)'}
             hoverColor="var(--accent)"
+            isMobile={isMobile}
           >
             {copied ? <CopyCheck size={11} /> : <Copy size={11} />}
           </ActionBtn>
@@ -375,6 +383,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
             title="编辑"
             color="var(--text-tertiary)"
             hoverColor="var(--accent)"
+            isMobile={isMobile}
           >
             <Pencil size={11} />
           </ActionBtn>
@@ -383,6 +392,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
             title="删除"
             color="var(--text-tertiary)"
             hoverColor="var(--red)"
+            isMobile={isMobile}
           >
             <Trash2 size={11} />
           </ActionBtn>
@@ -410,17 +420,19 @@ interface ActionBtnProps {
   title: string;
   color: string;
   hoverColor: string;
+  isMobile?: boolean;
   children: React.ReactNode;
 }
 
-function ActionBtn({ onClick, title, color, hoverColor, children }: ActionBtnProps) {
+function ActionBtn({ onClick, title, color, hoverColor, isMobile, children }: ActionBtnProps) {
   return (
     <button
       onClick={onClick}
       title={title}
       style={{
-        width: 24,
-        height: 24,
+        // 24px is a fine mouse target and a poor finger one.
+        width: isMobile ? 34 : 24,
+        height: isMobile ? 34 : 24,
         borderRadius: 4,
         flexShrink: 0,
         display: 'flex',

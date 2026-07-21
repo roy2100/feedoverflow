@@ -266,6 +266,19 @@ export default function App() {
     </Suspense>
   );
 
+  // Shared by both layouts: 管理订阅源 is also the only place to switch a feed's
+  // update notifications on, and phones are where those matter most.
+  const manageModal = showManageModal && (
+    <Suspense fallback={null}>
+      <ManageFeedsModal
+        feeds={feeds}
+        onClose={() => setShowManageModal(false)}
+        onDelete={deleteFeed}
+        onUpdate={updateFeed}
+      />
+    </Suspense>
+  );
+
   if (authed === null)
     return <div style={{ height: 'var(--app-height, 100dvh)', background: 'var(--bg)' }} />;
   if (authed === false)
@@ -331,7 +344,11 @@ export default function App() {
           <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
             {panel(
               0,
-              <FeedsPage onOpenAddModal={() => setShowAddModal(true)} onNavigate={setMobilePage} />,
+              <FeedsPage
+                onOpenAddModal={() => setShowAddModal(true)}
+                onOpenManageModal={() => setShowManageModal(true)}
+                onNavigate={setMobilePage}
+              />,
             )}
             {panel(1, <ListPage onNavigate={setMobilePage} />)}
             {panel(2, <ReaderPage onNavigate={setMobilePage} />)}
@@ -350,6 +367,7 @@ export default function App() {
           )}
         </div>
         {addModal}
+        {manageModal}
       </AudioContext.Provider>
     );
   }
@@ -434,16 +452,7 @@ export default function App() {
           )}
         </div>
         {addModal}
-        {showManageModal && (
-          <Suspense fallback={null}>
-            <ManageFeedsModal
-              feeds={feeds}
-              onClose={() => setShowManageModal(false)}
-              onDelete={deleteFeed}
-              onUpdate={updateFeed}
-            />
-          </Suspense>
-        )}
+        {manageModal}
         {showSettingsModal && (
           <Suspense fallback={null}>
             <SettingsModal onClose={() => setShowSettingsModal(false)} />
