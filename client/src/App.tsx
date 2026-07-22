@@ -23,6 +23,7 @@ export default function App() {
   const isMobile = useIsMobile();
   const {
     page: mobilePage,
+    instant: instantPanel,
     navigate: navigateMobile,
     openDeepLinked,
   } = useMobilePanelHistory(isMobile);
@@ -323,7 +324,9 @@ export default function App() {
 
   if (isMobile) {
     const depth = PANEL_DEPTH[mobilePage];
-    const transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
+    // instantPanel: this change came from an iOS swipe-back, which already
+    // animated the navigation — run no CSS slide so the two don't fight.
+    const transition = instantPanel ? 'none' : 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
 
     // Every panel stays mounted; translateX drives visibility. A parent panel
     // (rel < 0) parallax-shifts left and dims behind the active panel, adding
@@ -351,7 +354,7 @@ export default function App() {
               background: 'rgba(28, 25, 23, 0.28)',
               pointerEvents: 'none',
               opacity: rel < 0 ? 1 : 0,
-              transition: 'opacity 0.28s ease',
+              transition: instantPanel ? 'none' : 'opacity 0.28s ease',
             }}
           />
         </div>

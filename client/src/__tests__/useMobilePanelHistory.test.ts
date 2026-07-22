@@ -1,11 +1,21 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { useMobilePanelHistory } from '../hooks/useMobilePanelHistory';
+
+const realUserAgent = navigator.userAgent;
+
+function setUserAgent(ua: string) {
+  Object.defineProperty(navigator, 'userAgent', { value: ua, configurable: true });
+}
 
 beforeEach(() => {
   // Reset to a single history entry so each test starts at the root panel.
   window.history.replaceState(null, '', '/');
+});
+
+afterEach(() => {
+  setUserAgent(realUserAgent);
 });
 
 describe('useMobilePanelHistory on mobile', () => {
@@ -52,6 +62,32 @@ describe('useMobilePanelHistory on mobile', () => {
     await waitFor(() => expect(result.current.page).toBe('list'));
     act(() => window.history.back());
     await waitFor(() => expect(result.current.page).toBe('feeds'));
+  });
+
+  it('animates the forward push but not an iOS swipe-back', async () => {
+    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15');
+    const { result } = renderHook(() => useMobilePanelHistory(true));
+
+    // Going deeper is a tap with no native gesture — keep the CSS slide.
+    act(() => result.current.navigate('list'));
+    expect(result.current.instant).toBe(false);
+
+    // The edge-swipe already animated the back navigation; ours must not run a
+    // second, competing slide over it (the overlap this fixes).
+    act(() => window.history.back());
+    await waitFor(() => expect(result.current.page).toBe('feeds'));
+    expect(result.current.instant).toBe(true);
+  });
+
+  it('keeps the slide on back for non-iOS (Android)', async () => {
+    setUserAgent('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120');
+    const { result } = renderHook(() => useMobilePanelHistory(true));
+
+    act(() => result.current.navigate('list'));
+    act(() => window.history.back());
+    await waitFor(() => expect(result.current.page).toBe('feeds'));
+    // No native back-gesture on Android — the CSS slide is the only motion.
+    expect(result.current.instant).toBe(false);
   });
 
   it('ignores navigation to the panel already shown', () => {
