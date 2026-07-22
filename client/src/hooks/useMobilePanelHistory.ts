@@ -78,19 +78,27 @@ export function useMobilePanelHistory(isMobile: boolean) {
 
   /**
    * Lay down the entries the user never walked through, so back pops
-   * 文章 → 列表 → 订阅源 → exit even though a notification tap put them on the
-   * deepest panel in one step. Replacing what was there — rather than appending
-   * to it — is what Android's TaskStackBuilder does when rebuilding a task for a
-   * deep link, and what iOS's setViewControllers does to a navigation stack.
+   * 文章 → 列表 → 订阅源 even though a notification tap put them on the deepest
+   * panel in one step — Android's TaskStackBuilder parent stack, iOS's
+   * setViewControllers.
+   *
+   * Only the entries *missing* below the reader get pushed. A notification can
+   * arrive while the app is already open and already somewhere in the stack, and
+   * blanket-rewriting the current entry with 订阅源 does not replace what is
+   * underneath it — `replaceState` touches one entry — it buries it, leaving
+   * 订阅源 → 列表 → 订阅源 → 列表 → 文章. Back then replays panels the user
+   * already passed, which reads as broken and invites the extra swipe that
+   * finally exits the document.
    */
   const openDeepLinked = () => {
     if (!isMobile) {
       setState({ page: 'article', instant: false });
       return;
     }
-    window.history.replaceState({ page: 'feeds' }, '');
-    window.history.pushState({ page: 'list' }, '');
-    window.history.pushState({ page: 'article' }, '');
+    // The current entry is itself a panel of the same hierarchy, so everything
+    // shallower than it is already on the stack.
+    if (PANEL_DEPTH[page] < PANEL_DEPTH.list) window.history.pushState({ page: 'list' }, '');
+    if (PANEL_DEPTH[page] < PANEL_DEPTH.article) window.history.pushState({ page: 'article' }, '');
     // A one-step jump to the deepest panel — there is no slide to honor.
     setState({ page: 'article', instant: true });
   };

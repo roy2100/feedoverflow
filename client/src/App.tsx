@@ -166,7 +166,14 @@ export default function App() {
       // every reload, and it would follow anything the user bookmarks or shares.
       params.delete('article');
       const rest = params.toString();
-      window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''));
+      // Keep the entry's existing state: it carries the mobile panel this entry
+      // stands for, and dropping it would leave a history entry no popstate can
+      // map back to a panel.
+      window.history.replaceState(
+        window.history.state,
+        '',
+        window.location.pathname + (rest ? `?${rest}` : ''),
+      );
       setPendingArticleId(initial);
     }
 
@@ -176,6 +183,10 @@ export default function App() {
         setPendingArticleId(data.id);
     };
     navigator.serviceWorker?.addEventListener('message', onMessage);
+    // addEventListener alone does not start delivery — messages posted to this
+    // client stay queued until either `onmessage` is assigned or this is called,
+    // so without it a tap on an already-open app would just focus the window.
+    navigator.serviceWorker?.startMessages();
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
   }, [authed]);
 

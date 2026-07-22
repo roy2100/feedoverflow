@@ -64,6 +64,39 @@ describe('useMobilePanelHistory on mobile', () => {
     await waitFor(() => expect(result.current.page).toBe('feeds'));
   });
 
+  it('does not re-lay entries the open app already has below it', async () => {
+    const { result } = renderHook(() => useMobilePanelHistory(true));
+    act(() => result.current.navigate('list'));
+
+    // A notification can arrive while the app is already partway down the stack.
+    // Only 文章 is missing here; laying the whole hierarchy down again would bury
+    // the user's own entries and make back replay 列表 → 订阅源 twice.
+    act(() => result.current.openDeepLinked());
+    expect(result.current.page).toBe('article');
+
+    act(() => window.history.back());
+    await waitFor(() => expect(result.current.page).toBe('list'));
+    act(() => window.history.back());
+    await waitFor(() => expect(result.current.page).toBe('feeds'));
+    // Nothing left below: the next back leaves the app, as it would have before
+    // the notification arrived.
+    expect(window.history.length).toBe(3);
+  });
+
+  it('adds no entry when the deep link lands on an article already open', () => {
+    const { result } = renderHook(() => useMobilePanelHistory(true));
+    act(() => result.current.navigate('list'));
+    act(() => result.current.navigate('article'));
+    const before = window.history.length;
+
+    // Reading an article and being pushed another one swaps the content, not the
+    // stack — the reader entry is already the top of it.
+    act(() => result.current.openDeepLinked());
+
+    expect(result.current.page).toBe('article');
+    expect(window.history.length).toBe(before);
+  });
+
   it('animates the forward push but not an iOS swipe-back', async () => {
     setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15');
     const { result } = renderHook(() => useMobilePanelHistory(true));
