@@ -433,6 +433,11 @@ interface NavItemProps {
 }
 
 function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }: NavItemProps) {
+  // Desktop only: with three panes on screen the highlight says which view the list and
+  // reader panes are showing. Mobile is one pane at a time, so on the way back there is
+  // nothing left for it to point at — it just marks the row you came from, which you
+  // already know. `selected` still drives the desktop styling; mobile drops the visuals.
+  const hl = selected && !isMobile;
   return (
     <button
       onClick={onClick}
@@ -442,10 +447,10 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
         alignItems: 'center',
         padding: isMobile ? '11px 16px' : '6px 12px',
         gap: isMobile ? 12 : 8,
-        background: selected ? 'var(--bg-selected)' : 'transparent',
-        color: selected ? 'var(--text-primary)' : 'var(--text-secondary)',
+        background: hl ? 'var(--bg-selected)' : 'transparent',
+        color: hl ? 'var(--text-primary)' : 'var(--text-secondary)',
         fontSize: isMobile ? 15 : 13,
-        fontWeight: selected ? 500 : 400,
+        fontWeight: hl ? 500 : 400,
         textAlign: 'left',
         border: 'none',
         cursor: 'default',
@@ -465,7 +470,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
         <span
           style={{
             fontSize: 12,
-            color: selected ? 'var(--accent)' : 'var(--text-tertiary)',
+            color: hl ? 'var(--accent)' : 'var(--text-tertiary)',
             fontWeight: 500,
             flexShrink: 0,
           }}
