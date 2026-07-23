@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { MobilePage } from '../types';
 
@@ -43,11 +43,18 @@ export function useMobilePanelHistory(isMobile: boolean) {
   const [isIOS] = useState(detectIOS);
   const [state, setState] = useState<PanelState>({ page: 'feeds', instant: false });
   const page = state.page;
+  const pageRef = useRef(page);
+  pageRef.current = page;
 
   useEffect(() => {
     if (!isMobile) return;
-    if (!window.history.state?.page) {
-      window.history.replaceState({ page: 'feeds' }, '');
+    // Align the entry we are sitting on with the panel actually on screen —
+    // unconditionally, because a stale `page` is worse than a missing one.
+    // Safari restores the previous session's history state across a reload or a
+    // PWA relaunch, so the top entry can claim 文章 while this hook has just
+    // remounted at 订阅源.
+    if (window.history.state?.page !== pageRef.current) {
+      window.history.replaceState({ page: pageRef.current }, '');
     }
     const onPop = (e: PopStateEvent) => {
       const next = (e.state as { page?: MobilePage } | null)?.page ?? 'feeds';

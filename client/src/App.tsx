@@ -334,7 +334,16 @@ export default function App() {
     );
 
   if (isMobile) {
-    const depth = PANEL_DEPTH[mobilePage];
+    // A history entry outlives the state it described: the store drops
+    // `selectedArticle` on every loadArticles (pull-to-refresh, a view switch),
+    // and Safari can restore a whole stack from the previous session. Popping
+    // onto 文章 with no article renders an empty transparent pane on top of the
+    // list, which is still parallax-shifted and dimmed as a parent panel — the
+    // "swiped back into a broken layout" frame. Clamp to the deepest panel that
+    // has something to draw; history stays as it is, and the next tap on an
+    // article fills the reader back in.
+    const visiblePage = mobilePage === 'article' && !selectedArticle ? 'list' : mobilePage;
+    const depth = PANEL_DEPTH[visiblePage];
     // instantPanel: this change came from an iOS swipe-back, which already
     // animated the navigation — run no CSS slide so the two don't fight.
     const transition = instantPanel ? 'none' : 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
