@@ -362,7 +362,13 @@ export default function App() {
             inset: 0,
             transform: tx,
             transition,
-            willChange: 'transform',
+            // Promote to a compositing layer only while a CSS slide is actually
+            // running. Kept on permanently, the layer survives an iOS native
+            // swipe-back (instantPanel) with a stale hit-test region, so the
+            // panel it lands on won't scroll until the next touch forces WebKit
+            // to recompute it. Dropping it here de-promotes the settled panels
+            // back to plain main-thread scroll and repaints them immediately.
+            willChange: instantPanel ? 'auto' : 'transform',
             zIndex: idx + 1,
           }}
         >
