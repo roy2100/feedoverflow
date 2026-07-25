@@ -69,9 +69,14 @@ client/             Vite + React + TypeScript (port 3000)
   src/types.ts      shared client types, mirrors server-go/internal/model
   src/components/   FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, SettingsModal, PodcastPlayer, LoginForm
   src/pages/        mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
-  src/hooks/useMobilePanelHistory.ts  mobile panel stack ↔ browser history (system back walks
-                    订阅源 → 列表 → 文章; a push deep link synthesizes the stack it skipped)
 ```
+
+The mobile panel (订阅源 → 列表 → 文章) is plain React state in `App.tsx`, deliberately **not**
+mirrored into browser history: iOS's edge-swipe-back is a native gesture-driven animation of a
+history navigation that we then animated a second time from `popstate`, and that coupling caused a
+long run of iOS-only rendering bugs (frozen overlapping panels, dead scroll, buried deep-link
+stacks). Back is the in-app ← arrow only; the edge-swipe does nothing. Don't reintroduce
+`pushState` here — see `docs/plan-drop-mobile-history.md`.
 
 TypeScript, type-stripped by Vite/Vitest. `npm run typecheck` (`tsc --noEmit`, in `client/`) is
 the type gate — Vite does not type-check.

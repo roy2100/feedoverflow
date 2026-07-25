@@ -6,12 +6,21 @@ import ArticleReader from './components/ArticleReader';
 import FeedSidebar from './components/FeedSidebar';
 import LoginForm from './components/LoginForm';
 import { useIsMobile } from './hooks/useIsMobile';
-import { PANEL_DEPTH, useMobilePanelHistory } from './hooks/useMobilePanelHistory';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
 import { useStore } from './store';
-import type { AudioCtxValue, Article } from './types';
+import type { AudioCtxValue, Article, MobilePage } from './types';
+
+// Panel nesting depth (订阅源 → 列表 → 文章) — what the slide animation reads.
+// Deliberately *not* mirrored into browser history: iOS's edge-swipe is a native,
+// gesture-driven animation of a history navigation that we would then animate a
+// second time from `popstate`, and the two cannot be kept in sync (WebKit reports
+// the pop after the fact — no gesture start, progress, or cancel). That coupling
+// was the single cause of a long run of iOS-only rendering bugs. The cost of
+// dropping it is that the edge-swipe no longer goes back; the in-app ← arrow does.
+// Rationale: docs/plan-drop-mobile-history.md.
+const PANEL_DEPTH: Record<MobilePage, number> = { feeds: 0, list: 1, article: 2 };
 
 const AddFeedModal = lazy(() => import('./components/AddFeedModal'));
 const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
@@ -21,12 +30,7 @@ const PodcastPlayer = lazy(() => import('./components/PodcastPlayer'));
 export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null); // null=checking, false=unauthed, true=authed
   const isMobile = useIsMobile();
-  const {
-    page: mobilePage,
-    instant: instantPanel,
-    navigate: navigateMobile,
-    openDeepLinked,
-  } = useMobilePanelHistory(isMobile);
+  const [mobilePage, navigateMobile] = useState<MobilePage>('feeds');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -34,8 +38,6 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('sidebar-collapsed') === '1',
   );
-  // Article id handed over by a push notification, awaiting the feed list.
-  const [pendingArticleId, setPendingArticleId] = useState<string | null>(null);
   const [currentEpisode, setCurrentEpisode] = useState<Article | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
@@ -153,11 +155,19 @@ export default function App() {
   // message when a window was already open (see client/public/push-sw.js —
   // messaging rather than navigating keeps podcast playback and scroll alive).
   // Nothing in the normal browsing path runs through here.
-  // Capture the id both arrival paths carry, then open it in a second step: the
-  // feed list is still loading during a cold start, and opening immediately
-  // would miss the lookup on exactly the path this exists for.
+  //
+  // The article opens on its own, over whichever list is already loaded: the view
+  // behind it is deliberately left alone, so closing the article returns the user
+  // exactly where the notification interrupted them.
   useEffect(() => {
     if (authed !== true) return;
+
+    const open = async (id: string) => {
+      const article = await fetchArticleById(id);
+      if (!article) return;
+      selectArticle(article);
+      navigateMobile('article');
+    };
 
     const params = new URLSearchParams(window.location.search);
     const initial = params.get('article');
@@ -166,21 +176,13 @@ export default function App() {
       // every reload, and it would follow anything the user bookmarks or shares.
       params.delete('article');
       const rest = params.toString();
-      // Keep the entry's existing state: it carries the mobile panel this entry
-      // stands for, and dropping it would leave a history entry no popstate can
-      // map back to a panel.
-      window.history.replaceState(
-        window.history.state,
-        '',
-        window.location.pathname + (rest ? `?${rest}` : ''),
-      );
-      setPendingArticleId(initial);
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : ''));
+      void open(initial);
     }
 
     const onMessage = (e: MessageEvent) => {
       const data = e.data as { type?: string; id?: unknown } | null;
-      if (data?.type === 'open-article' && typeof data.id === 'string')
-        setPendingArticleId(data.id);
+      if (data?.type === 'open-article' && typeof data.id === 'string') void open(data.id);
     };
     navigator.serviceWorker?.addEventListener('message', onMessage);
     // addEventListener alone does not start delivery — messages posted to this
@@ -188,29 +190,7 @@ export default function App() {
     // so without it a tap on an already-open app would just focus the window.
     navigator.serviceWorker?.startMessages();
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
-  }, [authed]);
-
-  useEffect(() => {
-    // Wait for feeds: without them the article's own feed can't be resolved, and
-    // back would fall through to whatever list happened to be loaded. A user with
-    // no feeds can't receive a push in the first place, so this never stalls.
-    if (!pendingArticleId || feeds.length === 0) return;
-    const id = pendingArticleId;
-    setPendingArticleId(null);
-    void (async () => {
-      const article = await fetchArticleById(id);
-      if (!article) return;
-      // Synthesize the path the user never walked: put the article's own feed
-      // behind the reader, so back lands where the article actually came from.
-      // The web equivalent of Android's TaskStackBuilder parent stack / iOS's
-      // setViewControllers on a deep link.
-      const feed = feeds.find((f) => f.id === article.feedId);
-      if (feed) selectView({ type: 'feed', feed });
-      // Must follow selectView: loadArticles clears selectedArticle as it starts.
-      selectArticle(article);
-      openDeepLinked();
-    })();
-  }, [pendingArticleId, feeds]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -334,19 +314,14 @@ export default function App() {
     );
 
   if (isMobile) {
-    // A history entry outlives the state it described: the store drops
-    // `selectedArticle` on every loadArticles (pull-to-refresh, a view switch),
-    // and Safari can restore a whole stack from the previous session. Popping
-    // onto 文章 with no article renders an empty transparent pane on top of the
-    // list, which is still parallax-shifted and dimmed as a parent panel — the
-    // "swiped back into a broken layout" frame. Clamp to the deepest panel that
-    // has something to draw; history stays as it is, and the next tap on an
-    // article fills the reader back in.
+    // The store drops `selectedArticle` on every loadArticles (pull-to-refresh, a
+    // view switch), which can outlive a panel that was showing it: 文章 with no
+    // article renders an empty transparent pane on top of the list, which is
+    // still parallax-shifted and dimmed as a parent panel — a broken-looking
+    // frame. Clamp to the deepest panel that has something to draw; the next tap
+    // on an article fills the reader back in.
     const visiblePage = mobilePage === 'article' && !selectedArticle ? 'list' : mobilePage;
     const depth = PANEL_DEPTH[visiblePage];
-    // instantPanel: this change came from an iOS swipe-back, which already
-    // animated the navigation — run no CSS slide so the two don't fight.
-    const transition = instantPanel ? 'none' : 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)';
 
     // Every panel stays mounted; translateX drives visibility. A parent panel
     // (rel < 0) parallax-shifts left and dims behind the active panel, adding
@@ -361,14 +336,11 @@ export default function App() {
             position: 'absolute',
             inset: 0,
             transform: tx,
-            transition,
-            // Promote to a compositing layer only while a CSS slide is actually
-            // running. Kept on permanently, the layer survives an iOS native
-            // swipe-back (instantPanel) with a stale hit-test region, so the
-            // panel it lands on won't scroll until the next touch forces WebKit
-            // to recompute it. Dropping it here de-promotes the settled panels
-            // back to plain main-thread scroll and repaints them immediately.
-            willChange: instantPanel ? 'auto' : 'transform',
+            transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
+            // No `will-change`: WebKit composites a running transform transition
+            // on its own, while a permanent hint pins every panel — and the
+            // scroll container inside it — to a GPU layer for the app's lifetime,
+            // which is what left panels with stale hit-test regions on iOS.
             zIndex: idx + 1,
           }}
         >
@@ -380,7 +352,7 @@ export default function App() {
               background: 'rgba(28, 25, 23, 0.28)',
               pointerEvents: 'none',
               opacity: rel < 0 ? 1 : 0,
-              transition: instantPanel ? 'none' : 'opacity 0.28s ease',
+              transition: 'opacity 0.28s ease',
             }}
           />
         </div>

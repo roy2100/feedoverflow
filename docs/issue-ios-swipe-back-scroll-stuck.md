@@ -1,6 +1,10 @@
 # Issue: iOS PWA — scroll dead for one touch after a swipe-back
 
-Status: **Fixed** (2026-07-25, commit `e0081a9`).
+Status: **Fixed** (2026-07-25, commit `e0081a9`), then **obsoleted** the same day by
+`plan-drop-mobile-history.md`: with no history stack there is no swipe-back, and
+`willChange` was dropped from the panels entirely rather than only on the `instant`
+render. Kept for the analysis — the compositing-layer mechanism it documents is
+still the reason the panels carry no `will-change` today.
 
 ## Symptom
 

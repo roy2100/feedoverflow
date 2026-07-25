@@ -153,9 +153,9 @@ export const useStore = create<StoreState>((set, get) => ({
   // Article object and go straight through selectArticle. Resolves null when the
   // article is gone (trimmed by the size cap, or a stale notification).
   //
-  // It deliberately does not select: the caller has to switch to the article's
-  // feed first, and loadArticles clears selectedArticle as it starts — selecting
-  // here would just be undone.
+  // It deliberately does not select — the caller decides what to do with the
+  // article, and does not switch views first: the list behind the reader stays
+  // whatever the user was on, so closing the article returns them there.
   fetchArticleById: async (id) => {
     try {
       const r = await apiFetch(`${API}/articles/${encodeURIComponent(id)}`);

@@ -1,5 +1,10 @@
 # Plan: fix iOS edge-swipe-back panel overlap
 
+> **Superseded (2026-07-25) by `plan-drop-mobile-history.md`.** The mobile panel no
+> longer mirrors into browser history, so there is no back navigation for the
+> edge-swipe to drive and nothing for a CSS slide to compete with. The `instant`
+> flag this plan introduced is gone. Kept for the root-cause analysis.
+
 ## Goal
 On a standalone iOS PWA, a fast left-edge swipe-back leaves two mobile panels
 (订阅源 + 列表) frozen overlapping. Android is unaffected. Make back navigation
