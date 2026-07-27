@@ -160,6 +160,62 @@ describe('article metadata', () => {
     renderReader(BASE_ARTICLE);
     expect(screen.getByText(BASE_ARTICLE.author)).toBeInTheDocument();
   });
+
+  it('renders every author, uncapped', () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    renderReader({ ...BASE_ARTICLE, author: 'A One,B Two,C Three,D Four' });
+    expect(screen.getByText('A One · B Two · C Three · D Four')).toBeInTheDocument();
+  });
+});
+
+// ── Meta-row dates ────────────────────────────────────────────────────────────
+// The row keeps byline, dates and actions on one line, so the dates stay compact:
+// the year is dropped in the current year, and a same-day update shows time only.
+
+describe('meta-row dates', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 27, 20, 0));
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('omits the year for a current-year article', () => {
+    renderReader({ ...BASE_ARTICLE, pubDate: '2026-07-27T18:13:00' });
+    expect(screen.getByText('7月27日 18:13')).toBeInTheDocument();
+  });
+
+  it('keeps the year for an older article', () => {
+    renderReader({ ...BASE_ARTICLE, pubDate: '2025-07-27T18:13:00' });
+    expect(screen.getByText('2025年7月27日 18:13')).toBeInTheDocument();
+  });
+
+  it('shows only the time when the update lands on the publication day', () => {
+    renderReader({
+      ...BASE_ARTICLE,
+      pubDate: '2026-07-27T18:13:00',
+      updatedAt: new Date(2026, 6, 27, 19, 2).getTime(),
+    });
+    expect(screen.getByText('更新于 19:02')).toBeInTheDocument();
+  });
+
+  it('shows the date when the update lands on a later day', () => {
+    renderReader({
+      ...BASE_ARTICLE,
+      pubDate: '2026-07-27T18:13:00',
+      updatedAt: new Date(2026, 6, 28, 9, 0).getTime(),
+    });
+    expect(screen.getByText('更新于 7月28日 09:00')).toBeInTheDocument();
+  });
+
+  it('renders no date span at all when pubDate is unparseable', () => {
+    renderReader({ ...BASE_ARTICLE, pubDate: 'not-a-date' });
+    // An empty span still costs the row a gap, so the byline must be the lone child.
+    expect(screen.getByText('Test Author').parentElement?.childElementCount).toBe(1);
+  });
 });
 
 // ── 无图模式 (text-only) ───────────────────────────────────────────────────────

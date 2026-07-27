@@ -32,6 +32,38 @@ function formatFullDate(dateStr: string | number): string {
   });
 }
 
+function hhmm(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+// Meta-row date: drops the year for the current year ("7月27日 18:13"), which is what
+// makes the row fit — two unshrinkable full dates crowd the byline out entirely on a
+// narrow reader pane. Full precision stays in the title tooltip.
+function formatMetaDate(dateStr: string | number): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear() === new Date().getFullYear() ? '' : `${d.getFullYear()}年`;
+  return `${year}${d.getMonth() + 1}月${d.getDate()}日 ${hhmm(d)}`;
+}
+
+// A content update on the publication day repeats the date verbatim; show only the
+// time in that case.
+function formatUpdated(pubDate: string | number, updatedAt: string | number): string {
+  const pub = new Date(pubDate);
+  const upd = new Date(updatedAt);
+  if (isNaN(upd.getTime())) return '';
+  if (!isNaN(pub.getTime()) && isSameDay(pub, upd)) return hhmm(upd);
+  return formatMetaDate(updatedAt);
+}
+
 // Split a comma-separated byline into trimmed names (handles ASCII + full-width commas).
 function splitAuthors(author: string): string[] {
   return author
@@ -41,17 +73,11 @@ function splitAuthors(author: string): string[] {
 }
 
 // Normalize a byline ("A,B,C" → "A · B · C") so multi-author feeds read cleanly.
+// No name-count cap: the byline renders in full and the flex row truncates it with a
+// CSS ellipsis only when it genuinely runs out of width. The full list stays available
+// via the title tooltip.
 function formatAuthor(author: string): string {
   return splitAuthors(author).join(' · ');
-}
-
-// Collapse long multi-author bylines: show the first MAX_AUTHORS names, then "等".
-// The full list stays available via the title tooltip.
-const MAX_AUTHORS = 2;
-function truncateAuthor(author: string): string {
-  const names = splitAuthors(author);
-  if (names.length <= MAX_AUTHORS) return names.join(' · ');
-  return `${names.slice(0, MAX_AUTHORS).join(' · ')} 等`;
 }
 
 interface ArticleReaderProps {
@@ -355,17 +381,21 @@ export default function ArticleReader({
             marginBottom: 32,
             paddingBottom: 12,
             borderBottom: '1px solid var(--border-light)',
-            flexWrap: 'wrap',
+            // Desktop keeps byline and actions on one line: with `wrap`, flex breaks
+            // lines on content size *before* shrinking, so the actions group jumped to
+            // its own row even though the byline can truncate. `nowrap` lets it shrink.
+            flexWrap: isMobile ? 'wrap' : 'nowrap',
           }}
         >
-          {/* Byline + date — one wrapping group so actions stay aligned right */}
+          {/* Byline + date — one group so actions stay aligned right */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              flexWrap: 'wrap',
+              flexWrap: isMobile ? 'wrap' : 'nowrap',
               gap: '4px 10px',
               minWidth: 0,
+              overflow: 'hidden',
               flex: '1 1 auto',
             }}
           >
@@ -377,30 +407,43 @@ export default function ArticleReader({
                   color: 'var(--text-secondary)',
                   fontWeight: 500,
                   letterSpacing: '0.01em',
-                  maxWidth: isMobile ? '100%' : 360,
+                  // minWidth: 0 overrides the automatic minimum size, without which a
+                  // nowrap span refuses to shrink and would push the actions out.
+                  minWidth: 0,
+                  // Outweighs the dates' shrink factor, so the byline (which has a
+                  // tooltip) absorbs the squeeze and the dates only give way once it
+                  // is fully collapsed.
+                  flexShrink: 100,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}
               >
-                {truncateAuthor(article.author)}
+                {formatAuthor(article.author)}
               </span>
             )}
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-              {formatFullDate(article.pubDate)}
-            </span>
-            {article.updatedAt && (
-              <span
-                title={`内容更新于 ${formatFullDate(article.updatedAt)}`}
-                style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}
-              >
-                更新于 {formatFullDate(article.updatedAt)}
+            {formatMetaDate(article.pubDate) && (
+              <span title={formatFullDate(article.pubDate)} style={metaDateStyle}>
+                {formatMetaDate(article.pubDate)}
+              </span>
+            )}
+            {article.updatedAt && formatUpdated(article.pubDate, article.updatedAt) && (
+              <span title={`内容更新于 ${formatFullDate(article.updatedAt)}`} style={metaDateStyle}>
+                更新于 {formatUpdated(article.pubDate, article.updatedAt)}
               </span>
             )}
           </div>
           {/* Desktop-only actions */}
           {!isMobile && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                marginLeft: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexShrink: 0,
+              }}
+            >
               <button
                 onClick={() => onToggleStar(article)}
                 title={article.isStarred ? '取消收藏' : '收藏'}
@@ -826,6 +869,18 @@ function sanitizeHtml(html: string): string {
       .replace(/\sstyle\s*=\s*'[^']*'/gi, '')
   );
 }
+
+// Dates shrink last (flexShrink 1 against the byline's 100) and ellipsize rather than
+// being chopped mid-glyph by the group's overflow: hidden.
+const metaDateStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--text-tertiary)',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+  flexShrink: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
 
 const articleContentStyle: React.CSSProperties = {
   fontFamily: 'var(--font-serif)',
