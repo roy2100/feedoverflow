@@ -338,7 +338,10 @@ export default function ArticleReader({
           maxWidth: readingMode ? 820 : 680,
           width: '100%',
           margin: '0 auto',
-          padding: isMobile ? '24px 20px 80px' : '48px 48px 80px',
+          // Horizontal padding scales with the pane: a fixed 48px eats a third of a
+          // narrow (un-maximized) reader column, so it only reaches 48 once the pane
+          // is wide enough to spare it.
+          padding: isMobile ? '20px 20px 72px' : '32px clamp(24px, 5%, 48px) 72px',
         }}
       >
         {/* Feed name */}
@@ -350,7 +353,7 @@ export default function ArticleReader({
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: 'var(--accent)',
-              marginBottom: 12,
+              marginBottom: 10,
             }}
           >
             {article.feedName}
@@ -365,7 +368,7 @@ export default function ArticleReader({
             fontWeight: 600,
             lineHeight: 1.35,
             color: 'var(--text-primary)',
-            marginBottom: 14,
+            marginBottom: 12,
             letterSpacing: '-0.01em',
           }}
         >
@@ -378,8 +381,10 @@ export default function ArticleReader({
             display: 'flex',
             alignItems: 'center',
             gap: isMobile ? 10 : 16,
-            marginBottom: 32,
-            paddingBottom: 12,
+            // The body's own line-height (1.85) already adds ~7px of half-leading above
+            // the first line, so the visual gap under the rule reads larger than this.
+            marginBottom: 20,
+            paddingBottom: 10,
             borderBottom: '1px solid var(--border-light)',
             // Desktop keeps byline and actions on one line: with `wrap`, flex breaks
             // lines on content size *before* shrinking, so the actions group jumped to
@@ -706,7 +711,7 @@ export default function ArticleReader({
         {article.audioUrl && (
           <div
             style={{
-              marginBottom: 32,
+              marginBottom: 24,
               padding: '12px 16px',
               background: 'var(--bg-panel)',
               borderRadius: 8,
@@ -847,6 +852,21 @@ export function stripMedia(html: string): string {
   if (typeof DOMParser === 'undefined') return html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll(MEDIA_SELECTOR).forEach((el) => el.remove());
+  // Feeds wrap images in their own <p>/<div>/<figure>. Removing the image leaves the
+  // wrapper behind as a blank block that still claims its margins — a gap in the text
+  // with nothing in it. Drop wrappers that hold nothing but whitespace once the media
+  // is gone. Repeat so nested wrappers (<div><p><img></p></div>) collapse fully.
+  for (let pass = 0; pass < 3; pass++) {
+    const empties = doc.body.querySelectorAll<HTMLElement>('p, div, blockquote, li');
+    let removed = 0;
+    empties.forEach((el) => {
+      if (!el.textContent?.trim() && !el.querySelector(MEDIA_SELECTOR + ', br, hr, input')) {
+        el.remove();
+        removed++;
+      }
+    });
+    if (!removed) break;
+  }
   return doc.body.innerHTML;
 }
 
@@ -867,6 +887,10 @@ function sanitizeHtml(html: string): string {
       // (Emphasis via <b>/<strong>/<i>/<em>/<h2>… tags survives and gets themed.)
       .replace(/\sstyle\s*=\s*"[^"]*"/gi, '')
       .replace(/\sstyle\s*=\s*'[^']*'/gi, '')
+      // Spacer paragraphs — <p><br></p>, <p>&nbsp;</p> — are how many feeds fake a blank
+      // line. Against our own paragraph rhythm they render as an unexplained hole in the
+      // column, so drop them and let .rss-article's margins do the spacing.
+      .replace(/<p[^>]*>(?:\s|&nbsp;|&#160;|<br\s*\/?>)*<\/p>/gi, '')
   );
 }
 
@@ -896,6 +920,10 @@ if (typeof document !== 'undefined') {
     style.id = id;
     style.textContent = `
       .rss-article p { margin-bottom: 1.1em; }
+      /* The meta rule above already sets the gap; a leading margin (or a heading's
+         margin-top) would stack on top of it and open a blank band. */
+      .rss-article > :first-child { margin-top: 0; }
+      .rss-article > :last-child { margin-bottom: 0; }
       .rss-article h1, .rss-article h2, .rss-article h3 {
         font-family: var(--font-serif);
         font-weight: 600;

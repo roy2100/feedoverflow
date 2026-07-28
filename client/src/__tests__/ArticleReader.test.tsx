@@ -241,6 +241,17 @@ describe('stripMedia', () => {
     expect(out).toContain('keep');
   });
 
+  it('drops wrappers left empty by the removed media', () => {
+    const html = '<p>Before</p><div><p><img src="x.jpg"></p></div><p>After</p>';
+    const out = stripMedia(html);
+    expect(out).toBe('<p>Before</p><p>After</p>');
+  });
+
+  it('keeps a wrapper that still has text beside the image', () => {
+    const out = stripMedia('<div><img src="x.jpg">caption text</div>');
+    expect(out).toContain('caption text');
+  });
+
   it('leaves real content (links, code, blockquotes) untouched', () => {
     const html =
       '<p><a href="/x">link</a></p><pre><code>code</code></pre><blockquote>quote</blockquote>';
