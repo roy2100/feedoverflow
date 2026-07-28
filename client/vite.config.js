@@ -53,8 +53,10 @@ export default defineConfig({
         importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
-            // Article feeds: show cached content immediately, refresh in background
-            urlPattern: /^\/api\/(today|all-articles|starred)$/,
+            // Article feeds: show cached content immediately, refresh in background.
+            // Workbox matches against the full URL, so these patterns must NOT be
+            // anchored with ^ — a same-origin request is https://host/api/today.
+            urlPattern: /\/api\/(today|all-articles|starred)$/,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'api-articles',
@@ -68,8 +70,16 @@ export default defineConfig({
             },
           },
           {
+            // Auth endpoints: never cached, never served from cache. A stale
+            // auth-check would keep showing the app as logged in after a logout.
+            // Must be registered before the catch-all /api/ rule below — Workbox
+            // takes the first matching route.
+            urlPattern: /\/api\/(login|logout|auth-check)$/,
+            handler: 'NetworkOnly',
+          },
+          {
             // Other API requests: network first, fall back to cache
-            urlPattern: /^\/api\/.*/,
+            urlPattern: /\/api\//,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
@@ -80,13 +90,27 @@ export default defineConfig({
             },
           },
           {
-            // Google Fonts
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
+            // Google Fonts stylesheet: revalidate in the background so the @font-face
+            // rules can never drift out of sync with what is actually in the font cache.
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\//i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'google-fonts-stylesheets',
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            // Google Fonts files. Google slices Noto Serif SC into ~100 unicode-range
+            // subsets per weight, so the entry cap has to be in the hundreds — at a
+            // handful, LRU eviction thrashes and CJK text refetches on every article.
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\//i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts',
+              cacheName: 'google-fonts-webfonts',
               expiration: {
-                maxEntries: 10,
+                maxEntries: 400,
                 maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
               },
               cacheableResponse: {
