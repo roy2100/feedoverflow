@@ -10,6 +10,7 @@ import {
   Image,
   ImageOff,
   Check,
+  Copy,
   Loader2,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -114,11 +115,22 @@ export default function ArticleReader({
   // 无图模式 — strips images/media from the article body for distraction-free reading.
   // Display-only and self-contained (unlike readingMode, which changes the App layout).
   const [textOnly, setTextOnly] = useState(() => localStorage.getItem('text-only') === '1');
+  // Transient feedback for the copy button; reset by a timer we own so switching
+  // articles mid-flash can't leave a stale "已复制".
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'fail'>('idle');
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>();
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem('text-only', textOnly ? '1' : '0');
   }, [textOnly]);
+
+  useEffect(() => {
+    setCopyState('idle');
+    clearTimeout(copyTimer.current);
+  }, [article?.id]);
+
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   useEffect(() => {
     setFullContent(null);
@@ -174,6 +186,22 @@ export default function ArticleReader({
     } catch (err) {
       setFullContent({ error: (err as Error).message });
     }
+  };
+
+  // Copies whatever the reader is currently showing — the extracted 全文 when it has
+  // been loaded, otherwise the RSS body — as plain text, with the title and source URL
+  // so a pasted article keeps its provenance.
+  const handleCopy = async () => {
+    if (!article) return;
+    const extracted =
+      fullContent && fullContent !== 'loading' && 'html' in fullContent ? fullContent.html : '';
+    const body = htmlToPlainText(extracted || rssContent || article.summary || '');
+    const text = [decodeEntities(article.title), body, article.link && `原文：${article.link}`]
+      .filter(Boolean)
+      .join('\n\n');
+    clearTimeout(copyTimer.current);
+    setCopyState((await copyText(text)) ? 'done' : 'fail');
+    copyTimer.current = setTimeout(() => setCopyState('idle'), 1800);
   };
 
   if (!article) {
@@ -303,6 +331,28 @@ export default function ArticleReader({
               <Image size={18} strokeWidth={1.5} />
             )}
           </button>
+          <button
+            onClick={handleCopy}
+            disabled={isLoadingContent}
+            aria-label="复制全文"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: copyStateColor(copyState),
+              opacity: isLoadingContent ? 0.4 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              padding: 6,
+              borderRadius: 5,
+            }}
+          >
+            {copyState === 'done' ? (
+              <Check size={18} strokeWidth={1.5} />
+            ) : (
+              <Copy size={18} strokeWidth={1.5} />
+            )}
+          </button>
           {article.link && (
             <a
               href={article.link}
@@ -318,8 +368,7 @@ export default function ArticleReader({
                 padding: 6,
               }}
             >
-              原文
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                 <path
                   d="M2 10L10 2M10 2H5M10 2v5"
                   stroke="currentColor"
@@ -328,6 +377,7 @@ export default function ArticleReader({
                   strokeLinejoin="round"
                 />
               </svg>
+              原文
             </a>
           )}
         </div>
@@ -528,31 +578,50 @@ export default function ArticleReader({
                   )}
                 </button>
               )}
+              <button
+                onClick={handleCopy}
+                disabled={isLoadingContent}
+                title={
+                  copyState === 'done'
+                    ? '已复制'
+                    : copyState === 'fail'
+                      ? '复制失败'
+                      : '复制全文（纯文本）'
+                }
+                aria-label="复制全文"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: isLoadingContent ? 'default' : 'pointer',
+                  color: copyStateColor(copyState),
+                  opacity: isLoadingContent ? 0.4 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 4,
+                  borderRadius: 5,
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (copyState === 'idle' && !isLoadingContent)
+                    e.currentTarget.style.color = 'var(--accent)';
+                }}
+                onMouseLeave={(e) => {
+                  if (copyState === 'idle') e.currentTarget.style.color = 'var(--text-tertiary)';
+                }}
+              >
+                {copyState === 'done' ? (
+                  <Check size={15} strokeWidth={1.5} />
+                ) : (
+                  <Copy size={15} strokeWidth={1.5} />
+                )}
+              </button>
               {article.link && !fullContent && (
                 <button
                   onClick={handleFetchFull}
                   title="从原始网页提取全文"
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--text-tertiary)',
-                    background: 'none',
-                    border: '1px solid var(--border)',
-                    borderRadius: 5,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '3px 8px',
-                    transition: 'color 0.15s, border-color 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = 'var(--accent)';
-                    e.currentTarget.style.borderColor = 'var(--accent)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = 'var(--text-tertiary)';
-                    e.currentTarget.style.borderColor = 'var(--border)';
-                  }}
+                  style={{ ...textActionStyle, ...clusterGap, color: 'var(--text-tertiary)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
                 >
                   <AlignLeft size={11} />
                   全文
@@ -561,11 +630,10 @@ export default function ArticleReader({
               {fullContent === 'loading' && (
                 <span
                   style={{
-                    fontSize: 12,
+                    ...textActionStyle,
+                    ...clusterGap,
                     color: 'var(--text-tertiary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
+                    cursor: 'default',
                   }}
                 >
                   <span
@@ -587,21 +655,13 @@ export default function ArticleReader({
                   onClick={() => setFullContent(null)}
                   title="恢复 RSS 原文"
                   style={{
-                    fontSize: 12,
+                    ...textActionStyle,
+                    ...clusterGap,
                     color: 'var(--accent)',
-                    background: 'none',
-                    border: '1px solid var(--accent)',
-                    borderRadius: 5,
-                    cursor: 'pointer',
-                    padding: '3px 8px',
-                    opacity: 0.7,
-                    transition: 'opacity 0.15s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
+                    opacity: 0.8,
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
                 >
                   <Check size={11} />
                   全文
@@ -612,21 +672,12 @@ export default function ArticleReader({
                   href={article.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--accent)',
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    opacity: 0.8,
-                    transition: 'opacity 0.15s',
-                  }}
+                  style={{ ...textActionStyle, color: 'var(--accent)', opacity: 0.8 }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
                 >
-                  原文
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  {/* Icon first, matching 全文 — both text actions read icon → label. */}
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
                     <path
                       d="M2 10L10 2M10 2H5M10 2v5"
                       stroke="currentColor"
@@ -635,6 +686,7 @@ export default function ArticleReader({
                       strokeLinejoin="round"
                     />
                   </svg>
+                  原文
                 </a>
               )}
             </div>
@@ -870,6 +922,76 @@ export function stripMedia(html: string): string {
   return doc.body.innerHTML;
 }
 
+function copyStateColor(state: 'idle' | 'done' | 'fail'): string {
+  if (state === 'done') return 'var(--accent)';
+  if (state === 'fail') return '#c0392b';
+  return 'var(--text-tertiary)';
+}
+
+// Block-level tags that must end up on their own line in the copied plain text.
+// Everything else (spans, links, emphasis) stays inline, as it reads on screen.
+const BLOCK_SELECTOR =
+  'p, div, section, article, h1, h2, h3, h4, h5, h6, li, blockquote, pre, tr, figure, figcaption, table';
+
+// Flatten article HTML to plain text for the clipboard. Uses the DOM parser rather
+// than a tag-stripping regex so entities decode and nested markup can't leak through;
+// falls back to a naive strip where DOMParser is unavailable (non-browser).
+export function htmlToPlainText(html: string): string {
+  if (!html) return '';
+  if (typeof DOMParser === 'undefined') {
+    return normalizeText(html.replace(/<[^>]*>/g, ''));
+  }
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script, style, noscript').forEach((el) => el.remove());
+  doc.querySelectorAll('br').forEach((el) => el.replaceWith('\n'));
+  // A trailing newline per block is enough: normalizeText collapses the runs that
+  // nested wrappers produce, so paragraphs end up separated by exactly one blank line.
+  doc.querySelectorAll(BLOCK_SELECTOR).forEach((el) => el.append('\n\n'));
+  // Cells would otherwise run together into one unreadable word.
+  doc.querySelectorAll('td, th').forEach((el) => el.append('\t'));
+  return normalizeText(doc.body.textContent || '');
+}
+
+// Trim per line, drop the blank-line runs that nested block wrappers leave behind,
+// and normalize the non-breaking spaces feeds are full of.
+function normalizeText(text: string): string {
+  return text
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+$/, '').replace(/^[ \t]+/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// navigator.clipboard is unavailable in insecure contexts (plain-HTTP LAN access) and
+// can reject when the document isn't focused, so keep the legacy path as a fallback.
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the textarea path
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length); // iOS ignores select() alone
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function sanitizeHtml(html: string): string {
   return (
     html
@@ -893,6 +1015,30 @@ function sanitizeHtml(html: string): string {
       .replace(/<p[^>]*>(?:\s|&nbsp;|&#160;|<br\s*\/?>)*<\/p>/gi, '')
   );
 }
+
+// 全文 / 原文 share one borderless text-action look: a bordered chip next to four bare
+// 15px icon buttons read as a third button language crammed into the same row. Only the
+// color/opacity differ per state — the geometry is identical.
+const textActionStyle: React.CSSProperties = {
+  fontSize: 12,
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  textDecoration: 'none',
+  whiteSpace: 'nowrap',
+  transition: 'color 0.15s, opacity 0.15s',
+};
+
+// Applied to whichever 全文 state renders — the first of the two text actions — to open
+// the seam between the icon cluster and the text pair. The icon buttons carry 4px of
+// their own padding, so their glyphs already sit 18px apart (4 + gap 10 + 4); the text
+// actions have none, which puts them 10px apart. 10px extra here makes the seam 24px —
+// wider than either cluster's internal rhythm, so the two groups read as two groups.
+const clusterGap: React.CSSProperties = { marginLeft: 10 };
 
 // Dates shrink last (flexShrink 1 against the byline's 100) and ellipsize rather than
 // being chopped mid-glyph by the group's overflow: hidden.

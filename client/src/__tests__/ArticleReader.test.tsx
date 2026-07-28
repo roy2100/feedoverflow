@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import ArticleReader, { stripMedia } from '../components/ArticleReader';
+import ArticleReader, { stripMedia, htmlToPlainText } from '../components/ArticleReader';
 import { decodeEntities } from '../lib/decodeEntities';
 import type { Article } from '../types';
 
@@ -333,6 +333,85 @@ describe('WeChat-pasted inline styles', () => {
     expect(img.getAttribute('height')).toBe('393');
     // The runaway inline pixel width is gone; the reader CSS (max-width:100%) can size it
     expect(img.getAttribute('style')).not.toContain('644');
+  });
+});
+
+// ── 复制全文 ──────────────────────────────────────────────────────────────────
+
+describe('htmlToPlainText', () => {
+  it('separates block elements with exactly one blank line', () => {
+    expect(htmlToPlainText('<p>One</p><p>Two</p>')).toBe('One\n\nTwo');
+  });
+
+  it('collapses nested wrappers instead of stacking blank lines', () => {
+    expect(htmlToPlainText('<div><div><p>One</p></div></div><p>Two</p>')).toBe('One\n\nTwo');
+  });
+
+  it('keeps inline markup inline', () => {
+    expect(htmlToPlainText('<p>A <b>bold</b> <a href="/x">link</a></p>')).toBe('A bold link');
+  });
+
+  it('turns <br> into a line break', () => {
+    expect(htmlToPlainText('<p>One<br>Two</p>')).toBe('One\nTwo');
+  });
+
+  it('decodes entities and normalizes non-breaking spaces', () => {
+    expect(htmlToPlainText('<p>just&#160;don&#8217;t</p>')).toBe('just don’t');
+  });
+
+  it('drops script and style payloads', () => {
+    expect(htmlToPlainText('<style>p{color:red}</style><p>Body</p><script>x=1</script>')).toBe(
+      'Body',
+    );
+  });
+
+  it('returns an empty string for empty input', () => {
+    expect(htmlToPlainText('')).toBe('');
+  });
+});
+
+describe('copy button', () => {
+  let writeText: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  });
+
+  it('copies title, plain-text body and source link', async () => {
+    const article: Article = {
+      ...BASE_ARTICLE,
+      content: '<p>First para</p><p>Second <b>para</b></p>',
+    };
+    renderReader(article);
+    screen.getByLabelText('复制全文').click();
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText).toHaveBeenCalledWith(
+      'Test Article Title\n\nFirst para\n\nSecond para\n\n原文：https://example.com/article',
+    );
+  });
+
+  it('copies the extracted 全文 once it replaced the RSS body', async () => {
+    const article: Article = { ...BASE_ARTICLE, content: '<p>RSS body</p>' };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ content: '<p>Extracted body</p>' }),
+    });
+    renderReader(article);
+    screen.getByTitle('从原始网页提取全文').click();
+    await waitFor(() => expect(screen.getByText('Extracted body')).toBeInTheDocument());
+
+    screen.getByLabelText('复制全文').click();
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText.mock.calls[0][0]).toContain('Extracted body');
+    expect(writeText.mock.calls[0][0]).not.toContain('RSS body');
+  });
+
+  it('is disabled while the body is still loading', () => {
+    mockFetch.mockReturnValue(new Promise(() => {}));
+    renderReader(BASE_ARTICLE);
+    expect(screen.getByLabelText('复制全文')).toBeDisabled();
   });
 });
 
