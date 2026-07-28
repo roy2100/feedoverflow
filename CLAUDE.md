@@ -151,9 +151,9 @@ language, drop stale/redundant chrome.
 | POST | `/api/feeds/import-opml` | bulk import from OPML |
 | PATCH | `/api/feeds/:id` | rename feed and/or toggle `push_enabled` (both fields optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
-| GET | `/api/feeds/:id/articles` | articles for one feed, up to 500 |
-| GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest` |
-| GET | `/api/today` | today's articles, same `?mode=` toggle |
+| GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1` |
+| GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest`, `?summary=1` |
+| GET | `/api/today` | today's articles, same `?mode=` toggle; `?summary=1` |
 | GET | `/api/starred` | starred articles |
 | GET | `/api/podcasts` | episodes with a non-empty `audio_url` |
 | GET | `/api/starred/count` | badge count |
@@ -177,3 +177,13 @@ than duplicating `internal/httpapi`'s handler logic: `list_feeds`, `add_feed`, `
 `delete_feed`, `import_opml`, `get_all_articles`, `get_today_articles`, `get_starred_articles`,
 `get_feed_articles`, `get_starred_count`, `toggle_star`, `get_current_article`,
 `fetch_article_content`.
+
+The three list tools (`get_all_articles`, `get_today_articles`, `get_feed_articles`) call their
+endpoint with `?summary=1`; the two cross-feed ones also pin `?mode=digest`. Digest does not
+shrink the response (both modes cap at 500) — it changes who fills it, so one high-volume feed
+can't take the whole window and read to an agent as "the other feeds published nothing". The list endpoints strip `summary` and `content` by default because
+the browser's list panes render neither and 500 summaries per request is pure payload; an MCP
+client has no reader pane to open, so bare titles give it nothing to decide on. `?summary=1` adds
+back only the RSS summary — never `content`, which stays behind `fetch_article_content` /
+`/api/articles/:id/content`. `get_starred_articles` needs no flag: `/api/starred` has always
+returned both.

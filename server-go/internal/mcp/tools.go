@@ -97,12 +97,25 @@ func NewServer(port int) *mcp.Server {
 	})
 
 	// --- Articles ---
+	//
+	// The list endpoints strip the RSS summary by default (the browser's list
+	// panes never render it), so every list tool asks for it back with
+	// `?summary=1`: an agent has no reader pane to open, and a list of bare
+	// titles is not enough to decide what is worth fetching in full.
+	//
+	// The two cross-feed tools also pin `?mode=digest`, the per-feed fair share,
+	// rather than leaving the default `latest`. Both modes cap at LIST_LIMIT, so
+	// this does not shrink the response — it changes who fills it: under `latest`
+	// one high-volume feed can take the whole window, which for an agent asking
+	// "what's new" reads as the other subscriptions having published nothing.
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_all_articles",
-		Description: "Get the latest articles across all feeds (up to 5 per feed), sorted by date descending.",
+		Name: "get_all_articles",
+		Description: "Get the latest articles across all feeds, sorted by date descending, balanced so " +
+			"one high-volume feed cannot crowd out the rest. Each article includes its RSS summary; " +
+			"use fetch_article_content for the full text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
-		res, err := c.get(ctx, "/api/all-articles")
+		res, err := c.get(ctx, "/api/all-articles?mode=digest&summary=1")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -110,10 +123,12 @@ func NewServer(port int) *mcp.Server {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_today_articles",
-		Description: "Get all articles published today across all feeds.",
+		Name: "get_today_articles",
+		Description: "Get the articles published today across all feeds, balanced so one high-volume feed " +
+			"cannot crowd out the rest. Each article includes its RSS summary; use fetch_article_content " +
+			"for the full text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
-		res, err := c.get(ctx, "/api/today")
+		res, err := c.get(ctx, "/api/today?mode=digest&summary=1")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -135,10 +150,11 @@ func NewServer(port int) *mcp.Server {
 		FeedID string `json:"feed_id" jsonschema:"Feed ID from list_feeds"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_feed_articles",
-		Description: "Get the latest articles (up to 50) from a specific feed.",
+		Name: "get_feed_articles",
+		Description: "Get the latest articles (up to 50) from a specific feed, each with its RSS summary; " +
+			"use fetch_article_content for the full text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in feedArticlesInput) (*mcp.CallToolResult, any, error) {
-		res, err := c.get(ctx, "/api/feeds/"+url.PathEscape(in.FeedID)+"/articles")
+		res, err := c.get(ctx, "/api/feeds/"+url.PathEscape(in.FeedID)+"/articles?summary=1")
 		if err != nil {
 			return nil, nil, err
 		}

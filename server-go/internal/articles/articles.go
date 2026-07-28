@@ -82,11 +82,14 @@ type Row struct {
 	ContentUpdatedAt sql.NullInt64
 }
 
-// RowToArticle is the port of rowToArticle. List endpoints pass withContent=false
-// to strip summary+content; starred reads pass true. updatedAt is content_updated_at
-// (nil → JSON null). Fields Node emits without `|| ”` (feedId/feedName/title/link/
-// pubDate) are non-NULL in the data, so their string value is exact.
-func RowToArticle(r Row, withContent bool) model.Article {
+// RowToArticle is the port of rowToArticle. List endpoints pass
+// withSummary=withContent=false to strip both heavy columns; starred reads pass
+// true for both. The two are separate because the MCP list tools want the RSS
+// summary without dragging along the full article HTML (`?summary=1`).
+// updatedAt is content_updated_at (nil → JSON null). Fields Node emits without
+// `|| ”` (feedId/feedName/title/link/pubDate) are non-NULL in the data, so their
+// string value is exact.
+func RowToArticle(r Row, withSummary, withContent bool) model.Article {
 	a := model.Article{
 		ID:            r.ArticleID,
 		FeedID:        r.FeedID.String,
@@ -99,8 +102,10 @@ func RowToArticle(r Row, withContent bool) model.Article {
 		AudioDuration: r.AudioDuration.String,
 		IsStarred:     r.IsStarred.Valid && r.IsStarred.Int64 != 0,
 	}
-	if withContent {
+	if withSummary {
 		a.Summary = r.Summary.String
+	}
+	if withContent {
 		a.Content = r.Content.String
 	}
 	if r.ContentUpdatedAt.Valid {

@@ -223,6 +223,6 @@ func (s *Server) getFeedArticles(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"feedName": f.Name,
-		"articles": articles.NormalizePubDates(toArticles(rows, false)),
+		"articles": articles.NormalizePubDates(toArticles(rows, wantSummary(r), false)),
 	})
 }

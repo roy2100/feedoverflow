@@ -193,7 +193,7 @@ func (s *Server) getFeeds(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
-	arts, err := s.listArticles(r.URL.Query().Get("mode"), 0)
+	arts, err := s.listArticles(r.URL.Query().Get("mode"), 0, wantSummary(r))
 	if err != nil {
 		serverError(w, err)
 		return
@@ -207,7 +207,7 @@ func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getToday(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	arts, err := s.listArticles(r.URL.Query().Get("mode"), midnight.UnixMilli())
+	arts, err := s.listArticles(r.URL.Query().Get("mode"), midnight.UnixMilli(), wantSummary(r))
 	if err != nil {
 		serverError(w, err)
 		return
@@ -219,8 +219,9 @@ func (s *Server) getToday(w http.ResponseWriter, r *http.Request) {
 }
 
 // listArticles serves the shared all-articles/today body. since==0 means no time
-// filter (all-articles); since>0 filters to pub_ts >= since (today).
-func (s *Server) listArticles(mode string, since int64) ([]model.Article, error) {
+// filter (all-articles); since>0 filters to pub_ts >= since (today). withSummary
+// keeps the RSS summary on each row (see wantSummary).
+func (s *Server) listArticles(mode string, since int64, withSummary bool) ([]model.Article, error) {
 	rdb := s.DB.Reader()
 	feedIDs, err := store.FeedIDs(rdb)
 	if err != nil {
@@ -240,7 +241,7 @@ func (s *Server) listArticles(mode string, since int64) ([]model.Article, error)
 				return nil, err
 			}
 			for _, row := range rows {
-				arts = append(arts, articles.RowToArticle(row, false))
+				arts = append(arts, articles.RowToArticle(row, withSummary, false))
 			}
 		}
 		articles.ByPubDateDesc(arts)
@@ -258,7 +259,7 @@ func (s *Server) listArticles(mode string, since int64) ([]model.Article, error)
 	if err != nil {
 		return nil, err
 	}
-	return toArticles(rows, false), nil
+	return toArticles(rows, withSummary, false), nil
 }
 
 func (s *Server) getStarred(w http.ResponseWriter, _ *http.Request) {
@@ -268,7 +269,7 @@ func (s *Server) getStarred(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"articles": articles.NormalizePubDates(toArticles(rows, true)),
+		"articles": articles.NormalizePubDates(toArticles(rows, true, true)),
 	})
 }
 
@@ -278,7 +279,7 @@ func (s *Server) getPodcasts(w http.ResponseWriter, _ *http.Request) {
 		serverError(w, err)
 		return
 	}
-	arts := toArticles(rows, false)
+	arts := toArticles(rows, false, false)
 	articles.ByPubDateDesc(arts)
 	if len(arts) > 100 {
 		arts = arts[:100]
@@ -312,7 +313,7 @@ func (s *Server) getArticle(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
 		return
 	}
-	arts := articles.NormalizePubDates([]model.Article{articles.RowToArticle(row, true)})
+	arts := articles.NormalizePubDates([]model.Article{articles.RowToArticle(row, true, true)})
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"article": arts[0]})
 }
 
@@ -422,12 +423,25 @@ func digestQuota(feedCount int) int {
 
 // toArticles maps rows to Articles, always returning a non-nil slice so an empty
 // result serializes as [] (not null), matching Express res.json([]).
-func toArticles(rows []articles.Row, withContent bool) []model.Article {
+func toArticles(rows []articles.Row, withSummary, withContent bool) []model.Article {
 	out := make([]model.Article, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, articles.RowToArticle(r, withContent))
+		out = append(out, articles.RowToArticle(r, withSummary, withContent))
 	}
 	return out
+}
+
+// wantSummary reports whether a list request asked for the RSS summary column
+// (`?summary=1`). The browser never sets it — the list panes render title/feed
+// only, and shipping 500 summaries per request would be pure payload. The MCP
+// list tools do set it: an agent reading through the loopback API has no reader
+// pane to open, so a title-only list tells it nothing about the article.
+func wantSummary(r *http.Request) bool {
+	switch r.URL.Query().Get("summary") {
+	case "1", "true":
+		return true
+	}
+	return false
 }
 
 func serverError(w http.ResponseWriter, err error) {

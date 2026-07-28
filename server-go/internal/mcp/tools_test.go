@@ -132,16 +132,19 @@ func TestImportOPML(t *testing.T) {
 func TestGetAllArticles(t *testing.T) {
 	session, got := testServerAndAPI(t, jsonOK(`[]`))
 	callTool(t, session, "get_all_articles", nil)
-	if len(*got) != 1 || (*got)[0].path != "/api/all-articles" {
-		t.Fatalf("want GET /api/all-articles, got %#v", *got)
+	// ?summary=1: the list endpoints strip the summary by default, but an agent
+	// has no reader pane, so bare titles would be useless. ?mode=digest: the
+	// per-feed fair share, so one busy feed cannot fill the whole window.
+	if len(*got) != 1 || (*got)[0].path != "/api/all-articles?mode=digest&summary=1" {
+		t.Fatalf("want GET /api/all-articles?mode=digest&summary=1, got %#v", *got)
 	}
 }
 
 func TestGetTodayArticles(t *testing.T) {
 	session, got := testServerAndAPI(t, jsonOK(`[]`))
 	callTool(t, session, "get_today_articles", nil)
-	if len(*got) != 1 || (*got)[0].path != "/api/today" {
-		t.Fatalf("want GET /api/today, got %#v", *got)
+	if len(*got) != 1 || (*got)[0].path != "/api/today?mode=digest&summary=1" {
+		t.Fatalf("want GET /api/today?mode=digest&summary=1, got %#v", *got)
 	}
 }
 
@@ -156,8 +159,8 @@ func TestGetStarredArticles(t *testing.T) {
 func TestGetFeedArticles(t *testing.T) {
 	session, got := testServerAndAPI(t, jsonOK(`[]`))
 	callTool(t, session, "get_feed_articles", map[string]any{"feed_id": "1"})
-	if len(*got) != 1 || (*got)[0].path != "/api/feeds/1/articles" {
-		t.Fatalf("want GET /api/feeds/1/articles, got %#v", *got)
+	if len(*got) != 1 || (*got)[0].path != "/api/feeds/1/articles?summary=1" {
+		t.Fatalf("want GET /api/feeds/1/articles?summary=1, got %#v", *got)
 	}
 }
 
