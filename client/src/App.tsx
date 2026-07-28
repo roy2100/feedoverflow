@@ -6,6 +6,7 @@ import ArticleReader from './components/ArticleReader';
 import FeedSidebar from './components/FeedSidebar';
 import LoginForm from './components/LoginForm';
 import { useIsMobile } from './hooks/useIsMobile';
+import { clearProgress, loadProgress, saveProgress } from './lib/playbackProgress';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
@@ -43,6 +44,14 @@ export default function App() {
   const [isBuffering, setIsBuffering] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null) audioRef.current = new Audio();
+  // The audio listeners below are attached once, so they reach the playing
+  // episode through a ref instead of closing over stale state.
+  const episodeRef = useRef<Article | null>(null);
+  episodeRef.current = currentEpisode;
+  // The resume seek that is still waiting for `loadedmetadata`. Kept so
+  // switching episodes mid-load can cancel it — the listener is attached to the
+  // element, not to a source, and would otherwise fire on the next episode.
+  const pendingResumeRef = useRef<(() => void) | null>(null);
   const readerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -192,15 +201,27 @@ export default function App() {
     return () => navigator.serviceWorker?.removeEventListener('message', onMessage);
   }, [authed]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Remembers where this episode got to. Called on pause/close/hide and every
+  // few seconds while playing — the app can be killed in the background without
+  // any event firing, so the periodic write is the one that usually survives.
+  const persistProgress = () => {
+    const audio = audioRef.current;
+    const episode = episodeRef.current;
+    if (audio && episode) saveProgress(episode.id, audio.currentTime, audio.duration);
+  };
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     const onPlay = () => setIsPlaying(true);
     const onPause = () => {
+      persistProgress();
       setIsPlaying(false);
       setIsBuffering(false);
     };
     const onEnded = () => {
+      // Finished: drop the position so playing it again starts at the top.
+      if (episodeRef.current) clearProgress(episodeRef.current.id);
       setIsPlaying(false);
       setIsBuffering(false);
     };
@@ -208,19 +229,38 @@ export default function App() {
     // playback (sound) begins — the gap between them is the blank-audio wait.
     const onWaiting = () => setIsBuffering(true);
     const onPlaying = () => setIsBuffering(false);
+
+    let lastSaved = 0;
+    const onTime = () => {
+      if (Date.now() - lastSaved < 5000) return;
+      lastSaved = Date.now();
+      persistProgress();
+    };
+    // `visibilitychange` is the reliable one on iOS — backgrounding a PWA that
+    // is then killed never fires `pagehide`, let alone `unload`.
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') persistProgress();
+    };
+
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('waiting', onWaiting);
     audio.addEventListener('playing', onPlaying);
+    audio.addEventListener('timeupdate', onTime);
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', persistProgress);
     return () => {
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('waiting', onWaiting);
       audio.removeEventListener('playing', onPlaying);
+      audio.removeEventListener('timeupdate', onTime);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', persistProgress);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- listeners read refs, never state
 
   const handlePlay = (article: Article) => {
     const audio = audioRef.current;
@@ -233,7 +273,29 @@ export default function App() {
         audio.pause();
       }
     } else {
+      // Leaving an episode part-way: keep its position before the src swap
+      // wipes currentTime.
+      persistProgress();
+      if (pendingResumeRef.current) {
+        audio.removeEventListener('loadedmetadata', pendingResumeRef.current);
+        pendingResumeRef.current = null;
+      }
       audio.src = article.audioUrl;
+      // currentTime can only be set once the source knows its length, so the
+      // resume waits for metadata.
+      const resumeAt = loadProgress(article.id);
+      if (resumeAt > 0) {
+        const resume = () => {
+          pendingResumeRef.current = null;
+          try {
+            audio.currentTime = resumeAt;
+          } catch {
+            /* source refused the seek — play from the start */
+          }
+        };
+        pendingResumeRef.current = resume;
+        audio.addEventListener('loadedmetadata', resume, { once: true });
+      }
       setIsBuffering(true);
       audio.play().catch(console.error);
       setCurrentEpisode(article);
@@ -250,6 +312,9 @@ export default function App() {
   const handleClosePlayer = () => {
     const audio = audioRef.current;
     if (audio) {
+      // Save first: the `pause` event is queued, and by the time it runs both
+      // the src and the episode are gone.
+      persistProgress();
       audio.pause();
       audio.src = '';
     }

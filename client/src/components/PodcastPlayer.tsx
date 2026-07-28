@@ -2,6 +2,7 @@ import { Play, Pause, X, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useMediaSession } from '../hooks/useMediaSession';
 import { decodeEntities } from '../lib/decodeEntities';
 import type { Article } from '../types';
 
@@ -49,24 +50,6 @@ export default function PodcastPlayer({
     if (audioRef.current) audioRef.current.playbackRate = 1;
   }, [episode?.id]); // eslint-disable-line
 
-  const skip = (sec: number) => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.currentTime = Math.max(0, Math.min(a.currentTime + sec, a.duration || 0));
-  };
-
-  const cycleSpeed = () => {
-    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
-    setSpeed(next);
-    if (audioRef.current) audioRef.current.playbackRate = next;
-  };
-
-  const fmt = (s: number) => {
-    if (!s || isNaN(s) || !isFinite(s)) return '0:00';
-    const m = Math.floor(s / 60);
-    return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  };
-
   // Parse the feed-provided clock duration ("33:56" / "1:29:55") to seconds.
   const parseClock = (s: string | undefined): number => {
     if (!s) return 0;
@@ -79,6 +62,49 @@ export default function PodcastPlayer({
   // or Infinity), which would strand the seek bar at full and show 0:00. Fall
   // back to the feed's own duration so the player matches the reader.
   const effectiveDuration = duration || parseClock(episode.audioDuration);
+
+  // Single seek path for the in-app buttons, the seek bar and the lock-screen
+  // controls. Clamping against `effectiveDuration` matters for streams whose
+  // element duration is 0: clamping to that would send every forward skip back
+  // to the start.
+  const seekTo = (t: number) => {
+    const a = audioRef.current;
+    if (!a) return;
+    const max = effectiveDuration || t;
+    const next = Math.max(0, Math.min(t, max));
+    a.currentTime = next;
+    setCurrentTime(next);
+  };
+
+  const skip = (sec: number) => seekTo((audioRef.current?.currentTime ?? 0) + sec);
+
+  useMediaSession({
+    title: decodeEntities(episode.title),
+    artist: episode.feedName || '',
+    isPlaying,
+    position: currentTime,
+    duration: effectiveDuration,
+    playbackRate: speed,
+    // Not onTogglePlay: the OS names the action it wants, and a duplicate
+    // "play" while already playing must not pause.
+    onPlay: () => audioRef.current?.play().catch(console.error),
+    onPause: () => audioRef.current?.pause(),
+    onSeek: seekTo,
+    onSkip: skip,
+    onStop: onClose,
+  });
+
+  const cycleSpeed = () => {
+    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
+    setSpeed(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  };
+
+  const fmt = (s: number) => {
+    if (!s || isNaN(s) || !isFinite(s)) return '0:00';
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  };
 
   const btnStyle: React.CSSProperties = {
     background: 'none',
@@ -184,11 +210,7 @@ export default function PodcastPlayer({
             max={effectiveDuration || 100}
             value={currentTime}
             step={1}
-            onChange={(e) => {
-              const t = parseFloat(e.target.value);
-              if (audioRef.current) audioRef.current.currentTime = t;
-              setCurrentTime(t);
-            }}
+            onChange={(e) => seekTo(parseFloat(e.target.value))}
             style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
           />
           <button
@@ -309,14 +331,10 @@ export default function PodcastPlayer({
       <input
         type="range"
         min={0}
-        max={duration || 100}
+        max={effectiveDuration || 100}
         value={currentTime}
         step={1}
-        onChange={(e) => {
-          const t = parseFloat(e.target.value);
-          if (audioRef.current) audioRef.current.currentTime = t;
-          setCurrentTime(t);
-        }}
+        onChange={(e) => seekTo(parseFloat(e.target.value))}
         style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
       />
 
