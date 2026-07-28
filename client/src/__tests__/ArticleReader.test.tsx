@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
@@ -370,7 +370,70 @@ describe('htmlToPlainText', () => {
   });
 });
 
-describe('copy button', () => {
+// The low-frequency actions live behind the ⋯ menu, so every one of them is two
+// clicks: open the menu, then pick the item.
+function openMenu() {
+  fireEvent.click(screen.getByLabelText('更多操作'));
+}
+
+function clickItem(label: string) {
+  fireEvent.click(screen.getByText(label));
+}
+
+describe('overflow menu', () => {
+  it('keeps only 收藏 / ⋯ / 全文 / 原文 in the row', () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    renderReader(BASE_ARTICLE);
+    // The three folded actions have no row-level control of their own
+    expect(screen.queryByTitle('无图模式')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('专注阅读')).not.toBeInTheDocument();
+    expect(screen.queryByText('复制全文')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('更多操作')).toBeInTheDocument();
+  });
+
+  it('opens and closes on the trigger', () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    renderReader(BASE_ARTICLE);
+    openMenu();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    openMenu();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('closes on an outside pointerdown', () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    renderReader(BASE_ARTICLE);
+    openMenu();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('closes on Escape without letting it reach the app handler', () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    const appEsc = vi.fn();
+    document.addEventListener('keydown', appEsc);
+    renderReader(BASE_ARTICLE);
+    openMenu();
+    // Dispatched on body, as a real keystroke is: the menu's document-level capture
+    // listener then runs before the app's document-level bubble listener.
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    document.removeEventListener('keydown', appEsc);
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(appEsc).not.toHaveBeenCalled();
+  });
+
+  it('omits 专注阅读 when the host provides no toggle (mobile)', () => {
+    mockFetch.mockResolvedValue({ json: () => Promise.resolve({ content: '' }) });
+    renderReader(BASE_ARTICLE, { isMobile: true });
+    openMenu();
+    expect(screen.getByText('复制全文')).toBeInTheDocument();
+    expect(screen.getByText('无图模式')).toBeInTheDocument();
+    expect(screen.queryByText('专注阅读')).not.toBeInTheDocument();
+  });
+});
+
+describe('copy action', () => {
   let writeText: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -384,12 +447,21 @@ describe('copy button', () => {
       content: '<p>First para</p><p>Second <b>para</b></p>',
     };
     renderReader(article);
-    screen.getByLabelText('复制全文').click();
+    openMenu();
+    clickItem('复制全文');
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     expect(writeText).toHaveBeenCalledWith(
       'Test Article Title\n\nFirst para\n\nSecond para\n\n原文：https://example.com/article',
     );
+  });
+
+  it('reports the result in place, keeping the menu open', async () => {
+    renderReader({ ...BASE_ARTICLE, content: '<p>Body</p>' });
+    openMenu();
+    clickItem('复制全文');
+    await waitFor(() => expect(screen.getByText('已复制')).toBeInTheDocument());
+    expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 
   it('copies the extracted 全文 once it replaced the RSS body', async () => {
@@ -399,10 +471,11 @@ describe('copy button', () => {
       json: () => Promise.resolve({ content: '<p>Extracted body</p>' }),
     });
     renderReader(article);
-    screen.getByTitle('从原始网页提取全文').click();
+    fireEvent.click(screen.getByTitle('从原始网页提取全文'));
     await waitFor(() => expect(screen.getByText('Extracted body')).toBeInTheDocument());
 
-    screen.getByLabelText('复制全文').click();
+    openMenu();
+    clickItem('复制全文');
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     expect(writeText.mock.calls[0][0]).toContain('Extracted body');
     expect(writeText.mock.calls[0][0]).not.toContain('RSS body');
@@ -411,7 +484,8 @@ describe('copy button', () => {
   it('is disabled while the body is still loading', () => {
     mockFetch.mockReturnValue(new Promise(() => {}));
     renderReader(BASE_ARTICLE);
-    expect(screen.getByLabelText('复制全文')).toBeDisabled();
+    openMenu();
+    expect(screen.getByText('复制全文').closest('button')).toBeDisabled();
   });
 });
 
@@ -430,8 +504,9 @@ describe('text-only toggle', () => {
     // Default: image present
     expect(container.querySelector('.rss-article img')).not.toBeNull();
 
-    // Enable 无图模式 via the toolbar toggle
-    screen.getByTitle('无图模式').click();
+    // Enable 无图模式 from the ⋯ menu
+    openMenu();
+    clickItem('无图模式');
     await waitFor(() => expect(container.querySelector('.rss-article img')).toBeNull());
     expect(screen.getByText('Body text')).toBeInTheDocument();
   });
@@ -445,7 +520,11 @@ describe('text-only toggle', () => {
     const { container } = renderReader(article);
     await waitFor(() => expect(screen.getByText('Body text')).toBeInTheDocument());
     expect(container.querySelector('.rss-article img')).toBeNull();
-    // Toggle reflects the active state — button offers to show images again
-    expect(screen.getByTitle('显示图片')).toBeInTheDocument();
+    // The menu item reflects the active state with a ✓
+    openMenu();
+    expect(screen.getByText('无图模式').closest('button')?.textContent).toContain('无图模式');
+    expect(
+      screen.getByText('无图模式').closest('button')?.querySelector('.lucide-check'),
+    ).not.toBeNull();
   });
 });

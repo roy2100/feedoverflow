@@ -11,6 +11,7 @@ import {
   ImageOff,
   Check,
   Copy,
+  MoreHorizontal,
   Loader2,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -79,6 +80,149 @@ function splitAuthors(author: string): string[] {
 // via the title tooltip.
 function formatAuthor(author: string): string {
   return splitAuthors(author).join(' · ');
+}
+
+interface ActionItem {
+  key: string;
+  icon: React.ReactNode;
+  label: string;
+  onSelect: () => void;
+  /** Renders a ✓ on the right — for the toggles, whose state is otherwise invisible. */
+  active?: boolean;
+  disabled?: boolean;
+  /** Keep the menu open this long after the click, so an item can show its own result. */
+  holdOpenMs?: number;
+}
+
+// Overflow menu for the reader's low-frequency actions. Copy/无图/专注 are all rare
+// (无图 is a preference you set once), and each cost a permanent icon slot in a row
+// that has to share its width with the byline. Folded into one ⋯ they also get real
+// labels instead of hover-only tooltips.
+function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    // Capture phase + stopPropagation so Esc closes the menu without also reaching
+    // App's document-level handler, which would exit 专注阅读 in the same keystroke.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open]);
+
+  const select = (item: ActionItem) => {
+    item.onSelect();
+    clearTimeout(closeTimer.current);
+    if (item.holdOpenMs) {
+      closeTimer.current = setTimeout(() => setOpen(false), item.holdOpenMs);
+    } else {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', display: 'flex' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="更多操作"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="更多操作"
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: open ? 'var(--accent)' : 'var(--text-tertiary)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: iconSize > 15 ? 6 : 4,
+          borderRadius: 5,
+          transition: 'color 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          if (!open) e.currentTarget.style.color = 'var(--accent)';
+        }}
+        onMouseLeave={(e) => {
+          if (!open) e.currentTarget.style.color = 'var(--text-tertiary)';
+        }}
+      >
+        <MoreHorizontal size={iconSize} strokeWidth={1.5} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            minWidth: 152,
+            padding: 4,
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border-light)',
+            borderRadius: 8,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
+            zIndex: 30,
+            animation: 'fadeIn 0.12s ease',
+          }}
+        >
+          {items.map((item) => (
+            <button
+              key={item.key}
+              role="menuitem"
+              disabled={item.disabled}
+              onClick={() => select(item)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '7px 9px',
+                fontSize: 12.5,
+                textAlign: 'left',
+                whiteSpace: 'nowrap',
+                background: 'none',
+                border: 'none',
+                borderRadius: 5,
+                color: 'var(--text-secondary)',
+                opacity: item.disabled ? 0.4 : 1,
+                cursor: item.disabled ? 'default' : 'pointer',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={(e) => {
+                if (!item.disabled) e.currentTarget.style.background = 'var(--bg-hover)';
+              }}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              {item.icon}
+              {item.label}
+              {item.active && (
+                <Check
+                  size={12}
+                  strokeWidth={2}
+                  style={{ marginLeft: 'auto', color: 'var(--accent)' }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface ArticleReaderProps {
@@ -241,6 +385,49 @@ export default function ArticleReader({
   const rawContent = fullHtml || rssContent || article.summary || '';
   const hasHtml = /<[a-z][\s\S]*>/i.test(rawContent);
 
+  const menuIcon = 14;
+  const menuItems: ActionItem[] = [
+    {
+      key: 'copy',
+      icon:
+        copyState === 'done' ? (
+          <Check size={menuIcon} strokeWidth={1.5} style={{ color: 'var(--accent)' }} />
+        ) : (
+          <Copy size={menuIcon} strokeWidth={1.5} />
+        ),
+      label: copyState === 'done' ? '已复制' : copyState === 'fail' ? '复制失败' : '复制全文',
+      onSelect: handleCopy,
+      disabled: isLoadingContent,
+      // Stay open long enough for the label to report the result — closing on click
+      // would take the only feedback the action has with it.
+      holdOpenMs: 1000,
+    },
+    {
+      key: 'text-only',
+      icon: textOnly ? (
+        <ImageOff size={menuIcon} strokeWidth={1.5} />
+      ) : (
+        <Image size={menuIcon} strokeWidth={1.5} />
+      ),
+      label: '无图模式',
+      active: textOnly,
+      onSelect: () => setTextOnly((v) => !v),
+    },
+  ];
+  if (onToggleReadingMode) {
+    menuItems.push({
+      key: 'reading-mode',
+      icon: readingMode ? (
+        <Minimize2 size={menuIcon} strokeWidth={1.5} />
+      ) : (
+        <Maximize2 size={menuIcon} strokeWidth={1.5} />
+      ),
+      label: '专注阅读',
+      active: readingMode,
+      onSelect: onToggleReadingMode,
+    });
+  }
+
   return (
     <div
       ref={scrollRef}
@@ -311,48 +498,7 @@ export default function ArticleReader({
           >
             <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
           </button>
-          <button
-            onClick={() => setTextOnly((v) => !v)}
-            aria-label={textOnly ? '显示图片' : '无图模式'}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: textOnly ? 'var(--accent)' : 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              padding: 6,
-              borderRadius: 5,
-            }}
-          >
-            {textOnly ? (
-              <ImageOff size={18} strokeWidth={1.5} />
-            ) : (
-              <Image size={18} strokeWidth={1.5} />
-            )}
-          </button>
-          <button
-            onClick={handleCopy}
-            disabled={isLoadingContent}
-            aria-label="复制全文"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: copyStateColor(copyState),
-              opacity: isLoadingContent ? 0.4 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              padding: 6,
-              borderRadius: 5,
-            }}
-          >
-            {copyState === 'done' ? (
-              <Check size={18} strokeWidth={1.5} />
-            ) : (
-              <Copy size={18} strokeWidth={1.5} />
-            )}
-          </button>
+          <ActionMenu items={menuItems} iconSize={18} />
           {article.link && (
             <a
               href={article.link}
@@ -522,99 +668,7 @@ export default function ArticleReader({
               >
                 <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
               </button>
-              <button
-                onClick={() => setTextOnly((v) => !v)}
-                title={textOnly ? '显示图片' : '无图模式'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: textOnly ? 'var(--accent)' : 'var(--text-tertiary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: 4,
-                  borderRadius: 5,
-                  transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!textOnly) e.currentTarget.style.color = 'var(--accent)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!textOnly) e.currentTarget.style.color = 'var(--text-tertiary)';
-                }}
-              >
-                {textOnly ? (
-                  <ImageOff size={15} strokeWidth={1.5} />
-                ) : (
-                  <Image size={15} strokeWidth={1.5} />
-                )}
-              </button>
-              {onToggleReadingMode && (
-                <button
-                  onClick={onToggleReadingMode}
-                  title={readingMode ? '退出专注阅读 (Esc)' : '专注阅读'}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: readingMode ? 'var(--accent)' : 'var(--text-tertiary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: 4,
-                    borderRadius: 5,
-                    transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!readingMode) e.currentTarget.style.color = 'var(--accent)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!readingMode) e.currentTarget.style.color = 'var(--text-tertiary)';
-                  }}
-                >
-                  {readingMode ? (
-                    <Minimize2 size={15} strokeWidth={1.5} />
-                  ) : (
-                    <Maximize2 size={15} strokeWidth={1.5} />
-                  )}
-                </button>
-              )}
-              <button
-                onClick={handleCopy}
-                disabled={isLoadingContent}
-                title={
-                  copyState === 'done'
-                    ? '已复制'
-                    : copyState === 'fail'
-                      ? '复制失败'
-                      : '复制全文（纯文本）'
-                }
-                aria-label="复制全文"
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: isLoadingContent ? 'default' : 'pointer',
-                  color: copyStateColor(copyState),
-                  opacity: isLoadingContent ? 0.4 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: 4,
-                  borderRadius: 5,
-                  transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  if (copyState === 'idle' && !isLoadingContent)
-                    e.currentTarget.style.color = 'var(--accent)';
-                }}
-                onMouseLeave={(e) => {
-                  if (copyState === 'idle') e.currentTarget.style.color = 'var(--text-tertiary)';
-                }}
-              >
-                {copyState === 'done' ? (
-                  <Check size={15} strokeWidth={1.5} />
-                ) : (
-                  <Copy size={15} strokeWidth={1.5} />
-                )}
-              </button>
+              <ActionMenu items={menuItems} iconSize={15} />
               {article.link && !fullContent && (
                 <button
                   onClick={handleFetchFull}
@@ -920,12 +974,6 @@ export function stripMedia(html: string): string {
     if (!removed) break;
   }
   return doc.body.innerHTML;
-}
-
-function copyStateColor(state: 'idle' | 'done' | 'fail'): string {
-  if (state === 'done') return 'var(--accent)';
-  if (state === 'fail') return '#c0392b';
-  return 'var(--text-tertiary)';
 }
 
 // Block-level tags that must end up on their own line in the copied plain text.
