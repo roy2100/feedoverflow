@@ -110,6 +110,15 @@ language, drop stale/redundant chrome.
   gone) + size cap (`DB_MAX_SIZE_MB`, default 2GB — trims oldest non-starred articles to 90%, then
   `VACUUM`s). Starred articles are never deleted.
 - Article IDs: `md5(link || title+pubDate)` truncated to 12 chars.
+- Podcast playback position lives in `article_states.play_position` (whole seconds), not in the
+  browser — a resume survives a data wipe and follows the listener across devices. Every write is
+  an `UPDATE`: a progress ping carries only an id and a number, so inserting on a miss would mint
+  a title-less article row that shows up in every list. Non-NULL means "worth resuming" — the
+  *client* decides an episode is finished (only the audio element knows its real duration) and
+  sends `DELETE`, so the server needs no duration column. `GET` is capped at the 200 most recent
+  (`play_updated_at`): the client hydrates an in-memory map from it once at startup, because the
+  resume seek must stay synchronous with the play gesture. Rationale:
+  `docs/plan-podcast-progress-sqlite.md`.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).
 - Push has two independent axes, deliberately not merged: `feeds.push_enabled` says *this source
   is worth a notification* (global — one row, every device shares it), while `push_subscriptions`
@@ -135,7 +144,7 @@ language, drop stale/redundant chrome.
 
 **SQLite tables:**
 - `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts)`
-- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at)` — durable record of every fetched article
+- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at)` — durable record of every fetched article
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `sessions(token, created_at)` — 30-day TTL
 - `favicon_cache(domain, image, content_type, fetched_at)` — 30-day positive / 1-day negative TTL
@@ -163,6 +172,9 @@ language, drop stale/redundant chrome.
 | GET | `/api/fetch-content?url=` | Readability extraction |
 | GET | `/api/favicon?domain=` | cached feed favicon (BLOB) |
 | GET\|POST | `/api/current-article` | in-memory "currently open" article (for MCP) |
+| GET | `/api/podcast-progress` | recent playback positions, id → seconds (200 newest) |
+| POST | `/api/podcast-progress` | upsert one episode's position |
+| DELETE | `/api/podcast-progress/:id` | forget one episode's position |
 | GET\|PATCH | `/api/settings` | read/update settings |
 | POST | `/api/login` `/api/logout` | session auth |
 | GET | `/api/auth-check` | whether the request is authed |

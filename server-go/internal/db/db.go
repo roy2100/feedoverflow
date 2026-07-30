@@ -152,6 +152,13 @@ func InitSchema(db *sql.DB) error {
 	// the poller seeds it to now rather than replaying the backlog.
 	execIgnore(db, `ALTER TABLE feeds ADD COLUMN push_enabled INTEGER DEFAULT 0`)
 	execIgnore(db, `ALTER TABLE feeds ADD COLUMN last_notified_ts INTEGER`)
+	// Podcast playback position (whole seconds) and when it was last written (epoch
+	// ms). Both NULL means "never played, or played to the end" — the row is cleared
+	// once an episode finishes, so a non-NULL play_position is always worth resuming.
+	// Lives on the article row rather than in its own table because a position is
+	// per-article state like is_starred, and is meaningless once the article is gone.
+	execIgnore(db, `ALTER TABLE article_states ADD COLUMN play_position INTEGER`)
+	execIgnore(db, `ALTER TABLE article_states ADD COLUMN play_updated_at INTEGER`)
 
 	if _, err := db.Exec(
 		`CREATE INDEX IF NOT EXISTS idx_article_states_feed_pub ON article_states (feed_id, pub_ts)`,

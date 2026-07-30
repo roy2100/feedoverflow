@@ -6,7 +6,12 @@ import ArticleReader from './components/ArticleReader';
 import FeedSidebar from './components/FeedSidebar';
 import LoginForm from './components/LoginForm';
 import { useIsMobile } from './hooks/useIsMobile';
-import { clearProgress, loadProgress, saveProgress } from './lib/playbackProgress';
+import {
+  clearProgress,
+  hydrate as hydrateProgress,
+  loadProgress,
+  saveProgress,
+} from './lib/playbackProgress';
 import FeedsPage from './pages/FeedsPage';
 import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
@@ -142,19 +147,23 @@ export default function App() {
   }, [selectedArticle?.id]);
 
   useEffect(() => {
+    // hydrateProgress fills the in-memory playback-position map from SQLite. It has
+    // to happen up front because the resume seek in handlePlay is synchronous —
+    // see lib/playbackProgress.ts.
+    const start = () => {
+      init();
+      loadArticles({ type: 'today' });
+      void hydrateProgress();
+    };
     fetch('/api/auth-check')
       .then((r) => r.json())
       .then((data) => {
         setAuthed(data.authed);
-        if (data.authed) {
-          init();
-          loadArticles({ type: 'today' });
-        }
+        if (data.authed) start();
       })
       .catch(() => {
         setAuthed(true);
-        init();
-        loadArticles({ type: 'today' });
+        start();
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
