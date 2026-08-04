@@ -140,6 +140,14 @@ language, drop stale/redundant chrome.
   executed as a full-table scan. Deliberately *not*
   wired to push — a collection is a lens, not a source, and the feeds under it already notify.
   Rationale: `docs/plan-collections.md`.
+- **List queries never name the `content` column.** An article body is far larger than a
+  SQLite page, so it lives in overflow pages the engine walks only when the column is
+  referenced — and every list caller passes `withContent=false`, i.e. it was read and thrown
+  away. `store.articleColsNoContent` substitutes a literal in the same scan position, so
+  `scanArticleRows` is unchanged and only the bytes differ. Two reads keep the real column:
+  `Starred` and `ArticleByID` (the push deep link). Symptom this fixed: a ~40 kB list
+  response stalling ~450 ms on the first request after a restart, invisible once the OS page
+  cache was warm.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).
 - Push has two independent axes, deliberately not merged: `feeds.push_enabled` says *this source
   is worth a notification* (global — one row, every device shares it), while `push_subscriptions`

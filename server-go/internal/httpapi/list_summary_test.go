@@ -97,3 +97,37 @@ func TestFeedArticlesSummaryParam(t *testing.T) {
 		t.Errorf("summary=1: want content still stripped, got %q", content)
 	}
 }
+
+// The mirror of the stripping above: the two reads that *do* carry content must
+// keep carrying it. List queries deliberately never name the `content` column —
+// an article body lives in SQLite overflow pages, so selecting it costs page reads
+// even when the value is thrown away — and this pins the two exceptions, so
+// switching them to the light column set fails here instead of silently emptying
+// the reader pane and the push deep link.
+func TestContentCarryingReads(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	seedSummaryRow(t, s, "k1", "f1")
+	if _, err := s.DB.Writer().Exec(
+		`UPDATE article_states SET is_starred = 1, starred_at = 1 WHERE article_id = 'k1'`,
+	); err != nil {
+		t.Fatalf("star: %v", err)
+	}
+
+	if _, content := listFields(t, do(h, "GET", "/api/starred", "", nil).Body.String()); content != "the content" {
+		t.Errorf("/api/starred: want content, got %q", content)
+	}
+
+	rec := do(h, "GET", "/api/articles/k1", "", nil)
+	var one struct {
+		Article struct {
+			Content string `json:"content"`
+		} `json:"article"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &one); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if one.Article.Content != "the content" {
+		t.Errorf("/api/articles/:id: want content, got %q", one.Article.Content)
+	}
+}

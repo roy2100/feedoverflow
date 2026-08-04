@@ -16,6 +16,21 @@ import (
 const articleCols = `article_id, feed_id, feed_name, title, link, pub_date,
 	summary, content, author, audio_url, audio_duration, is_starred, content_updated_at`
 
+// Same columns in the same scan order, but with `content` replaced by a literal —
+// so scanArticleRows is shared and only the bytes change.
+//
+// Every list query uses this: the browser's list panes render neither the article
+// body nor (by default) the summary, and RowToArticle is called with
+// withContent=false, so the column was read and then thrown away. That read is not
+// free. An article body is far larger than SQLite's page size, so it lives in
+// overflow pages that the engine only walks when the column is actually
+// referenced — naming it in the SELECT turned a ~40 kB response into tens of MB of
+// page reads, invisible while the OS cache was warm and a ~450 ms stall on the
+// first request after a restart. Content stays behind /api/articles/:id/content
+// and the two reads that genuinely need it (Starred, ArticleByID).
+const articleColsNoContent = `article_id, feed_id, feed_name, title, link, pub_date,
+	summary, '' AS content, author, audio_url, audio_duration, is_starred, content_updated_at`
+
 func scanArticleRows(rows *sql.Rows) ([]articles.Row, error) {
 	defer rows.Close()
 	var out []articles.Row
@@ -78,7 +93,7 @@ func FeedIDs(db *sql.DB) ([]string, error) {
 // NewestGlobal — latest mode: global newest N by pub_ts.
 func NewestGlobal(db *sql.DB, limit int) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT `+articleCols+` FROM article_states ORDER BY pub_ts DESC LIMIT ?`, limit)
+		`SELECT `+articleColsNoContent+` FROM article_states ORDER BY pub_ts DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +103,7 @@ func NewestGlobal(db *sql.DB, limit int) ([]articles.Row, error) {
 // SinceGlobal — today latest mode: global newest N since a pub_ts cutoff.
 func SinceGlobal(db *sql.DB, since int64, limit int) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT `+articleCols+` FROM article_states WHERE pub_ts >= ? ORDER BY pub_ts DESC LIMIT ?`,
+		`SELECT `+articleColsNoContent+` FROM article_states WHERE pub_ts >= ? ORDER BY pub_ts DESC LIMIT ?`,
 		since, limit)
 	if err != nil {
 		return nil, err
@@ -116,7 +131,7 @@ func ArticleByID(db *sql.DB, id string) (articles.Row, bool, error) {
 // NewestByFeed — digest mode: newest quota rows for one feed.
 func NewestByFeed(db *sql.DB, feedID string, limit int) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT `+articleCols+` FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT ?`,
+		`SELECT `+articleColsNoContent+` FROM article_states WHERE feed_id = ? ORDER BY pub_ts DESC LIMIT ?`,
 		feedID, limit)
 	if err != nil {
 		return nil, err
@@ -127,7 +142,7 @@ func NewestByFeed(db *sql.DB, feedID string, limit int) ([]articles.Row, error) 
 // SinceByFeed — today digest mode: newest quota rows for one feed since a cutoff.
 func SinceByFeed(db *sql.DB, feedID string, since int64, limit int) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT `+articleCols+` FROM article_states
+		`SELECT `+articleColsNoContent+` FROM article_states
 		 WHERE feed_id = ? AND pub_ts >= ? ORDER BY pub_ts DESC LIMIT ?`,
 		feedID, since, limit)
 	if err != nil {
@@ -151,7 +166,7 @@ func Starred(db *sql.DB) ([]articles.Row, error) {
 // Podcasts — GET /api/podcasts: audio-bearing rows, newest by pub_ts, cap 200.
 func Podcasts(db *sql.DB) ([]articles.Row, error) {
 	rows, err := db.Query(
-		`SELECT ` + articleCols + ` FROM article_states
+		`SELECT ` + articleColsNoContent + ` FROM article_states
 		 WHERE audio_url IS NOT NULL AND audio_url != ''
 		 ORDER BY pub_ts DESC LIMIT 200`)
 	if err != nil {
@@ -240,7 +255,7 @@ func LikeEscape(s string) string { return likeEscaper.Replace(s) }
 // the caller ever re-sorts. Port of routes/search.ts. `like` is the already-escaped
 // pattern (ESCAPE '\'); scope is "starred" | "feed" | "".
 func Search(r *sql.DB, like, scope, feedID string) ([]articles.Row, error) {
-	q := `SELECT ` + articleCols + ` FROM article_states
+	q := `SELECT ` + articleColsNoContent + ` FROM article_states
 		WHERE (title LIKE ? ESCAPE '\' OR summary LIKE ? ESCAPE '\' OR content LIKE ? ESCAPE '\')`
 	args := []any{like, like, like}
 	switch {

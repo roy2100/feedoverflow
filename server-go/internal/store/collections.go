@@ -242,7 +242,7 @@ func DeleteCollection(w *sql.DB, id string) (int64, error) {
 func RuleArticles(r *sql.DB, rule Rule, limit int) ([]articles.Row, error) {
 	include, exclude := wordBoundary(rule.Include), wordBoundary(rule.Exclude)
 
-	q := `SELECT ` + articleCols + ` FROM article_states WHERE 1 = 1`
+	q := `SELECT ` + articleColsNoContent + ` FROM article_states WHERE 1 = 1`
 	args := []any{}
 	if rule.FeedID != "" {
 		q += ` AND feed_id = ?`
