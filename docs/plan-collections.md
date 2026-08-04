@@ -188,3 +188,32 @@ GLOB has no `ESCAPE` clause, so a keyword containing `*`, `?` or `[` needs a sec
 hand-rolled escaper living beside `LikeEscape` — the exact duplication that escaper was
 consolidated to remove — and CJK keywords would still have to branch back to `LIKE`, leaving
 two matching paths in SQL.
+
+## Perf note: what the list-query column set actually costs
+
+Measured on a synthetic 391 MB DB shaped like the live one (20k rows, 10 kB bodies, the real
+column order), 500-row window, page-cache misses from `.stats on`:
+
+| SELECT | misses | warm |
+|---|---|---|
+| includes `content` | 2516 | ~10 ms |
+| skips `content`, still takes `author` (current) | 2516 | ~3 ms |
+| also skips `summary` | 2516 | ~3 ms |
+| touches nothing stored after `content` | **516** | ~1 ms |
+
+Three conclusions, the first of which corrects the reasoning in commit `c457d95`:
+
+1. **Dropping `content` from the SELECT does not reduce page reads.** `content` is the 8th
+   column and the list rows still need `author`, `audio_url`, `is_starred` and
+   `content_updated_at`, all stored after it, so SQLite walks the overflow chain either way.
+   The 3× it does buy is the cost of materializing megabytes of body text into Go strings —
+   real, but CPU and allocation, not I/O.
+2. **Doing the same for `summary` buys nothing.** A few hundred bytes sharing the record's
+   first page: identical misses, identical time. Not worth the flag plumbing that `?summary=1`
+   would force through six store functions.
+3. **The 5× is in column order, not column count.** A query needing nothing stored after
+   `content` reads one page per row instead of the whole overflow chain. Two ways to get
+   there, neither free: a covering index over the list columns (fat index, write amplification
+   on every persist), or moving bodies into their own table keyed by `article_id` (clean —
+   only `Starred` and `ArticleByID` read them — but a migration over the live 460 MB DB).
+   Unmeasured against the real DB; do that before committing to either.
