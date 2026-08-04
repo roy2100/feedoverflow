@@ -6,6 +6,7 @@ import {
   List,
   Podcast,
   Rss,
+  Layers,
   Settings,
   SlidersHorizontal,
   PanelLeft,
@@ -16,7 +17,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { faviconDomain } from '../faviconDomain';
-import type { Feed, View } from '../types';
+import type { Collection, Feed, View } from '../types';
 
 function FeedIcon({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
@@ -39,12 +40,14 @@ function FeedIcon({ url }: { url: string }) {
 interface FeedSidebarProps {
   isMobile?: boolean;
   feeds: Feed[];
+  collections: Collection[];
   selectedView: View;
   onSelectView: (view: View) => void;
   onRefresh: () => void;
   onToggleSidebar?: (() => void) | null;
   onOpenAddModal: () => void;
   onOpenManageModal?: (() => void) | null;
+  onOpenCollectionsModal?: (() => void) | null;
   onOpenSettings?: (() => void) | null;
   onSearch?: (query: string) => void;
   // Scoped-search toggle (desktop only). `scopeLabel` is non-null only when the base view is
@@ -57,12 +60,14 @@ interface FeedSidebarProps {
 export default function FeedSidebar({
   isMobile,
   feeds,
+  collections,
   selectedView,
   onSelectView,
   onRefresh,
   onToggleSidebar,
   onOpenAddModal,
   onOpenManageModal,
+  onOpenCollectionsModal,
   onOpenSettings,
   onSearch,
   scopedSearch,
@@ -128,6 +133,7 @@ export default function FeedSidebar({
   const scoped = selectedView.type === 'search' ? selectedView.scope : undefined;
   const hlType = scoped ? scoped.kind : selectedView.type;
   const hlFeedId = scoped?.kind === 'feed' ? scoped.feedId : selectedView.feed?.id;
+  const hlCollectionId = scoped ? undefined : selectedView.collection?.id;
 
   return (
     <aside
@@ -319,6 +325,33 @@ export default function FeedSidebar({
           onClick={() => onSelectView({ type: 'podcast' })}
         />
 
+        {/* Collections — saved streams merging several feeds. The section keeps its
+            header even when empty: it is the only entry point to the editor, and a
+            feature with no discoverable way in is a feature nobody uses. */}
+        {onOpenCollectionsModal && (
+          <SectionLabel
+            style={{ marginTop: 8 }}
+            action={
+              <IconBtn onClick={onOpenCollectionsModal} title="管理合集" isMobile={isMobile}>
+                <Plus size={isMobile ? 15 : 12} />
+              </IconBtn>
+            }
+          >
+            合集
+          </SectionLabel>
+        )}
+        {collections.map((collection) => (
+          <NavItem
+            key={collection.id}
+            isMobile={isMobile}
+            label={collection.name}
+            icon={<Layers size={isMobile ? 16 : 13} strokeWidth={2} />}
+            iconColor="#3B9E6E"
+            selected={hlType === 'collection' && hlCollectionId === collection.id}
+            onClick={() => onSelectView({ type: 'collection', collection })}
+          />
+        ))}
+
         {/* Feed list */}
         {feeds.length > 0 && <SectionLabel style={{ marginTop: 8 }}>订阅源</SectionLabel>}
         {feeds.map((feed) => {
@@ -402,9 +435,11 @@ function IconBtn({ onClick, title, isMobile, children }: IconBtnProps) {
 interface SectionLabelProps {
   children: React.ReactNode;
   style?: React.CSSProperties;
+  /** Optional control pinned to the right of the label (e.g. "add"). */
+  action?: React.ReactNode;
 }
 
-function SectionLabel({ children, style }: SectionLabelProps) {
+function SectionLabel({ children, style, action }: SectionLabelProps) {
   return (
     <div
       style={{
@@ -414,10 +449,14 @@ function SectionLabel({ children, style }: SectionLabelProps) {
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
         color: 'var(--text-tertiary)',
+        display: action ? 'flex' : undefined,
+        alignItems: action ? 'center' : undefined,
+        justifyContent: action ? 'space-between' : undefined,
         ...style,
       }}
     >
-      {children}
+      <span>{children}</span>
+      {action}
     </div>
   );
 }

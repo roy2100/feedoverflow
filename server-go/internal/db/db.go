@@ -127,6 +127,19 @@ func InitSchema(db *sql.DB) error {
     public_key  TEXT NOT NULL,
     private_key TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS collections (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    position   INTEGER,
+    created_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS collection_rules (
+    id            INTEGER PRIMARY KEY,
+    collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    feed_id       TEXT,
+    include       TEXT,
+    exclude       TEXT
+  );
 `); err != nil {
 		return fmt.Errorf("base schema: %w", err)
 	}
@@ -207,6 +220,13 @@ func InitSchema(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_article_states_podcast_ts ON article_states (pub_ts DESC) WHERE audio_url IS NOT NULL AND audio_url != ''`,
 	); err != nil {
 		return fmt.Errorf("idx podcast: %w", err)
+	}
+
+	// Rules are always read by collection, never globally.
+	if _, err := db.Exec(
+		`CREATE INDEX IF NOT EXISTS idx_collection_rules_collection ON collection_rules (collection_id)`,
+	); err != nil {
+		return fmt.Errorf("idx collection_rules: %w", err)
 	}
 
 	// pub_ts backfill: db.ts recomputes pub_ts for pre-existing NULL rows via

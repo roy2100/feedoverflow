@@ -29,11 +29,6 @@ type searchArticle struct {
 	IsStarred     bool   `json:"isStarred"`
 }
 
-// likeEscaper escapes the LIKE metacharacters, matching q.replace(/[\\%_]/g,'\\$&').
-// Backslash is escaped first; NewReplacer's single non-overlapping pass makes the
-// order among the three safe.
-var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-
 // getSearch is the port of GET /api/search.
 func (s *Server) getSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -44,7 +39,7 @@ func (s *Server) getSearch(w http.ResponseWriter, r *http.Request) {
 	scope := r.URL.Query().Get("scope")
 	feedID := r.URL.Query().Get("feedId")
 
-	like := "%" + likeEscaper.Replace(q) + "%"
+	like := "%" + store.LikeEscape(q) + "%"
 	rows, err := store.Search(s.DB.Reader(), like, scope, feedID)
 	if err != nil {
 		serverError(w, err)

@@ -222,6 +222,16 @@ func ResolveURL(db *sql.DB, url string) (string, error) {
 	return strings.TrimSuffix(base, "/") + "/" + url[len(scheme):], nil
 }
 
+// likeEscaper escapes the LIKE metacharacters, matching q.replace(/[\\%_]/g,'\\$&').
+// Backslash is escaped first; NewReplacer's single non-overlapping pass makes the
+// order among the three safe.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// LikeEscape escapes a user-typed term for use inside a LIKE pattern (paired with
+// ESCAPE '\'). Both search and collection rules feed raw input into LIKE, so the
+// escaping lives here rather than being written twice.
+func LikeEscape(s string) string { return likeEscaper.Replace(s) }
+
 // Search — GET /api/search: LIKE across title/summary/content, optionally scoped
 // to starred or one feed, newest by pub_ts first, cap 200 (the caller re-sorts by
 // parsed date and slices to 100). Ordering must key on the numeric pub_ts, not the
