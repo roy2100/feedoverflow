@@ -17,6 +17,7 @@ import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
 import { useStore } from './store';
 import type { AudioCtxValue, Article, MobilePage } from './types';
+import { viewTitle } from './viewTitle';
 
 // Panel nesting depth (订阅源 → 列表 → 文章) — what the slide animation reads.
 // Deliberately *not* mirrored into browser history: iOS's edge-swipe is a native,
@@ -349,21 +350,6 @@ export default function App() {
     onClosePlayer: handleClosePlayer,
   };
 
-  const viewTitle =
-    selectedView.type === 'all'
-      ? '全部'
-      : selectedView.type === 'today'
-        ? '今日'
-        : selectedView.type === 'starred'
-          ? '收藏'
-          : selectedView.type === 'podcast'
-            ? '播客'
-            : selectedView.type === 'search'
-              ? `搜索：${selectedView.query ?? ''}`
-              : selectedView.type === 'collection'
-                ? selectedView.collection?.name
-                : selectedView.feed?.name;
-
   const addModal = showAddModal && (
     <Suspense fallback={null}>
       <AddFeedModal onClose={() => setShowAddModal(false)} onAdd={addFeed} onImport={importFeeds} />
@@ -533,7 +519,7 @@ export default function App() {
             selectedArticle={selectedArticle}
             onSelectArticle={selectArticle}
             loading={loadingArticles}
-            viewTitle={viewTitle}
+            viewTitle={viewTitle(selectedView)}
             onRefresh={() => loadArticles(selectedView)}
             onPlay={handlePlay}
             currentEpisode={currentEpisode}
