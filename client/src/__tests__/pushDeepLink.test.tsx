@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import App from '../App';
@@ -236,7 +236,13 @@ describe('push deep link — back out of the reader', () => {
 
     render(<App />);
     await screen.findByText('推送文章');
-    expect(readerPanel().style.transform).toBe('translateX(0)');
+    // Wait for the panel rather than asserting on the render that first shows the
+    // title: `open()` sets the article in the zustand store and the panel with
+    // React state, and a store write forces a sync-lane render that leaves the
+    // still-pending default-lane `navigateMobile` for a later flush. So there is
+    // one render carrying the title with the panel not yet moved, and on a slow
+    // machine (CI) the assertion can land in it.
+    await waitFor(() => expect(readerPanel().style.transform).toBe('translateX(0)'));
 
     fireEvent.click(screen.getByText('文章列表'));
 

@@ -30,6 +30,7 @@ const PANEL_DEPTH: Record<MobilePage, number> = { feeds: 0, list: 1, article: 2 
 
 const AddFeedModal = lazy(() => import('./components/AddFeedModal'));
 const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
+const ManageCollectionsModal = lazy(() => import('./components/ManageCollectionsModal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const PodcastPlayer = lazy(() => import('./components/PodcastPlayer'));
 
@@ -39,6 +40,7 @@ export default function App() {
   const [mobilePage, navigateMobile] = useState<MobilePage>('feeds');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [showCollectionsModal, setShowCollectionsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [readingMode, setReadingMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -61,6 +63,7 @@ export default function App() {
 
   const {
     feeds,
+    collections,
     articles,
     selectedView,
     selectedArticle,
@@ -75,6 +78,9 @@ export default function App() {
     importFeeds,
     deleteFeed,
     updateFeed,
+    addCollection,
+    updateCollection,
+    deleteCollection,
     loadArticles,
     lastListView,
     scopedSearch,
@@ -94,7 +100,7 @@ export default function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (isMobile) return;
-      if (showAddModal || showManageModal || showSettingsModal) return;
+      if (showAddModal || showManageModal || showCollectionsModal || showSettingsModal) return;
       const target = e.target as HTMLElement;
       const tag = target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable)
@@ -125,6 +131,7 @@ export default function App() {
     selectedArticle,
     showAddModal,
     showManageModal,
+    showCollectionsModal,
     showSettingsModal,
     isMobile,
     selectArticle,
@@ -353,7 +360,9 @@ export default function App() {
             ? '播客'
             : selectedView.type === 'search'
               ? `搜索：${selectedView.query ?? ''}`
-              : selectedView.feed?.name;
+              : selectedView.type === 'collection'
+                ? selectedView.collection?.name
+                : selectedView.feed?.name;
 
   const addModal = showAddModal && (
     <Suspense fallback={null}>
@@ -370,6 +379,19 @@ export default function App() {
         onClose={() => setShowManageModal(false)}
         onDelete={deleteFeed}
         onUpdate={updateFeed}
+      />
+    </Suspense>
+  );
+
+  const collectionsModal = showCollectionsModal && (
+    <Suspense fallback={null}>
+      <ManageCollectionsModal
+        collections={collections}
+        feeds={feeds}
+        onClose={() => setShowCollectionsModal(false)}
+        onCreate={addCollection}
+        onUpdate={updateCollection}
+        onDelete={deleteCollection}
       />
     </Suspense>
   );
@@ -450,6 +472,7 @@ export default function App() {
               <FeedsPage
                 onOpenAddModal={() => setShowAddModal(true)}
                 onOpenManageModal={() => setShowManageModal(true)}
+                onOpenCollectionsModal={() => setShowCollectionsModal(true)}
                 onNavigate={navigateMobile}
               />,
             )}
@@ -471,6 +494,7 @@ export default function App() {
         </div>
         {addModal}
         {manageModal}
+        {collectionsModal}
       </AudioContext.Provider>
     );
   }
@@ -488,12 +512,14 @@ export default function App() {
         {!readingMode && !sidebarCollapsed && (
           <FeedSidebar
             feeds={feeds}
+            collections={collections}
             selectedView={selectedView}
             onSelectView={selectView}
             onRefresh={() => loadArticles(selectedView)}
             onToggleSidebar={toggleSidebar}
             onOpenAddModal={() => setShowAddModal(true)}
             onOpenManageModal={() => setShowManageModal(true)}
+            onOpenCollectionsModal={() => setShowCollectionsModal(true)}
             onOpenSettings={() => setShowSettingsModal(true)}
             onSearch={search}
             scopedSearch={scopedSearch}
@@ -556,6 +582,7 @@ export default function App() {
         </div>
         {addModal}
         {manageModal}
+        {collectionsModal}
         {showSettingsModal && (
           <Suspense fallback={null}>
             <SettingsModal onClose={() => setShowSettingsModal(false)} />

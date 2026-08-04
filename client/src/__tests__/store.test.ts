@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { useStore } from '../store';
-import type { Article, Feed, View } from '../types';
+import type { Article, Collection, Feed, View } from '../types';
 
 const INITIAL_STATE = {
   feeds: [],
+  collections: [],
   articles: [],
   selectedView: { type: 'today' } as View,
   selectedArticle: null,
@@ -435,5 +436,94 @@ describe('updateFeed', () => {
     const feeds = useStore.getState().feeds;
     expect(feeds[0].name).toBe('Renamed');
     expect(feeds[1].name).toBe('Keep');
+  });
+});
+
+// ─── collections ──────────────────────────────────────────────────────────────
+
+describe('collections', () => {
+  const collection = (id: string, name: string): Collection => ({
+    id,
+    name,
+    rules: [{ feedId: 'f1', include: '', exclude: '' }],
+  });
+
+  it('a collection view requests its own articles endpoint', async () => {
+    await useStore
+      .getState()
+      .loadArticles({ type: 'collection', collection: collection('c1', 'AI') });
+    expect(fetch).toHaveBeenCalledWith('/api/collections/c1/articles', expect.any(Object));
+  });
+
+  it('init loads collections alongside feeds', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchByUrl({
+        '/api/feeds': [],
+        '/api/starred/count': { count: 0 },
+        '/api/collections': [collection('c1', 'AI')],
+      }),
+    );
+    await useStore.getState().init();
+    expect(useStore.getState().collections).toHaveLength(1);
+  });
+
+  // An older server has no /api/collections and answers the SPA fallback, so the
+  // body is not an array. Without the guard the sidebar would try to map over it.
+  it('init tolerates a non-array collections response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchByUrl({ '/api/feeds': [], '/api/starred/count': { count: 0 } }),
+    );
+    await useStore.getState().init();
+    expect(useStore.getState().collections).toEqual([]);
+  });
+
+  it('addCollection appends the created collection', async () => {
+    vi.stubGlobal('fetch', mockFetch(collection('c2', 'New')));
+    useStore.setState({ collections: [collection('c1', 'A')] });
+    await useStore.getState().addCollection({ name: 'New', rules: [] });
+    expect(useStore.getState().collections.map((c) => c.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('addCollection throws the server error message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({ ok: false, json: () => Promise.resolve({ error: '规则无效' }) }),
+      ),
+    );
+    await expect(useStore.getState().addCollection({ name: 'X', rules: [] })).rejects.toThrow(
+      '规则无效',
+    );
+    expect(useStore.getState().collections).toEqual([]);
+  });
+
+  it('editing the open collection reloads its list', async () => {
+    const c = collection('c1', 'A');
+    useStore.setState({ collections: [c], selectedView: { type: 'collection', collection: c } });
+    await useStore
+      .getState()
+      .updateCollection('c1', { rules: [{ feedId: 'f2', include: '', exclude: '' }] });
+    expect(fetch).toHaveBeenCalledWith('/api/collections/c1/articles', expect.any(Object));
+    expect(useStore.getState().collections[0].rules[0].feedId).toBe('f2');
+  });
+
+  it('deleting the open collection falls back to 今日', async () => {
+    const c = collection('c1', 'A');
+    useStore.setState({ collections: [c], selectedView: { type: 'collection', collection: c } });
+    await useStore.getState().deleteCollection('c1');
+    expect(useStore.getState().collections).toEqual([]);
+    expect(useStore.getState().selectedView.type).toBe('today');
+  });
+
+  it('deleting another collection leaves the current view alone', async () => {
+    const open = collection('c1', 'A');
+    useStore.setState({
+      collections: [open, collection('c2', 'B')],
+      selectedView: { type: 'collection', collection: open },
+    });
+    await useStore.getState().deleteCollection('c2');
+    expect(useStore.getState().selectedView.collection?.id).toBe('c1');
   });
 });

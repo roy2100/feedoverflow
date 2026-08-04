@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 
-import type { Article, Feed, ListMode, SearchScope, View } from './types';
+import type {
+  Article,
+  Collection,
+  CollectionRule,
+  Feed,
+  ListMode,
+  SearchScope,
+  View,
+} from './types';
 
 const API = '/api';
 let loadAbortController: AbortController | null = null;
@@ -26,6 +34,7 @@ async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
 
 interface StoreState {
   feeds: Feed[];
+  collections: Collection[];
   articles: Article[];
   selectedView: View;
   selectedArticle: Article | null;
@@ -50,11 +59,18 @@ interface StoreState {
   importFeeds: (newFeeds: Feed[]) => void;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  addCollection: (input: { name: string; rules: CollectionRule[] }) => Promise<void>;
+  updateCollection: (
+    id: string,
+    patch: { name?: string; rules?: CollectionRule[] },
+  ) => Promise<void>;
+  deleteCollection: (id: string) => Promise<void>;
   fetchArticleById: (id: string) => Promise<Article | null>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
   feeds: [],
+  collections: [],
   articles: [],
   selectedView: { type: 'today' },
   selectedArticle: null,
@@ -66,11 +82,16 @@ export const useStore = create<StoreState>((set, get) => ({
 
   init: async () => {
     try {
-      const [feedsData, starred] = await Promise.all([
+      const [feedsData, starred, collections] = await Promise.all([
         apiFetch(`${API}/feeds`).then((r) => r.json()),
         apiFetch(`${API}/starred/count`).then((r) => r.json()),
+        apiFetch(`${API}/collections`).then((r) => r.json()),
       ]);
-      set({ feeds: feedsData, starredCount: starred.count ?? 0 });
+      set({
+        feeds: feedsData,
+        starredCount: starred.count ?? 0,
+        collections: Array.isArray(collections) ? collections : [],
+      });
     } catch (e) {
       console.error(e);
     }
@@ -95,6 +116,8 @@ export const useStore = create<StoreState>((set, get) => ({
         else if (view.scope?.kind === 'feed' && view.scope.feedId) {
           url += `&scope=feed&feedId=${encodeURIComponent(view.scope.feedId)}`;
         }
+      } else if (view.type === 'collection') {
+        url = `${API}/collections/${view.collection?.id}/articles`;
       } else {
         url = urlMap[view.type] ?? `${API}/feeds/${view.feed?.id}/articles`;
         // 全部/今日 honor the latest/digest ordering toggle; other views ignore it.
@@ -222,6 +245,45 @@ export const useStore = create<StoreState>((set, get) => ({
     if (wasViewingDeleted) {
       get().selectView({ type: 'all' });
     }
+  },
+
+  addCollection: async ({ name, rules }) => {
+    const r = await apiFetch(`${API}/collections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, rules }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || '创建失败');
+    set((state) => ({ collections: [...state.collections, data] }));
+  },
+
+  // Same optional-field contract as updateFeed: a rename that omitted `rules`
+  // must not wipe them, so only what the caller passed is sent.
+  updateCollection: async (id, patch) => {
+    const r = await apiFetch(`${API}/collections/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || '保存失败');
+    set((state) => ({
+      collections: state.collections.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    }));
+    // The open list is now stale — its rules changed under it.
+    const view = get().selectedView;
+    if (view.type === 'collection' && view.collection?.id === id) {
+      const next = get().collections.find((c) => c.id === id);
+      if (next) get().selectView({ type: 'collection', collection: next });
+    }
+  },
+
+  deleteCollection: async (id) => {
+    await apiFetch(`${API}/collections/${id}`, { method: 'DELETE' });
+    const wasViewing =
+      get().selectedView.type === 'collection' && get().selectedView.collection?.id === id;
+    set((state) => ({ collections: state.collections.filter((c) => c.id !== id) }));
+    if (wasViewing) get().selectView({ type: 'today' });
   },
 
   // Both fields are optional and only sent when present: the server applies just

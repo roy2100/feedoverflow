@@ -1,0 +1,139 @@
+# Plan: Collections (合集) — saved multi-feed article streams
+
+## Goal
+
+Let the reader define a named stream that merges articles from several feeds, optionally
+narrowed by keyword — e.g. "AI 播客" = (Feed A where title/summary contains "AI") ∪
+(Feed B, everything) ∪ (any feed where title contains "LLM").
+
+## Key premise
+
+`article_states` already holds **every** fetched article from every feed in one flat table.
+A collection is therefore not a fetch pipeline, a cache entry, or a poller target — it is a
+**saved query over one table**. Nothing in `internal/cache`, `internal/jobs`, `internal/feed`
+or the persist chain changes.
+
+Second premise: `/api/all-articles` and `/api/today` never call `EnsureFresh` — they read
+straight from the table and let the poller keep it current. A collection endpoint does the
+same, so freshness needs no new logic either.
+
+## Model
+
+A collection is an **OR of rules**; each rule is `feed AND include AND NOT exclude`.
+
+```sql
+CREATE TABLE collections (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, position INTEGER, created_at INTEGER
+);
+CREATE TABLE collection_rules (
+  id            INTEGER PRIMARY KEY,
+  collection_id TEXT NOT NULL,
+  feed_id       TEXT,   -- NULL = any feed
+  include       TEXT,   -- NULL/'' = no keyword requirement
+  exclude       TEXT    -- NULL/'' = no exclusion
+);
+```
+
+That one shape covers every case asked for:
+
+| Intent | Rules |
+|---|---|
+| Merge feeds A+B+C | 3 rules, `feed_id` only |
+| Category X of A, category Y of B | 2 rules, `feed_id` + `include` |
+| "AI" from everywhere | 1 rule, `feed_id = NULL`, `include = 'AI'` |
+
+Keyword matching is `LIKE` over **title + summary** — deliberately not `content`
+(`/api/search` does include content, but a body-text mention is not a category signal and
+would make rules match far too much).
+
+## Query strategy — no dynamic SQL
+
+Run **one query per rule and merge in Go**, the same fan-out/merge `digest` mode already
+uses in `Server.listArticles` (`FeedIDs` → `NewestByFeed` per feed → `ByPubDateDesc` → cap).
+Each rule query is `NewestByFeed` plus optional `LIKE` predicates. Then dedupe by
+`article_id`, sort `pub_ts DESC`, cap at `articles.ListLimit`.
+
+This is exact, not approximate: the global newest-N of a union is always contained in the
+union of the per-rule newest-N.
+
+## Scope
+
+**In**
+
+1. `internal/db` — two tables (additive, idempotent, in `InitSchema`).
+2. `internal/store/collections.go` — CRUD + `RuleArticles` query.
+3. `internal/httpapi/collections.go` — `GET/POST /api/collections`,
+   `PATCH/DELETE /api/collections/{id}`, `GET /api/collections/{id}/articles`.
+4. Client — `Collection`/`CollectionRule` types, `View.type = 'collection'`, store state +
+   CRUD, sidebar section, a `ManageCollectionsModal` for create/edit/delete.
+5. Go tests for the rule query + handlers; client test for the store's collection load.
+6. `CLAUDE.md` — schema, API table, architecture note.
+
+**Out**
+
+- Push notifications for collections. A collection is a lens, not a source; the underlying
+  feeds already notify, and a second axis would double-notify.
+- MCP tools. Can be added later as thin self-calls, like every other tool.
+- A boolean query DSL. OR-of-(feed AND keyword) is the whole language.
+- `?mode=digest`. The two-mode toggle exists because 全部/今日 span every feed; a collection
+  is already a hand-picked, small set.
+- Collections never own articles: deleting one touches zero `article_states` rows.
+
+## Steps
+
+1. Schema migration in `db.InitSchema` (+ index on `collection_rules.collection_id`).
+2. `store`: `ListCollections`, `CollectionWithRules`, `InsertCollection`, `UpdateCollection`,
+   `ReplaceRules`, `DeleteCollection`, `RuleArticles`.
+3. `httpapi/collections.go` + route registration in `mountAPIRoutes`.
+4. Go tests.
+5. Client types + store.
+6. `FeedSidebar` section + `ManageCollectionsModal` + `App.tsx` wiring (`viewTitle`).
+7. `make check`, `npm test`, `npm run typecheck`, `fmt`/`lint`.
+8. Update `CLAUDE.md`; branch `feat/collections` → PR.
+
+## Risks / open questions
+
+- A rule with no `feed_id` and no `include` selects the entire table — reject at the API
+  (a rule must constrain on at least one axis) rather than silently building a slow "全部".
+- Global keyword rules (`feed_id = NULL`) are an unindexed `LIKE` scan, exactly like
+  `/api/search` today. Acceptable at this DB size; noted, not optimized.
+- Deleting a feed leaves rules pointing at a dead `feed_id`. They simply match nothing.
+  Cleaning them up silently would destroy user intent, so rules are left alone and the
+  editor shows the dangling id as unknown.
+
+## Complexity
+
+**Medium** — many small files, but no new subsystem: one schema addition, one query pattern
+already present in the codebase, and a list view the client renders with existing components.
+
+## Outcome
+
+Implemented as planned, with these specifics worth recording:
+
+- **Rule validation** landed as `store.Rule.Normalized()` + `Valid()`: rules are trimmed,
+  and a rule constraining nothing (no feed, no include) is rejected with 400 rather than
+  becoming a full-table scan. A collection must carry at least one valid rule.
+- **`ReplaceRules` is a transaction** (`DELETE` + re-`INSERT` inside `BEGIN`), so a failed
+  edit can't leave a collection with a truncated rule set. `PATCH` only replaces rules when
+  the request actually sends a `rules` array — a rename-only body leaves them untouched,
+  the same optional-pointer contract `patchFeed` uses for `name`/`push_enabled`.
+- **Dedupe is by `article_id`** in `collectionArticles`: overlapping rules (e.g. a feed rule
+  plus a global keyword rule that both match one article) would otherwise show it twice.
+- **`DELETE` on a collection also deletes its rules** explicitly rather than relying on
+  `ON DELETE CASCADE` — the connection DSN doesn't enable `foreign_keys`, so the declared
+  FK is documentation, not enforcement.
+- **The LIKE escaper moved** from `httpapi/search.go` into `store.LikeEscape`. Rules and
+  search both feed raw user input into `LIKE`, and a second copy of an escaping routine is
+  exactly the kind of thing that drifts out of sync.
+- **Client**: `store.loadArticles` gained one branch for the collection URL;
+  `ArticleList`/`ArticleReader` needed zero changes because the payload is the same
+  `Article[]`. `hideFeedName` stays false for collections — a merged stream is exactly
+  where the source name carries information. The editor re-checks the "rule constrains
+  nothing" rule locally before POSTing, so the failure is explained next to the fields
+  that caused it instead of arriving as a banner after a round trip.
+- Scoped search deliberately does **not** gain a collection scope. `scopeFromView` still
+  returns only starred/feed; scoping search to a collection would mean intersecting a
+  saved query with a text query, which the single-`WHERE` search handler can't express.
+
+Deviations: none of substance. The `position` column is written (create order) but no
+reorder UI ships — the sidebar lists collections in that order and the modal edits in place.

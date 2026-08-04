@@ -67,7 +67,7 @@ client/             Vite + React + TypeScript (port 3000)
   src/App.tsx       top-level layout/auth/audio owner
   src/store.ts      zustand store — feeds/articles/views + all fetch logic
   src/types.ts      shared client types, mirrors server-go/internal/model
-  src/components/   FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, SettingsModal, PodcastPlayer, LoginForm
+  src/components/   FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, ManageCollectionsModal, SettingsModal, PodcastPlayer, LoginForm
   src/pages/        mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
 ```
 
@@ -81,9 +81,10 @@ stacks). Back is the in-app ← arrow only; the edge-swipe does nothing. Don't r
 TypeScript, type-stripped by Vite/Vitest. `npm run typecheck` (`tsc --noEmit`, in `client/`) is
 the type gate — Vite does not type-check.
 
-**Data flow:** `store.ts` owns app state (`feeds`, `articles`, `selectedView`, `selectedArticle`,
-`starredCount`); components subscribe via `useStore`. `selectedView`: `{ type: 'all' | 'today' |
-'starred' | 'feed', feed? }`. Star uses optimistic updates — mutate local state immediately,
+**Data flow:** `store.ts` owns app state (`feeds`, `collections`, `articles`, `selectedView`,
+`selectedArticle`, `starredCount`); components subscribe via `useStore`. `selectedView`:
+`{ type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search', feed?,
+collection?, query?, scope? }`. Star uses optimistic updates — mutate local state immediately,
 fire-and-forget POST to sync.
 
 **Vite proxy:** `/api/*` → `http://localhost:3002`.
@@ -119,6 +120,19 @@ language, drop stale/redundant chrome.
   (`play_updated_at`): the client hydrates an in-memory map from it once at startup, because the
   resume seek must stay synchronous with the play gesture. Rationale:
   `docs/plan-podcast-progress-sqlite.md`.
+- **Collections** (`合集`) are saved queries over `article_states`, not sources: a collection is
+  the *union* of its rules, each rule `feed AND include AND NOT exclude`, and it fetches nothing —
+  no cache entry, no poller slot, no freshness handling, exactly like `/api/all-articles`. That
+  one shape expresses every case: merge N feeds (N rules, feed only), take one category out of
+  each feed (feed + keyword), or follow a keyword across every feed (keyword only). The endpoint
+  runs **one query per rule and merges in Go** — the same fan-out `digest` mode uses — instead of
+  assembling an OR-chained `WHERE`, which keeps the SQL static; taking `ListLimit` per rule is
+  exact, since the newest N of a union is contained in the union of the per-rule newest N. Results
+  are deduped by `article_id` (rules may overlap). Keywords match title + summary but **not**
+  `content`: a term buried in the body is not a category signal. A rule constraining neither feed
+  nor keyword is rejected (400) rather than executed as a full-table scan. Deliberately *not*
+  wired to push — a collection is a lens, not a source, and the feeds under it already notify.
+  Rationale: `docs/plan-collections.md`.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).
 - Push has two independent axes, deliberately not merged: `feeds.push_enabled` says *this source
   is worth a notification* (global — one row, every device shares it), while `push_subscriptions`
@@ -144,6 +158,7 @@ language, drop stale/redundant chrome.
 
 **SQLite tables:**
 - `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts)`
+- `collections(id, name, position, created_at)` + `collection_rules(id, collection_id, feed_id, include, exclude)` — saved multi-feed streams
 - `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at)` — durable record of every fetched article
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `sessions(token, created_at)` — 30-day TTL
@@ -161,6 +176,11 @@ language, drop stale/redundant chrome.
 | PATCH | `/api/feeds/:id` | rename feed and/or toggle `push_enabled` (both fields optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
 | GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1` |
+| GET | `/api/collections` | list collections with their rules |
+| POST | `/api/collections` | create a collection (name + rules) |
+| PATCH | `/api/collections/:id` | rename and/or replace rules (both fields optional) |
+| DELETE | `/api/collections/:id` | remove a collection (articles untouched) |
+| GET | `/api/collections/:id/articles` | the collection's merged stream; `?summary=1` |
 | GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest`, `?summary=1` |
 | GET | `/api/today` | today's articles, same `?mode=` toggle; `?summary=1` |
 | GET | `/api/starred` | starred articles |

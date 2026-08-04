@@ -5,15 +5,17 @@ import type { MobilePage, View } from '../types';
 interface FeedsPageProps {
   onOpenAddModal: () => void;
   onOpenManageModal: () => void;
+  onOpenCollectionsModal: () => void;
   onNavigate: (page: MobilePage) => void;
 }
 
 export default function FeedsPage({
   onOpenAddModal,
   onOpenManageModal,
+  onOpenCollectionsModal,
   onNavigate,
 }: FeedsPageProps) {
-  const { feeds, selectedView, selectView, search, loadArticles } = useStore();
+  const { feeds, collections, selectedView, selectView, search, loadArticles } = useStore();
 
   const handleSelectView = (view: View) => {
     selectView(view);
@@ -29,11 +31,13 @@ export default function FeedsPage({
     <FeedSidebar
       isMobile
       feeds={feeds}
+      collections={collections}
       selectedView={selectedView}
       onSelectView={handleSelectView}
       onRefresh={() => loadArticles(selectedView)}
       onOpenAddModal={onOpenAddModal}
       onOpenManageModal={onOpenManageModal}
+      onOpenCollectionsModal={onOpenCollectionsModal}
       onOpenSettings={null}
       onSearch={handleSearch}
     />
