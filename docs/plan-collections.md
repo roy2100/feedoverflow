@@ -161,3 +161,30 @@ script has no word separators, so substring *is* the right test there.
   Narrowing the rule with a feed constraint is the workaround; paging the coarse pass would
   mean holding several thousand rows (each carrying `content`) in memory, which this app's
   memory budget does not justify.
+
+#### If that bound ever needs closing
+
+Both options below make `LIMIT` exact by doing the boundary test *inside* the query, so the
+500 rows SQLite returns are already the answer. Deferred, not rejected — the bound needs an
+ASCII keyword whose rule scope yields >500 coarse hits that are mostly false, and the
+collections in use are CJK, where there are no false positives at all.
+
+**Preferred — register a Go function as a SQLite scalar function.** `mattn/go-sqlite3`
+v1.14.47 exposes `(*SQLiteConn).RegisterFunc`, so `db.Open` can install `word_match(text,
+kw)` through a `ConnectHook` on a named driver, and the rule query becomes
+`WHERE title LIKE ? AND word_match(title, ?)` — `LIKE` still narrows the candidates,
+`word_match` decides, and the existing `wordBoundary` stays the single definition of the
+semantics (CJK and ASCII branches both live in Go). Costs: `db.Open` is the connection entry
+point for the *whole* app, and both pools would move to the custom driver — a blast radius
+larger than the feature; one cgo callback per candidate row, with SQLite free to reorder the
+`AND` so the `LIKE` prefilter is not a guaranteed reduction; and the compiled regexp needs
+caching per keyword or every row recompiles it.
+
+**Rejected alternative — GLOB character classes, no Go involved.** `upper(' '||title||' ')
+GLOB '*[^A-Z0-9]AI[^A-Z0-9]*'` was measured to give semantics identical to the Go `\b`
+version, CJK adjacency included (`AI模型发布` matches, since `[^A-Z0-9]` treats 模 as one
+non-word character) and case handled by `upper()`. It loses on maintenance, not capability:
+GLOB has no `ESCAPE` clause, so a keyword containing `*`, `?` or `[` needs a second,
+hand-rolled escaper living beside `LikeEscape` — the exact duplication that escaper was
+consolidated to remove — and CJK keywords would still have to branch back to `LIKE`, leaving
+two matching paths in SQL.
