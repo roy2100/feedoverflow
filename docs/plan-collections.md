@@ -137,3 +137,27 @@ Implemented as planned, with these specifics worth recording:
 
 Deviations: none of substance. The `position` column is written (create order) but no
 reorder UI ships — the sidebar lists collections in that order and the modal edits in place.
+
+### Follow-up: word-boundary matching for Latin keywords
+
+Shipped after first use. The original `LIKE '%kw%'` is a substring test, and SQLite's `LIKE`
+is case-insensitive over ASCII, so an `AI` rule also collected "said", "maintaining" and
+"available" — noise that made any Latin-script keyword useless. CJK was unaffected: the
+script has no word separators, so substring *is* the right test there.
+
+- SQL keeps the coarse `LIKE` pass (a superset of the answer, and the part SQLite can
+  index); `store.refine` re-checks the survivors in Go with a case-insensitive ASCII `\b`
+  regexp built by `wordBoundary`.
+- Go's `\b` is ASCII-only, which is exactly right: in `AI模型发布` the CJK character is not
+  an ASCII word character, so the boundary still holds and the row matches. A SQL-side
+  `' ' || title || ' ' LIKE '% AI %'` trick would have silently missed it.
+- Only edges that are themselves word characters get anchored, so `C++`, `.NET` and `#tag`
+  work — `\b` after `+` would demand a word character there and never match.
+- A word-boundary **exclusion is not applied in SQL at all**. `LIKE` over-matches, so an
+  SQL exclusion would drop rows the boundary rule keeps, and a row SQL never returns cannot
+  be recovered in Go.
+- Known bound, accepted: the `LIMIT` applies to the coarse pass, so a keyword with heavy
+  false-positive noise can under-fill the 500-row window and lose *older* true matches.
+  Narrowing the rule with a feed constraint is the workaround; paging the coarse pass would
+  mean holding several thousand rows (each carrying `content`) in memory, which this app's
+  memory budget does not justify.

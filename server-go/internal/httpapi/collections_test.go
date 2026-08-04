@@ -238,3 +238,75 @@ func TestCollectionKeywordEscapesLikeWildcards(t *testing.T) {
 		t.Fatalf("ids = %v, want [e1]", got)
 	}
 }
+
+// A Latin-script keyword matches whole words only. SQLite's LIKE is a
+// case-insensitive substring test, so without this an "AI" rule also collects
+// "said", "maintaining" and "available" — which makes the rule useless.
+func TestCollectionLatinKeywordMatchesWholeWords(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	seedRuleArticle(t, s, "w1", "f1", "Said the developer", "", 900)
+	seedRuleArticle(t, s, "w2", "f1", "Maintaining a chain", "", 800)
+	seedRuleArticle(t, s, "w3", "f1", "Available email details", "", 700)
+	seedRuleArticle(t, s, "w4", "f1", "OpenAI ships a model", "", 600)
+	seedRuleArticle(t, s, "w5", "f1", "AI 模型发布", "", 500)
+	// A CJK character is not an ASCII word character, so the boundary still holds
+	// with no separator — the case a SQL-side "pad with spaces" trick would miss.
+	seedRuleArticle(t, s, "w6", "f1", "AI模型发布", "", 400)
+	seedRuleArticle(t, s, "w7", "f1", "生成式 ai 的进展", "", 300)   // lowercase, still matches
+	seedRuleArticle(t, s, "w8", "f1", "标题无关", "本周 AI 综述", 200) // matched via summary
+
+	id := createCollection(t, s, `{"name":"AI","rules":[{"feedId":"f1","include":"AI"}]}`)
+	got := collectionArticleIDs(t, s, id)
+	want := []string{"w5", "w6", "w7", "w8"}
+	if len(got) != len(want) {
+		t.Fatalf("ids = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ids = %v, want %v", got, want)
+		}
+	}
+}
+
+// The same boundary rule governs exclude — and it must not be applied in SQL,
+// where LIKE would drop rows the word-boundary rule keeps.
+func TestCollectionLatinExcludeMatchesWholeWords(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	seedRuleArticle(t, s, "x1", "f1", "Said the developer", "", 300)
+	seedRuleArticle(t, s, "x2", "f1", "AI takes over", "", 200)
+	seedRuleArticle(t, s, "x3", "f1", "普通文章", "", 100)
+
+	id := createCollection(t, s, `{"name":"去AI","rules":[{"feedId":"f1","exclude":"AI"}]}`)
+	got := collectionArticleIDs(t, s, id)
+	if len(got) != 2 || got[0] != "x1" || got[1] != "x3" {
+		t.Fatalf("ids = %v, want [x1 x3] (only the whole-word AI dropped)", got)
+	}
+}
+
+// CJK has no word separators, so substring matching is the correct test there and
+// a boundary rule would break it.
+func TestCollectionCJKKeywordStaysSubstring(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	seedRuleArticle(t, s, "z1", "f1", "早餐速递 8月4日", "", 200)
+	seedRuleArticle(t, s, "z2", "f1", "晚间新闻", "", 100)
+
+	id := createCollection(t, s, `{"name":"每日","rules":[{"feedId":"f1","include":"早餐"}]}`)
+	if got := collectionArticleIDs(t, s, id); len(got) != 1 || got[0] != "z1" {
+		t.Fatalf("ids = %v, want [z1]", got)
+	}
+}
+
+// A keyword whose edge is not a word character (C++, .NET, #tag) can only be
+// anchored on the side that is one — \b after "+" would demand a word character
+// there and never match.
+func TestCollectionKeywordWithNonWordEdges(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	seedRuleArticle(t, s, "p1", "f1", "C++ 23 is out", "", 300)
+	seedRuleArticle(t, s, "p2", "f1", "Learning C today", "", 200)
+	seedRuleArticle(t, s, "p3", "f1", "Rust news", "", 100)
+
+	id := createCollection(t, s, `{"name":"C++","rules":[{"feedId":"f1","include":"C++"}]}`)
+	if got := collectionArticleIDs(t, s, id); len(got) != 1 || got[0] != "p1" {
+		t.Fatalf("ids = %v, want [p1]", got)
+	}
+}

@@ -365,7 +365,8 @@ function CollectionEditor({ collection, feeds, onCancel, onSave }: CollectionEdi
             lineHeight: 1.6,
           }}
         >
-          合集包含所有满足<b>任意一条</b>规则的文章。关键词匹配标题和摘要。
+          合集包含所有满足<b>任意一条</b>规则的文章。关键词匹配标题和摘要；英文按整词匹配，
+          「AI」不会命中「said」。
         </p>
 
         {rules.map((rule, i) => (

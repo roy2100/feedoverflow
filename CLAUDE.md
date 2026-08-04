@@ -129,8 +129,15 @@ language, drop stale/redundant chrome.
   assembling an OR-chained `WHERE`, which keeps the SQL static; taking `ListLimit` per rule is
   exact, since the newest N of a union is contained in the union of the per-rule newest N. Results
   are deduped by `article_id` (rules may overlap). Keywords match title + summary but **not**
-  `content`: a term buried in the body is not a category signal. A rule constraining neither feed
-  nor keyword is rejected (400) rather than executed as a full-table scan. Deliberately *not*
+  `content`: a term buried in the body is not a category signal. A **Latin-script keyword matches
+  whole words only** — SQLite's `LIKE` is a case-insensitive substring test, so `%AI%` also
+  collects "said"/"maintaining"/"available"; SQL does the coarse `LIKE` pass (a superset, and the
+  part SQLite can index) and Go re-checks survivors with an ASCII `\b` regexp. CJK keywords keep
+  plain substring matching — the script has no word separators, so a boundary rule would break
+  them — and Go's `\b` is ASCII-only, so `AI模型发布` still matches `AI`. A word-boundary
+  *exclusion* is deliberately **not** applied in SQL: `LIKE` over-matches, and a row SQL drops can
+  never be recovered. A rule constraining neither feed nor keyword is rejected (400) rather than
+  executed as a full-table scan. Deliberately *not*
   wired to push — a collection is a lens, not a source, and the feeds under it already notify.
   Rationale: `docs/plan-collections.md`.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).

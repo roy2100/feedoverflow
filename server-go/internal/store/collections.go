@@ -2,7 +2,9 @@ package store
 
 import (
 	"database/sql"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"rss-reader/server-go/internal/articles"
 )
@@ -232,7 +234,14 @@ func DeleteCollection(w *sql.DB, id string) (int64, error) {
 // Keyword matching covers title and summary but deliberately not content: a term
 // buried in an article's body is not what "this kind of article" means, and
 // including content would make most rules match nearly everything from a feed.
+//
+// A Latin-script keyword additionally has to match on word boundaries (see
+// wordBoundary). SQL does the coarse `LIKE` pass — it is what SQLite can index and
+// it is a superset of the answer — and Go re-checks the survivors, because `LIKE`
+// has no notion of a word: `%AI%` matches "said", "maintaining" and "available".
 func RuleArticles(r *sql.DB, rule Rule, limit int) ([]articles.Row, error) {
+	include, exclude := wordBoundary(rule.Include), wordBoundary(rule.Exclude)
+
 	q := `SELECT ` + articleCols + ` FROM article_states WHERE 1 = 1`
 	args := []any{}
 	if rule.FeedID != "" {
@@ -244,7 +253,10 @@ func RuleArticles(r *sql.DB, rule Rule, limit int) ([]articles.Row, error) {
 		q += ` AND (title LIKE ? ESCAPE '\' OR summary LIKE ? ESCAPE '\')`
 		args = append(args, like, like)
 	}
-	if rule.Exclude != "" {
+	// An exclusion that will be re-checked in Go must not be applied here at all:
+	// `LIKE` over-matches, so filtering in SQL would drop rows the word-boundary
+	// rule keeps — and a row dropped by SQL can never be recovered.
+	if rule.Exclude != "" && exclude == nil {
 		like := "%" + LikeEscape(rule.Exclude) + "%"
 		// COALESCE on both columns: `NULL NOT LIKE x` is NULL, which would drop every
 		// row with an empty title or summary instead of keeping it.
@@ -259,5 +271,74 @@ func RuleArticles(r *sql.DB, rule Rule, limit int) ([]articles.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scanArticleRows(rows)
+	out, err := scanArticleRows(rows)
+	if err != nil || (include == nil && exclude == nil) {
+		return out, err
+	}
+	return refine(out, include, exclude), nil
+}
+
+// wordBoundary compiles a case-insensitive matcher that requires kw to appear as a
+// whole word, or returns nil when kw needs no such treatment.
+//
+// It applies only to pure-ASCII keywords. `LIKE '%AI%'` is a substring test, and
+// SQLite's LIKE is case-insensitive over ASCII, so an "AI" rule also collects
+// "said", "maintaining" and "available" — noise that makes a Latin keyword
+// useless. CJK keywords have the opposite property: the script has no word
+// separators, so substring *is* the right test and a boundary rule would break
+// them. Hence: ASCII → word boundary, anything else → nil (SQL's LIKE stands).
+//
+// Go's \b is an ASCII word boundary, which is exactly the semantics wanted here:
+// in "AI模型发布" the CJK character does not count as a word character, so \bAI\b
+// still matches — the case a SQL-side `' ' || title || ' ' LIKE '% AI %'` trick
+// would silently miss.
+func wordBoundary(kw string) *regexp.Regexp {
+	if kw == "" {
+		return nil
+	}
+	for i := 0; i < len(kw); i++ {
+		if kw[i] >= utf8.RuneSelf {
+			return nil // not ASCII: substring matching is already correct
+		}
+	}
+	// Anchor only the edges that are themselves word characters. `\b` asserts a
+	// word/non-word transition, so anchoring "C++" on the right would demand a word
+	// character after the "+" and never match.
+	pat := regexp.QuoteMeta(kw)
+	if isWordByte(kw[0]) {
+		pat = `\b` + pat
+	}
+	if isWordByte(kw[len(kw)-1]) {
+		pat += `\b`
+	}
+	re, err := regexp.Compile(`(?i)` + pat)
+	if err != nil {
+		return nil // unreachable after QuoteMeta; degrade to the LIKE result
+	}
+	return re
+}
+
+func isWordByte(b byte) bool {
+	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+// refine re-applies the word-boundary matchers to rows the SQL pass returned,
+// against the same two columns the SQL pass looked at. A nil matcher means that
+// half of the rule was already decided in SQL and must not be second-guessed.
+func refine(rows []articles.Row, include, exclude *regexp.Regexp) []articles.Row {
+	out := rows[:0]
+	for _, row := range rows {
+		if include != nil && !matchesRow(row, include) {
+			continue
+		}
+		if exclude != nil && matchesRow(row, exclude) {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func matchesRow(row articles.Row, re *regexp.Regexp) bool {
+	return re.MatchString(row.Title.String) || re.MatchString(row.Summary.String)
 }
