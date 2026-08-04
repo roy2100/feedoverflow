@@ -4,6 +4,12 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import ArticleReader, { stripMedia, htmlToPlainText } from '../components/ArticleReader';
 import { decodeEntities } from '../lib/decodeEntities';
+import {
+  __resetProgressCache,
+  clearProgress,
+  hydrate as hydrateProgress,
+  saveProgress,
+} from '../lib/playbackProgress';
 import type { Article } from '../types';
 
 const noop = () => {};
@@ -526,5 +532,59 @@ describe('text-only toggle', () => {
     expect(
       screen.getByText('无图模式').closest('button')?.querySelector('.lucide-check'),
     ).not.toBeNull();
+  });
+});
+
+// ── Podcast row ───────────────────────────────────────────────────────────────
+
+describe('podcast play button', () => {
+  // Carries content so the reader doesn't fetch it and leave the mock owned by
+  // the hydrate case below.
+  const EPISODE: Article = {
+    ...BASE_ARTICLE,
+    content: '<p>Episode notes</p>',
+    audioUrl: 'https://example.com/ep.mp3',
+  };
+
+  afterEach(() => {
+    __resetProgressCache();
+  });
+
+  it('offers 播放 for an episode with no saved position', () => {
+    renderReader(EPISODE);
+    expect(screen.getByText('播放')).toBeInTheDocument();
+  });
+
+  it('offers 继续 once a saved position exists, even for an episode that is not loaded', () => {
+    saveProgress(EPISODE.id, 300, 1800);
+    renderReader(EPISODE);
+    expect(screen.getByText('继续')).toBeInTheDocument();
+  });
+
+  it('still says 播放 when the position is too small to be worth resuming', () => {
+    saveProgress(EPISODE.id, 3, 1800);
+    renderReader(EPISODE);
+    expect(screen.getByText('播放')).toBeInTheDocument();
+  });
+
+  it('flips to 继续 when hydrate lands after the reader is already open', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ progress: { [EPISODE.id]: 420 } }),
+    });
+    renderReader(EPISODE);
+    expect(screen.getByText('播放')).toBeInTheDocument();
+
+    await hydrateProgress();
+    await waitFor(() => expect(screen.getByText('继续')).toBeInTheDocument());
+  });
+
+  it('goes back to 播放 after the episode is played to the end', async () => {
+    saveProgress(EPISODE.id, 300, 1800);
+    renderReader(EPISODE);
+    expect(screen.getByText('继续')).toBeInTheDocument();
+
+    clearProgress(EPISODE.id);
+    await waitFor(() => expect(screen.getByText('播放')).toBeInTheDocument());
   });
 });

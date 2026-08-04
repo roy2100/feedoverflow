@@ -14,9 +14,10 @@ import {
   MoreHorizontal,
   Loader2,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { decodeEntities } from '../lib/decodeEntities';
+import { hasProgress, subscribeProgress } from '../lib/playbackProgress';
 import type { Article } from '../types';
 
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
@@ -347,6 +348,13 @@ export default function ArticleReader({
     setCopyState((await copyText(text)) ? 'done' : 'fail');
     copyTimer.current = setTimeout(() => setCopyState('idle'), 1800);
   };
+
+  // Subscribed rather than read straight off the map: the positions arrive from
+  // SQLite one fetch after the first paint, so a reader already open would keep
+  // offering 播放 on an episode it could resume.
+  const canResume = useSyncExternalStore(subscribeProgress, () =>
+    article ? hasProgress(article.id) : false,
+  );
 
   if (!article) {
     if (isMobile) return null;
@@ -869,7 +877,7 @@ export default function ArticleReader({
                 <>
                   <Pause size={11} strokeWidth={2} /> 暂停
                 </>
-              ) : currentEpisode?.id === article.id ? (
+              ) : currentEpisode?.id === article.id || canResume ? (
                 <>
                   <Play size={11} strokeWidth={2} /> 继续
                 </>

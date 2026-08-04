@@ -27,6 +27,33 @@ const END_MARGIN_SECONDS = 20;
 /** id → position in seconds. Empty until hydrate() lands. */
 const positions = new Map<string, number>();
 
+// UI that labels a play button "继续" rather than "播放" reads this map during
+// render, so it needs telling when the map moves under it: hydrate() lands after
+// the first paint, and finishing an episode clears its entry while the row is on
+// screen.
+const listeners = new Set<() => void>();
+
+function notify() {
+  for (const listener of listeners) listener();
+}
+
+/** Subscribe half of a useSyncExternalStore pair; see hasProgress. */
+export function subscribeProgress(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * Whether this episode would resume rather than start from the top — the snapshot
+ * half of the pair. Deliberately a boolean and not the position: the periodic save
+ * rewrites the position every 5s, and subscribers only care about the one flip.
+ */
+export function hasProgress(id: string): boolean {
+  return loadProgress(id) > 0;
+}
+
 /**
  * Fires a write at the server. Progress is a nicety, never a reason to surface an
  * error, so failures are swallowed.
@@ -72,6 +99,7 @@ export async function hydrate(): Promise<void> {
     for (const [id, seconds] of Object.entries(progress ?? {})) {
       if (typeof seconds === 'number' && Number.isFinite(seconds)) positions.set(id, seconds);
     }
+    notify();
   } catch {
     // No positions is the same as never having listened: resume just doesn't happen.
   }
@@ -90,6 +118,7 @@ export function saveProgress(id: string, position: number, duration: number) {
   }
   const seconds = Math.round(position);
   positions.set(id, seconds);
+  notify();
   send(API, 'POST', { id, position: seconds, duration: Number.isFinite(duration) ? duration : 0 });
 }
 
@@ -106,10 +135,12 @@ export function clearProgress(id: string) {
   // Unconditional: the in-memory map only holds what this session hydrated or
   // wrote, so "not in the map" is no evidence the server has nothing.
   positions.delete(id);
+  notify();
   send(`${API}/${encodeURIComponent(id)}`, 'DELETE');
 }
 
 /** Test seam — drops the in-memory map so each case starts from a cold app. */
 export function __resetProgressCache() {
   positions.clear();
+  notify();
 }
