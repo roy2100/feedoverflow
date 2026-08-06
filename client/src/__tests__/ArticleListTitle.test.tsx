@@ -40,33 +40,30 @@ function renderList(a: Article, hideFeedName = false) {
 }
 
 describe('article row title', () => {
-  it('shows only the original when there is no translation', () => {
+  it('shows the original when there is no translation', () => {
     renderList(article());
     expect(screen.getByText('Apple unveils M5 chip')).toBeTruthy();
   });
 
-  // The chosen display is 译文主、原文次: a machine-translated headline can be
-  // wrong, so the original has to stay on screen as the check — demoted, never
-  // replaced.
-  it('shows both the translation and the original when translated', () => {
+  // The original used to sit on a muted second line here. It doubled every row's
+  // height and was clipped mid-word, and scanning a list is the one place it earns
+  // nothing — checking a suspect translation happens on the article you opened,
+  // and ArticleReader still shows both.
+  it('replaces the original outright when translated', () => {
     renderList(article({ titleZh: '苹果发布 M5 芯片' }));
     expect(screen.getByText('苹果发布 M5 芯片')).toBeTruthy();
-    expect(screen.getByText('Apple unveils M5 chip')).toBeTruthy();
+    expect(screen.queryByText('Apple unveils M5 chip')).toBeNull();
   });
 
-  // Both row layouts render the title, so both need the second line.
-  it('shows both in the hideFeedName layout too', () => {
+  it('does the same in the hideFeedName layout', () => {
     renderList(article({ titleZh: '苹果发布 M5 芯片' }), true);
     expect(screen.getByText('苹果发布 M5 芯片')).toBeTruthy();
-    expect(screen.getByText('Apple unveils M5 chip')).toBeTruthy();
+    expect(screen.queryByText('Apple unveils M5 chip')).toBeNull();
   });
 
-  // An all-whitespace value is not a translation; it must not push an empty line
-  // in and demote the real headline to grey small text.
+  // An all-whitespace value is not a translation; it must not blank the headline.
   it('ignores a blank translation', () => {
     renderList(article({ titleZh: '   ' }));
-    const original = screen.getByText('Apple unveils M5 chip');
-    expect(original).toBeTruthy();
-    expect(screen.queryByText('   ')).toBeNull();
+    expect(screen.getByText('Apple unveils M5 chip')).toBeTruthy();
   });
 });

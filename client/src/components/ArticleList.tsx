@@ -360,21 +360,14 @@ function ArticleItem({
     color: 'var(--text-tertiary)',
     flexShrink: 0,
   };
-  // When a translation exists it takes the title slot and the original drops to a
-  // muted second line. Machine-translated headlines are terse, pun-heavy and
-  // sometimes wrong, so the original stays on screen as the check — it is never
-  // replaced, only demoted. One line, clipped: it is a reference, not the headline.
-  const originalStyle: React.CSSProperties = {
-    fontSize: 12,
-    color: 'var(--text-tertiary)',
-    lineHeight: 1.4,
-    marginTop: 2,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  };
-  const titleZh = article.titleZh?.trim();
-  const displayTitle = titleZh || article.title;
+  // A translation replaces the title outright here; the original is not shown.
+  // It was, on a muted second line, and it doubled the height of every row while
+  // being clipped mid-word — a reference nobody could finish reading. Scanning a
+  // list is the one place the original earns nothing: checking a suspect
+  // translation is something you do on the article you opened, and ArticleReader
+  // still shows both. `title` itself is never overwritten in the data, and search
+  // matches both, so nothing is actually lost by hiding it here.
+  const displayTitle = article.titleZh?.trim() || article.title;
 
   return (
     <div
@@ -404,9 +397,8 @@ function ArticleItem({
                 marginBottom: article.audioUrl ? 4 : 0,
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={titleStyle}>{decodeEntities(displayTitle)}</div>
-                {titleZh && <div style={originalStyle}>{decodeEntities(article.title)}</div>}
+              <div style={{ ...titleStyle, flex: 1, minWidth: 0 }}>
+                {decodeEntities(displayTitle)}
               </div>
               <span style={{ ...timeStyle, marginTop: 1 }}>{formatDate(article.pubDate)}</span>
             </div>
@@ -435,9 +427,8 @@ function ArticleItem({
                   {formatDate(article.pubDate)}
                 </span>
               </div>
-              <div style={{ marginBottom: article.audioUrl ? 4 : 0 }}>
-                <div style={titleStyle}>{decodeEntities(displayTitle)}</div>
-                {titleZh && <div style={originalStyle}>{decodeEntities(article.title)}</div>}
+              <div style={{ ...titleStyle, marginBottom: article.audioUrl ? 4 : 0 }}>
+                {decodeEntities(displayTitle)}
               </div>
             </>
           )}

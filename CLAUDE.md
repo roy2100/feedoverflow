@@ -212,8 +212,10 @@ language, drop stale/redundant chrome.
   The endpoint is any OpenAI-compatible `/chat/completions` (`llm_config`, editable at runtime from
   SettingsModal — the worker re-reads it every tick). `base_url` arrives over HTTP, so it is
   restricted to https or loopback and upstream response bodies are never echoed to the client. The
-  original title is never overwritten: the list and reader show the translation with the original
-  demoted beneath it, because a machine-translated headline needs to stay checkable.
+  original title is never overwritten in the data. The **list shows only the translation** — a muted
+  second line doubled every row's height and was clipped mid-word, and scanning is the one place the
+  original earns nothing. **ArticleReader shows both**, which is where a suspect translation is
+  actually checked, and search matches `title` and `title_zh` alike.
   Future article-level AI output (body translation, summaries) should **not** follow this shape:
   those are only needed for what you actually open, so they belong on-demand from the reader, and
   their output belongs in a side table — a body-sized column on `article_states` is exactly what the

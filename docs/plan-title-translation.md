@@ -501,3 +501,21 @@ can change — for a few mao a month. Stopped here instead.
 **Lesson for the next capability:** a provider dashboard reports totals, which cannot distinguish an
 expensive prompt from a model thinking out loud. The per-request `usage` log paid for itself in one
 deploy, and it is worth having *before* the first bill rather than after.
+
+## Revision: the list shows the translation only
+
+The chosen display was 译文主、原文次 in both panes. In the list that turned out to be wrong, and
+seeing it with real data made it obvious: every row was two lines tall, and the original line was
+clipped mid-word (`…Report of Dispute Over Stockpil…`) — it cost the height of a full row while
+being unreadable anyway.
+
+The original was there to keep a machine translation checkable. That reasoning holds, but not in a
+list: you check a headline you are suspicious of, and by then you have opened it. **ArticleReader
+still shows both**, `title` is never overwritten in the data, and `/api/search` matches both
+columns, so the original is neither lost nor unreachable — just not on screen while scanning.
+
+Not done: a `title` attribute so hovering a row reveals the original. It would be free visually, but
+a native tooltip firing on every row while scanning is the same noise in a different form.
+
+`ArticleList` goes back to its original single-`div` title markup, with `displayTitle` substituted
+for `article.title`. The reader is unchanged.
