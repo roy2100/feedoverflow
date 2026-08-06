@@ -2,6 +2,7 @@ package translate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -174,5 +175,92 @@ func TestConfigReady(t *testing.T) {
 	noKey.APIKey = ""
 	if noKey.Ready() {
 		t.Fatal("config with no key reported ready")
+	}
+}
+
+// Thinking is off by default on DeepSeek at `high` effort, which measured ~1800
+// characters of reasoning to produce a ~20-character headline — 95% of the
+// completion tokens. The switch has to be on the wire, and max_tokens rides with
+// it (only safe once thinking is off).
+func TestTranslateDisablesThinking(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"苹果发布 M5 芯片"}}]}`))
+	}))
+	defer srv.Close()
+	cfg := Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "m"}
+
+	if _, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip"); err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+	thinking, ok := got["thinking"].(map[string]any)
+	if !ok || thinking["type"] != "disabled" {
+		t.Fatalf(`thinking = %v, want {"type":"disabled"}`, got["thinking"])
+	}
+	if got["max_tokens"] != float64(maxCompletionTokens) {
+		t.Fatalf("max_tokens = %v, want %d", got["max_tokens"], maxCompletionTokens)
+	}
+}
+
+// `thinking` is DeepSeek's field. A provider that rejects unknown fields answers
+// 400, and the only honest reading is "one of these is not understood" — so the
+// call retries without them instead of reporting the model as unavailable.
+// max_tokens must come off too: with thinking back on, a low cap truncates the
+// model mid-thought and returns empty content, which the caller would settle as
+// "no translation, never retry".
+func TestTranslateRetriesWithoutThinkingOn400(t *testing.T) {
+	var bodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		bodies = append(bodies, b)
+		w.Header().Set("Content-Type", "application/json")
+		if _, sent := b["thinking"]; sent {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"unknown field: thinking"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"苹果发布 M5 芯片"}}]}`))
+	}))
+	defer srv.Close()
+	cfg := Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "m"}
+
+	got, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	if err != nil {
+		t.Fatalf("Translate: %v", err)
+	}
+	if got != "苹果发布 M5 芯片" {
+		t.Fatalf("got %q", got)
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("want 2 attempts, got %d", len(bodies))
+	}
+	if _, sent := bodies[1]["thinking"]; sent {
+		t.Fatal("retry still carried the thinking field")
+	}
+	if _, sent := bodies[1]["max_tokens"]; sent {
+		t.Fatal("retry still carried max_tokens; it would truncate the reasoning")
+	}
+}
+
+// A 400 that is not about the request fields still ends as ErrModel after the
+// retry, rather than looping.
+func TestTranslateGivesUpWhenRetryAlso400s(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	cfg := Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "nope"}
+
+	_, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	if !errors.Is(err, ErrModel) {
+		t.Fatalf("err = %v, want ErrModel", err)
+	}
+	if calls != 2 {
+		t.Fatalf("want exactly 2 attempts, got %d", calls)
 	}
 }

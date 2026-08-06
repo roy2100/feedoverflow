@@ -49,10 +49,29 @@ func New(log *slog.Logger) *Client {
 	return &Client{HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log}
 }
 
+// maxCompletionTokens caps the answer. A translated headline is a few dozen
+// tokens, so this is pure insurance — but it is only safe to send alongside
+// thinking:disabled. With thinking on, a cap this low truncates the model
+// mid-thought and yields empty content, which the caller would settle as "no
+// translation, don't retry" and lose the row for good.
+const maxCompletionTokens = 200
+
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
 	Stream   bool          `json:"stream"`
+	// Thinking turns off chain-of-thought. DeepSeek enables it by default at `high`
+	// effort, which on this task measured ~1800 characters of English reasoning to
+	// produce a ~20-character Chinese headline: 95% of the completion tokens, and
+	// ~5x the total bill. (reasoning_effort has no "none" value, so this is the
+	// only switch.) The field is DeepSeek's, but it is sent to every provider and
+	// the 400 fallback below handles the ones that reject unknown fields.
+	Thinking  *thinkingParam `json:"thinking,omitempty"`
+	MaxTokens int            `json:"max_tokens,omitempty"`
+}
+
+type thinkingParam struct {
+	Type string `json:"type"`
 }
 
 type chatMessage struct {
@@ -88,43 +107,71 @@ func (c *Client) Translate(ctx context.Context, cfg Config, title string) (strin
 	}
 	in := truncateRunes(title, maxTitleRunes)
 
-	body, err := json.Marshal(chatRequest{
-		Model: cfg.Model,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: in},
-		},
-		Stream: false,
-	})
+	parsed, status, err := c.post(ctx, cfg, in, true)
+	// `thinking` is a DeepSeek field. A provider that validates its request body
+	// strictly will reject it, and the only honest reading of a 400 here is "one of
+	// these fields is not understood" — so retry once without them rather than
+	// reporting the model as unavailable. Deliberately not remembered: a cached
+	// "unsupported" flag goes stale the moment the endpoint is repointed, and the
+	// providers that take this path are the ones that do no thinking anyway, so the
+	// extra round trip is cheap and self-correcting.
+	if status == http.StatusBadRequest {
+		parsed, _, err = c.post(ctx, cfg, in, false)
+	}
 	if err != nil {
 		return "", err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint(cfg.BaseURL), bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrConnect, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", statusError(resp.StatusCode)
-	}
-	var parsed chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", fmt.Errorf("%w: %v", ErrUpstream, err)
 	}
 	c.logUsage(parsed, in)
 	if len(parsed.Choices) == 0 {
 		return "", nil
 	}
 	return clean(parsed.Choices[0].Message.Content, in), nil
+}
+
+// post makes one chat-completions call. It returns the HTTP status alongside the
+// error so the caller can tell a rejected request field from a real failure.
+func (c *Client) post(
+	ctx context.Context, cfg Config, in string, disableThinking bool,
+) (chatResponse, int, error) {
+	r := chatRequest{
+		Model: cfg.Model,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: in},
+		},
+		Stream: false,
+	}
+	if disableThinking {
+		r.Thinking = &thinkingParam{Type: "disabled"}
+		// Only safe together with thinking off — see maxCompletionTokens.
+		r.MaxTokens = maxCompletionTokens
+	}
+	body, err := json.Marshal(r)
+	if err != nil {
+		return chatResponse{}, 0, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint(cfg.BaseURL), bytes.NewReader(body))
+	if err != nil {
+		return chatResponse{}, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return chatResponse{}, 0, fmt.Errorf("%w: %v", ErrConnect, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return chatResponse{}, resp.StatusCode, statusError(resp.StatusCode)
+	}
+	var parsed chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return chatResponse{}, resp.StatusCode, fmt.Errorf("%w: %v", ErrUpstream, err)
+	}
+	return parsed, resp.StatusCode, nil
 }
 
 // logUsage records what one translation cost. `reasoning` is the length of any
