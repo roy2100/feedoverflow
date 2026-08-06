@@ -138,12 +138,11 @@ func (s *Server) postImportOPML(w http.ResponseWriter, r *http.Request) {
 // push-only body must not have to echo the name back.
 func (s *Server) patchFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name             *string `json:"name"`
-		PushEnabled      *bool   `json:"push_enabled"`
-		TranslateEnabled *bool   `json:"translate_enabled"`
+		Name        *string `json:"name"`
+		PushEnabled *bool   `json:"push_enabled"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.Name == nil && body.PushEnabled == nil && body.TranslateEnabled == nil {
+	if body.Name == nil && body.PushEnabled == nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "name required"})
 		return
 	}
@@ -172,20 +171,6 @@ func (s *Server) patchFeed(w http.ResponseWriter, r *http.Request) {
 		// Enabling seeds the notification watermark to now (store.SetFeedPush), so
 		// switching push on never replays the feed's existing backlog.
 		changes, err := store.SetFeedPush(s.DB.Writer(), id, *body.PushEnabled, time.Now().UnixMilli())
-		if err != nil {
-			serverError(w, err)
-			return
-		}
-		if changes == 0 {
-			httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
-			return
-		}
-	}
-	if body.TranslateEnabled != nil {
-		// No watermark to seed, unlike push: pending work is a recency window, so
-		// switching on backfills that window by itself and switching off leaves every
-		// stored translation in place.
-		changes, err := store.SetFeedTranslate(s.DB.Writer(), id, *body.TranslateEnabled)
 		if err != nil {
 			serverError(w, err)
 			return

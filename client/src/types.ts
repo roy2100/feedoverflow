@@ -6,8 +6,6 @@ export interface Feed {
   url: string;
   /** Per-feed Web Push opt-in. Absent on responses from an older server. */
   push_enabled?: boolean;
-  /** Per-feed LLM title-translation opt-in. Absent on responses from an older server. */
-  translate_enabled?: boolean;
 }
 
 /**
@@ -17,17 +15,20 @@ export interface Feed {
 export interface FeedPatch {
   name?: string;
   push_enabled?: boolean;
-  translate_enabled?: boolean;
 }
 
 /**
- * The LLM endpoint used for title translation. `key_set` stands in for the API key,
- * which the server never returns — only whether one is stored.
+ * Title translation is one global setting, not a per-feed opt-in: feeds that need no
+ * translation are detected by script rather than declared, so there is nothing to
+ * decide per source. `key_set` stands in for the API key, which the server never
+ * returns — only whether one is stored. `enabled` is the intent, `key_set` the
+ * capability; both are required before anything is translated.
  */
 export interface LLMConfig {
   base_url: string;
   model: string;
   key_set: boolean;
+  enabled: boolean;
 }
 
 export interface Article {

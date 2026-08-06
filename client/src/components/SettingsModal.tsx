@@ -76,6 +76,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [llmBase, setLlmBase] = useState('');
   const [llmModel, setLlmModel] = useState('');
   const [keySet, setKeySet] = useState(false);
+  // The switch is the intent, the key is the capability — both are needed before
+  // anything is translated, which is why the checkbox is disabled without a key
+  // rather than silently doing nothing.
+  const [llmEnabled, setLlmEnabled] = useState(false);
   const [llmKey, setLlmKey] = useState('');
   const [editingKey, setEditingKey] = useState(false);
   const [llmDirty, setLlmDirty] = useState(false);
@@ -111,6 +115,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         setLlmBase(c.base_url);
         setLlmModel(c.model);
         setKeySet(c.key_set);
+        setLlmEnabled(c.enabled);
       })
       .catch(() => {});
   }, []);
@@ -127,9 +132,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       // since the initial empty state shows the input without any 更改 to click.
       // When it is hidden, a model-only edit cannot blank a stored credential the
       // browser never saw.
-      const patch: Record<string, string> = {
+      const patch: Record<string, string | boolean> = {
         base_url: llmBase.trim(),
         model: llmModel.trim(),
+        // Sent on every save, so switching on always re-stamps the server's
+        // watermark: articles published while it was off were deliberately skipped,
+        // and a later enable must not reach back over them.
+        enabled: llmEnabled,
       };
       if (keyEditable) patch.api_key = llmKey.trim();
       const r = await fetch('/api/llm/config', {
@@ -415,6 +424,31 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
           </div>
 
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 14,
+              fontSize: 13,
+              color: keySet ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              cursor: keySet ? 'pointer' : 'default',
+            }}
+            title={keySet ? '' : '请先填写并保存 API Key'}
+          >
+            <input
+              type="checkbox"
+              checked={llmEnabled}
+              disabled={!keySet}
+              onChange={(e) => {
+                setLlmEnabled(e.target.checked);
+                setLlmDirty(true);
+              }}
+              style={{ cursor: keySet ? 'pointer' : 'default' }}
+            />
+            翻译文章标题
+          </label>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button
               onClick={handleSaveLLM}
@@ -467,7 +501,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           >
             任何兼容 OpenAI <code style={{ fontFamily: 'monospace' }}>/chat/completions</code>{' '}
             的服务均可（DeepSeek、Moonshot、OpenRouter、本机 Ollama 等）。
-            配置后在「管理订阅源」中逐个开启需要翻译标题的订阅源；留空 API Key 即关闭翻译。
+            开启后非中文标题会译成中文显示，原标题保留在下方；中文标题自动跳过，不消耗额度。
+            开启时仅回溯最近 24 小时，更早的文章不会翻译。
           </p>
         </div>
       </div>

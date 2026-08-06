@@ -27,9 +27,10 @@ func (s *Server) getLLMConfig(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"base_url": cfg.BaseURL,
-		"model":    cfg.Model,
-		"key_set":  cfg.APIKey != "",
+		"base_url": cfg.Conn.BaseURL,
+		"model":    cfg.Conn.Model,
+		"key_set":  cfg.Conn.APIKey != "",
+		"enabled":  cfg.Enabled,
 	})
 }
 
@@ -41,9 +42,10 @@ func (s *Server) patchLLMConfig(w http.ResponseWriter, r *http.Request) {
 		BaseURL *string `json:"base_url"`
 		Model   *string `json:"model"`
 		APIKey  *string `json:"api_key"`
+		Enabled *bool   `json:"enabled"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.BaseURL == nil && body.Model == nil && body.APIKey == nil {
+	if body.BaseURL == nil && body.Model == nil && body.APIKey == nil && body.Enabled == nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "no fields to update"})
 		return
 	}
@@ -70,7 +72,13 @@ func (s *Server) patchLLMConfig(w http.ResponseWriter, r *http.Request) {
 		v := strings.TrimSpace(*body.APIKey)
 		body.APIKey = &v
 	}
-	if err := store.SaveLLMConfig(s.DB.Writer(), body.BaseURL, body.APIKey, body.Model); err != nil {
+	// Switching on stamps the watermark 24h back rather than at now: feed items
+	// routinely carry a pub_date hours older than the fetch, so a watermark pinned
+	// at now would let the next several polls land untranslated and read as broken.
+	// A day is ~300 titles, on the order of ¥0.05.
+	since := time.Now().Add(-24 * time.Hour).UnixMilli()
+	if err := store.SaveLLMConfig(
+		s.DB.Writer(), body.BaseURL, body.APIKey, body.Model, body.Enabled, since); err != nil {
 		serverError(w, err)
 		return
 	}
@@ -95,13 +103,15 @@ func (s *Server) postLLMConfigTest(w http.ResponseWriter, r *http.Request) {
 		serverError(w, err)
 		return
 	}
-	if !cfg.Ready() {
+	// Only the connection has to be usable — the test is about whether the endpoint
+	// answers, not about whether translation is currently switched on.
+	if !cfg.Conn.Ready() {
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "请先填写 API Key"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if err := s.Translator.Check(ctx, cfg); err != nil {
+	if err := s.Translator.Check(ctx, cfg.Conn); err != nil {
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}

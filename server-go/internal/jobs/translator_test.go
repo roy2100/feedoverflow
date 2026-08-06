@@ -28,8 +28,8 @@ func (f *fakeTranslator) Translate(_ context.Context, _ translate.Config, title 
 	return f.out, nil
 }
 
-// translateDB gives a DB with one translate-enabled feed and no seeded feeds
-// competing for article ids.
+// translateDB gives a DB with one feed, translation switched on, and a watermark
+// far enough back that the seeded articles are in range.
 func translateDB(t *testing.T, key string) *db.DB {
 	t.Helper()
 	handle := newTestDB(t)
@@ -37,10 +37,10 @@ func translateDB(t *testing.T, key string) *db.DB {
 		t.Fatal(err)
 	}
 	seedFeed(t, handle.Writer(), "f1")
-	if _, err := handle.Writer().Exec(`UPDATE feeds SET translate_enabled = 1 WHERE id = 'f1'`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := handle.Writer().Exec(`UPDATE llm_config SET api_key = ? WHERE id = 1`, key); err != nil {
+	since := time.Now().Add(-24 * time.Hour).UnixMilli()
+	if _, err := handle.Writer().Exec(
+		`UPDATE llm_config SET api_key = ?, enabled = 1, translate_since = ? WHERE id = 1`,
+		key, since); err != nil {
 		t.Fatal(err)
 	}
 	return handle
@@ -162,12 +162,19 @@ func TestTranslatorFailureAbortsTick(t *testing.T) {
 	}
 }
 
-// The recency window is the whole of the worker's state — an article older than
-// it is never selected, which is what keeps the historical backlog out of scope
-// without a per-feed watermark.
+// The give-up bound: a row older than translateWindow is never selected, so a
+// request that keeps failing cannot sit at the head of a newest-first queue
+// forever and block everything behind it.
 func TestTranslatorIgnoresRowsOutsideWindow(t *testing.T) {
 	handle := translateDB(t, "sk-test")
+	// Push the enable watermark back too, so the window is the only thing excluding
+	// this row.
 	old := time.Now().Add(-jobs.TranslateWindowForTest - time.Hour)
+	if _, err := handle.Writer().Exec(
+		`UPDATE llm_config SET translate_since = ? WHERE id = 1`, old.Add(-time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatal(err)
+	}
 	seedTitled(t, handle.Writer(), "a1", "f1", "Ancient headline", old)
 
 	tr := &fakeTranslator{out: "x"}
@@ -181,10 +188,29 @@ func TestTranslatorIgnoresRowsOutsideWindow(t *testing.T) {
 	}
 }
 
-// A feed without the switch on is never touched, even inside the window.
-func TestTranslatorIgnoresDisabledFeed(t *testing.T) {
+// The enable watermark is the other lower bound, and it is the one that stops
+// switching translation on from reaching back over the whole archive.
+func TestTranslatorIgnoresRowsBeforeEnable(t *testing.T) {
 	handle := translateDB(t, "sk-test")
-	if _, err := handle.Writer().Exec(`UPDATE feeds SET translate_enabled = 0`); err != nil {
+	seedTitled(t, handle.Writer(), "old", "f1", "Published before enabling", time.Now().Add(-48*time.Hour))
+	seedTitled(t, handle.Writer(), "new", "f1", "Published after enabling", time.Now())
+
+	tr := &fakeTranslator{out: "译文"}
+	runTranslator(handle, tr)
+
+	if len(tr.seen) != 1 || tr.seen[0] != "Published after enabling" {
+		t.Fatalf("watermark not honoured, translator saw %v", tr.seen)
+	}
+	if _, valid := titleZh(t, handle.Reader(), "old"); valid {
+		t.Fatal("a row published before the switch was turned on was written")
+	}
+}
+
+// The switch is off by default; flipping it off must stop new work even though
+// the key is still stored.
+func TestTranslatorNoOpsWhenDisabled(t *testing.T) {
+	handle := translateDB(t, "sk-test")
+	if _, err := handle.Writer().Exec(`UPDATE llm_config SET enabled = 0 WHERE id = 1`); err != nil {
 		t.Fatal(err)
 	}
 	seedTitled(t, handle.Writer(), "a1", "f1", "Apple unveils M5 chip", time.Now())
@@ -193,12 +219,13 @@ func TestTranslatorIgnoresDisabledFeed(t *testing.T) {
 	runTranslator(handle, tr)
 
 	if len(tr.seen) != 0 {
-		t.Fatalf("a disabled feed was translated: %v", tr.seen)
+		t.Fatalf("worker ran with the switch off: %v", tr.seen)
 	}
 }
 
-// An empty API key is how the feature is switched off, and it is read per tick
-// (llm_config is editable at runtime), so the worker must no-op without calling.
+// A key is a capability and the switch is an intent; on without a key must not
+// dial out with an empty bearer token. Config is read per tick, so this also
+// covers a key cleared while the server is running.
 func TestTranslatorNoOpsWithoutKey(t *testing.T) {
 	handle := translateDB(t, "")
 	seedTitled(t, handle.Writer(), "a1", "f1", "Apple unveils M5 chip", time.Now())

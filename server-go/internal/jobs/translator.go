@@ -10,11 +10,12 @@ import (
 
 const (
 	translateInterval = 30 * time.Second
-	// translateWindow bounds what counts as pending. It is the whole of the
-	// worker's state: enabling a feed backfills this much history, an article older
-	// than this is never translated, and a request that keeps failing gives up when
-	// its article ages out. The alternative — a per-feed watermark — buys finer
-	// behaviour at the cost of a column, seed/stamp calls and advance rules.
+	// translateWindow is the give-up bound, not a backfill bound: how far back the
+	// worker will keep *retrying*. A failed request writes nothing, and the pending
+	// query is ordered newest-first, so without this a permanently-failing row would
+	// sit at the head of the queue forever and block everything behind it. Reaching
+	// back on enable is a separate concern with its own watermark
+	// (llm_config.translate_since) — the cutoff is the later of the two.
 	translateWindow = 7 * 24 * time.Hour
 	// translateBatch caps titles per tick. Requests are sequential, so this is also
 	// the ceiling on how long one tick can run against a slow endpoint.
@@ -42,18 +43,21 @@ func (r *Runner) StartTranslator(ctx context.Context) {
 //
 // Config is read here rather than at startup because llm_config is editable at
 // runtime from the settings panel — there is no boot-time "translator is nil"
-// disable the way Push has one. An empty API key is how the feature is off, so
-// the common case costs one single-row read per tick.
+// disable the way Push has one. When the switch is off (or no key is stored) the
+// tick costs one single-row read.
 func (r *Runner) translatePending(ctx context.Context) {
 	cfg, err := store.LLMConfig(r.DB.Reader())
 	if err != nil {
 		r.Log.Warn("translate: config read failed", "err", err)
 		return
 	}
-	if !cfg.Ready() {
+	if !cfg.Active() {
 		return
 	}
-	cutoff := time.Now().Add(-translateWindow).UnixMilli()
+	// Two independent lower bounds, so neither has to serve both purposes: Since
+	// says how far back switching on reaches, translateWindow says when to stop
+	// retrying. Whichever is later wins.
+	cutoff := max(time.Now().Add(-translateWindow).UnixMilli(), cfg.Since)
 	pending, err := store.PendingTranslations(r.DB.Reader(), cutoff, translateBatch)
 	if err != nil {
 		r.Log.Warn("translate: select pending failed", "err", err)
@@ -69,7 +73,7 @@ func (r *Runner) translatePending(ctx context.Context) {
 			r.saveTranslation(p.ArticleID, "")
 			continue
 		}
-		out, err := r.Translator.Translate(ctx, cfg, p.Title)
+		out, err := r.Translator.Translate(ctx, cfg.Conn, p.Title)
 		if err != nil {
 			// Write nothing: the row stays NULL and is retried next tick, until it
 			// ages out of the window. Abort the rest of the batch rather than

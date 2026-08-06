@@ -19,6 +19,7 @@ function stubFetch(keySet: boolean) {
           base_url: 'https://api.deepseek.com',
           model: 'deepseek-chat',
           key_set: keySet,
+          enabled: keySet,
         }),
       };
     }
@@ -107,5 +108,40 @@ describe('SettingsModal translation service', () => {
       target: { value: 'kimi-k2' },
     });
     expect(screen.getByText('测试连接')).toBeDisabled();
+  });
+});
+
+describe('SettingsModal translation switch', () => {
+  // The key is a capability, the switch is an intent. Without a key the checkbox
+  // would flip a flag and nothing would ever be translated, so it says why instead.
+  it('disables the switch until a key is stored', async () => {
+    stubFetch(false);
+    render(<SettingsModal onClose={vi.fn()} />);
+
+    const box = await screen.findByLabelText('翻译文章标题');
+    expect(box).toBeDisabled();
+    expect(box).not.toBeChecked();
+  });
+
+  it('reflects the stored switch state', async () => {
+    stubFetch(true);
+    render(<SettingsModal onClose={vi.fn()} />);
+
+    const box = await screen.findByLabelText('翻译文章标题');
+    expect(box).not.toBeDisabled();
+    expect(box).toBeChecked();
+  });
+
+  // Sent on every save so the server sees the intended state; the server is what
+  // decides whether that counts as an off→on transition worth re-stamping.
+  it('sends the switch state with the save', async () => {
+    const patches = stubFetch(true);
+    render(<SettingsModal onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByLabelText('翻译文章标题'));
+    saveLLM();
+
+    await waitFor(() => expect(llmPatches(patches)).toHaveLength(1));
+    expect(llmPatches(patches)[0]).toMatchObject({ enabled: false });
   });
 });

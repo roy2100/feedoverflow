@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"rss-reader/server-go/internal/translate"
 )
@@ -135,5 +137,119 @@ func TestLLMConfigTestWithoutKey(t *testing.T) {
 	rec := do(h, "POST", "/api/llm/config/test", "", jsonHdr())
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"ok":false`) {
 		t.Fatalf("unexpected: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Enabling stamps the watermark ~24h back, not at now. Feed items routinely carry
+// a pub_date hours older than the fetch, so a watermark pinned at now would let
+// the next several polls land untranslated and read as the feature being broken.
+func TestLLMConfigEnableStampsWatermark24hBack(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+
+	before := time.Now().UnixMilli()
+	if rec := do(h, "PATCH", "/api/llm/config", `{"enabled":true}`, jsonHdr()); rec.Code != 200 {
+		t.Fatalf("PATCH: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var enabled int
+	var since sql.NullInt64
+	if err := s.DB.Reader().QueryRow(`SELECT enabled, translate_since FROM llm_config WHERE id = 1`).
+		Scan(&enabled, &since); err != nil {
+		t.Fatal(err)
+	}
+	if enabled != 1 {
+		t.Fatal("enabled not set")
+	}
+	if !since.Valid {
+		t.Fatal("translate_since not stamped")
+	}
+	day := int64(24 * time.Hour / time.Millisecond)
+	// A day back, give or take the second this test takes to run.
+	if delta := before - since.Int64; delta < day-60_000 || delta > day+60_000 {
+		t.Fatalf("translate_since is %dms back, want ~%dms", delta, day)
+	}
+}
+
+// Re-enabling after a spell switched off must re-stamp: the articles published
+// while it was off were deliberately not translated, and reaching back over them
+// would undo that decision (and pay for it).
+func TestLLMConfigReEnableRestampsWatermark(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+
+	do(h, "PATCH", "/api/llm/config", `{"enabled":true}`, jsonHdr())
+	var first int64
+	_ = s.DB.Reader().QueryRow(`SELECT translate_since FROM llm_config WHERE id = 1`).Scan(&first)
+
+	// Backdate it so a re-stamp is unambiguous.
+	if _, err := s.DB.Writer().Exec(
+		`UPDATE llm_config SET translate_since = ? WHERE id = 1`, first-1_000_000); err != nil {
+		t.Fatal(err)
+	}
+	do(h, "PATCH", "/api/llm/config", `{"enabled":false}`, jsonHdr())
+	do(h, "PATCH", "/api/llm/config", `{"enabled":true}`, jsonHdr())
+
+	var second int64
+	_ = s.DB.Reader().QueryRow(`SELECT translate_since FROM llm_config WHERE id = 1`).Scan(&second)
+	if second <= first-1_000_000 {
+		t.Fatalf("watermark not re-stamped on re-enable: %d", second)
+	}
+}
+
+// Switching off leaves the watermark alone — it is only ever set on enable.
+func TestLLMConfigDisableKeepsKeyAndWatermark(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	setKey(t, s, "sk-keep")
+	do(h, "PATCH", "/api/llm/config", `{"enabled":true}`, jsonHdr())
+
+	if rec := do(h, "PATCH", "/api/llm/config", `{"enabled":false}`, jsonHdr()); rec.Code != 200 {
+		t.Fatalf("PATCH: %d %s", rec.Code, rec.Body.String())
+	}
+	var key string
+	var since sql.NullInt64
+	if err := s.DB.Reader().QueryRow(`SELECT api_key, translate_since FROM llm_config WHERE id = 1`).
+		Scan(&key, &since); err != nil {
+		t.Fatal(err)
+	}
+	if key != "sk-keep" {
+		t.Fatalf("disabling cleared the key: %q", key)
+	}
+	if !since.Valid {
+		t.Fatal("disabling cleared the watermark")
+	}
+	rec := do(h, "GET", "/api/llm/config", "", nil)
+	if !strings.Contains(rec.Body.String(), `"enabled":false`) {
+		t.Fatalf("GET does not report the switch: %s", rec.Body.String())
+	}
+}
+
+// The settings form sends `enabled` with every save, so a save while the switch is
+// already on must not move the watermark — that would silently skip everything
+// published since it was turned on.
+func TestLLMConfigSaveWhileEnabledKeepsWatermark(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+
+	do(h, "PATCH", "/api/llm/config", `{"enabled":true}`, jsonHdr())
+	var first int64
+	if err := s.DB.Reader().QueryRow(`SELECT translate_since FROM llm_config WHERE id = 1`).
+		Scan(&first); err != nil {
+		t.Fatal(err)
+	}
+
+	// An ordinary edit that happens to carry enabled:true again.
+	if rec := do(h, "PATCH", "/api/llm/config",
+		`{"model":"kimi-k2","enabled":true}`, jsonHdr()); rec.Code != 200 {
+		t.Fatalf("PATCH: %d %s", rec.Code, rec.Body.String())
+	}
+	var second int64
+	if err := s.DB.Reader().QueryRow(`SELECT translate_since FROM llm_config WHERE id = 1`).
+		Scan(&second); err != nil {
+		t.Fatal(err)
+	}
+	if second != first {
+		t.Fatalf("watermark moved on a no-op enable: %d -> %d", first, second)
 	}
 }

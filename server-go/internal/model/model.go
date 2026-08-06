@@ -14,9 +14,6 @@ type Feed struct {
 	// watermark (feeds.last_notified_ts) is deliberately not exposed — it is
 	// poller bookkeeping, not something a client acts on.
 	PushEnabled bool `json:"push_enabled"`
-	// TranslateEnabled is the per-feed LLM title-translation opt-in (default off).
-	// Like PushEnabled it is global to the feed, not per device.
-	TranslateEnabled bool `json:"translate_enabled"`
 }
 
 // Article is the enriched article shape returned by the list/detail endpoints.

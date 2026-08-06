@@ -362,3 +362,58 @@ decide whether the save carries the key — one condition instead of two that co
 `src/__tests__/SettingsModal.test.tsx` now pins all four states (first key sent, model-only edit
 omits the key, 更改 re-sends it, dirty form disables the test button); the first of those fails
 against the old code.
+
+## Revision: global switch instead of a per-feed opt-in
+
+The per-feed toggle was retired before this ever shipped. The reasoning that put it there was
+borrowed from push, and it does not transfer.
+
+**Why per-feed did not hold up.** Its main justification was "don't spend money on Chinese feeds" —
+and `IsMostlyChinese` already solves that, for free, with no clicks: a Chinese feed with the switch
+on issues zero requests and changes nothing on screen. Push genuinely needs per-source decisions
+(which feeds are worth interrupting you), but whether a feed needs translating is a property of its
+script, which is *detectable* rather than something to declare 30 times. Cost is not a granularity
+driver either at ~¥0.1/day fully on. The one real residual — "this English feed I read fine, the
+extra line is noise" — did not justify a column, a PATCH field, a control on every row, and their
+tests. Adding it back later is purely additive.
+
+**The future-capabilities argument cuts the same way.** Body translation and summarisation are
+~100× the tokens of a title (~4000 vs ~40 per article), and unlike titles they are only needed for
+the article you actually open — a list pane renders titles, not bodies. So they want a different
+mechanism entirely: on-demand from the reader, where the click *is* the switch and cost is bounded
+by what you read. They would not reuse a feed flag. Their output also does not belong on
+`article_states`: body-sized columns are exactly what the `articleColsNoContent` perf note warns
+about, so a side table (`article_ai(article_id, kind, text, …)`) is the right home, never joined by
+list queries. Recorded here rather than built — no abstraction was added for it.
+
+**Backfill on enable was cut to 24h, not to zero.** Zero has a real failure mode: feed items
+routinely carry a `pub_date` hours older than the moment they are fetched, so a watermark pinned at
+`now` would let the next several polls arrive untranslated with no explanation. 24h is ~300 titles,
+on the order of ¥0.05, and makes "switch it on and the visible list translates" true. (For scale:
+the 7-day backfill this replaced was only ~¥0.1–0.3 one-time, so this was never really a cost
+decision.)
+
+**The 7-day window stays, with a different job.** It was doing two things; only one was backfill.
+The other is the give-up bound: a failed request writes nothing and the queue is newest-first, so a
+permanently-failing row would otherwise sit at the head forever and block everything behind it. The
+cutoff is now `max(translate_since, now − 7d)` — two bounds, one job each, same query.
+
+### Changes
+
+- `feeds.translate_enabled` dropped; `llm_config` gains `enabled` + `translate_since`.
+  `InitSchema` carries a previously-set per-feed flag over to the global switch before dropping the
+  column (`adoptFeedTranslateFlag`), so a DB from the intermediate build does not silently lose it.
+- `store.SetFeedTranslate`, the `translate_enabled` field on `PATCH /api/feeds/:id`, and
+  `model.Feed.TranslateEnabled` are gone. `PendingTranslations` no longer joins `feeds` — it is now
+  a plain indexed scan over `pub_ts`.
+- `store.TranslateConfig` wraps the connection (`translate.Config`) with `Enabled`/`Since`, so the
+  client package still knows nothing about policy.
+- `GET /api/llm/config` gains `enabled`; `PATCH` accepts it. The watermark is stamped **only on an
+  off→on transition** (`CASE WHEN enabled = 1 THEN translate_since ELSE ? END`) — the settings form
+  sends `enabled` with every save, so stamping unconditionally would let an unrelated model edit
+  move the watermark forward and silently skip everything published since.
+- UI: the per-row 译 toggle is gone from ManageFeedsModal; SettingsModal's 翻译服务 section gains a
+  「翻译文章标题」 checkbox, disabled until a key is stored.
+- Tests: `internal/db/migrate_test.go` covers the adoption path, a fresh DB staying off, and
+  InitSchema idempotence; `internal/jobs` gains a watermark test; `internal/httpapi` gains three
+  (stamp 24h back, re-stamp on re-enable, no move on a no-op enable).
