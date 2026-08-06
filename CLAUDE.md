@@ -18,9 +18,9 @@ npm run fmt && npm run lint:fix   # after changes — auto-format + auto-fix
 npm run fmt:check && npm run lint # before commit — must both pass clean
 
 # Deploy (full runbook: docs/rathole-vps-tunnel.md)
-./scripts/deploy.sh              # build + sync to ~/Deploy, kickstart the launchd service
-launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
-tail -f ~/Deploy/rss-reader/logs/app.log      # structured NDJSON (slog)
+./scripts/deploy.sh              # build + sync to ~/Deploy/feedoverflow, kickstart the launchd service
+launchctl kickstart -k "gui/$(id -u)/com.feedoverflow.app"   # force restart
+tail -f ~/Deploy/feedoverflow/logs/app.log    # structured NDJSON (slog)
 ```
 
 Do not silence lint errors or rewrite business logic just to make `lint` pass — if a correctness
