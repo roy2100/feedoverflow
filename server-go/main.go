@@ -66,7 +66,7 @@ func main() {
 	// One client shared by the settings 测试连接 endpoint and the background worker,
 	// so what the test exercises is exactly what the worker will run. It holds no
 	// credentials — every call reads llm_config, which is editable at runtime.
-	translator := translate.New()
+	translator := translate.New(appLogger)
 	srv := &httpapi.Server{
 		DB: handle, Cache: c, Favicon: fav, Push: pusher, Translator: translator,
 		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,

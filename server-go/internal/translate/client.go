@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,22 +27,26 @@ const maxGrowth = 4
 // message and never concatenated into it: RSS titles are attacker-controlled, and
 // keeping them out of the instruction channel is the whole mitigation. The blast
 // radius if a title tries to redirect the model is one wrong headline string.
-const systemPrompt = `You translate news headlines into Simplified Chinese.
-Rules:
-- Output ONLY the translated headline. No quotes, no explanation, no prefix.
-- Keep product names, company names, version numbers and acronyms as-is.
-- Preserve the terse register of a headline; do not add words that are not there.
-- If the input is already Chinese, output it unchanged.`
+// It is kept terse on purpose: it is resent on every request (one title per call),
+// so every token here is paid ~400 times a day.
+const systemPrompt = `Translate the news headline to Simplified Chinese.
+Reply with the translation only — no quotes, no explanation.
+Keep names, versions and acronyms as-is. If already Chinese, echo it.`
 
 // Client is the OpenAI-compatible chat-completions caller.
 type Client struct {
 	HTTP *http.Client
+	// Log, when set, records the token usage each endpoint reports. Translation is
+	// the only thing here that costs money per item, and the split between prompt
+	// and completion tokens is the only way to tell an expensive prompt from a
+	// model that is thinking out loud. nil in tests.
+	Log *slog.Logger
 }
 
 // New returns a Client with the request timeout the worker relies on: translation
 // runs off the request path, but a hung endpoint must not stall a whole tick.
-func New() *Client {
-	return &Client{HTTP: &http.Client{Timeout: 30 * time.Second}}
+func New(log *slog.Logger) *Client {
+	return &Client{HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log}
 }
 
 type chatRequest struct {
@@ -57,8 +62,22 @@ type chatMessage struct {
 
 type chatResponse struct {
 	Choices []struct {
-		Message chatMessage `json:"message"`
+		Message struct {
+			Content string `json:"content"`
+			// ReasoningContent is DeepSeek's field for chain-of-thought. It is never
+			// used as the translation — it is read only so the log can say how much of
+			// the completion went to thinking rather than to the answer.
+			ReasoningContent string `json:"reasoning_content"`
+		} `json:"message"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+		// DeepSeek reports prefix-cache hits here; an identical system prompt on
+		// every call should be landing in it.
+		PromptCacheHitTokens int `json:"prompt_cache_hit_tokens"`
+	} `json:"usage"`
 }
 
 // Translate implements Translator.
@@ -101,10 +120,32 @@ func (c *Client) Translate(ctx context.Context, cfg Config, title string) (strin
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrUpstream, err)
 	}
+	c.logUsage(parsed, in)
 	if len(parsed.Choices) == 0 {
 		return "", nil
 	}
 	return clean(parsed.Choices[0].Message.Content, in), nil
+}
+
+// logUsage records what one translation cost. `reasoning` is the length of any
+// chain-of-thought the model returned: on a task this small it is the difference
+// between ~100 tokens a call and several hundred, and it is invisible in a
+// provider dashboard that only reports totals.
+func (c *Client) logUsage(r chatResponse, in string) {
+	if c.Log == nil {
+		return
+	}
+	reasoning := 0
+	if len(r.Choices) > 0 {
+		reasoning = len([]rune(r.Choices[0].Message.ReasoningContent))
+	}
+	c.Log.Info("translate usage",
+		"promptTokens", r.Usage.PromptTokens,
+		"completionTokens", r.Usage.CompletionTokens,
+		"totalTokens", r.Usage.TotalTokens,
+		"cacheHitTokens", r.Usage.PromptCacheHitTokens,
+		"reasoningRunes", reasoning,
+		"titleRunes", len([]rune(in)))
 }
 
 // Check runs one real translation so the settings panel's 测试连接 exercises the

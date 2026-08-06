@@ -120,7 +120,7 @@ func serve(t *testing.T, status int, body string) Config {
 func TestTranslateReadsChoice(t *testing.T) {
 	cfg := serve(t, http.StatusOK,
 		`{"choices":[{"message":{"role":"assistant","content":"苹果发布 M5 芯片"}}]}`)
-	got, err := New().Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	got, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
 	if err != nil {
 		t.Fatalf("Translate: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestTranslateReadsChoice(t *testing.T) {
 // nil error, so the caller settles the row instead of retrying forever.
 func TestTranslateEmptyChoicesIsNotAnError(t *testing.T) {
 	cfg := serve(t, http.StatusOK, `{"choices":[]}`)
-	got, err := New().Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	got, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
 	if err != nil || got != "" {
 		t.Fatalf("got (%q, %v), want (\"\", nil)", got, err)
 	}
@@ -154,7 +154,7 @@ func TestTranslateNormalizesStatuses(t *testing.T) {
 	}
 	for _, c := range cases {
 		cfg := serve(t, c.status, `{"error":{"message":"secret upstream detail"}}`)
-		_, err := New().Translate(context.Background(), cfg, "Apple unveils M5 chip")
+		_, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
 		if !errors.Is(err, c.want) {
 			t.Errorf("status %d → %v, want %v", c.status, err, c.want)
 		}
