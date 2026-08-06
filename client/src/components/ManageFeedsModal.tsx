@@ -1,4 +1,15 @@
-import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck, Bell, BellOff } from 'lucide-react';
+import {
+  X,
+  Check,
+  Trash2,
+  Pencil,
+  Rss,
+  Copy,
+  CopyCheck,
+  Bell,
+  BellOff,
+  Languages,
+} from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -11,7 +22,7 @@ import {
   pushBlocker,
   unsubscribeDevice,
 } from '../lib/push';
-import type { Feed } from '../types';
+import type { Feed, FeedPatch } from '../types';
 
 function fallbackCopy(text: string, onDone: () => void) {
   const ta = document.createElement('textarea');
@@ -52,7 +63,7 @@ interface ManageFeedsModalProps {
   feeds: Feed[];
   onClose: () => void;
   onDelete: (feedId: string) => Promise<void>;
-  onUpdate: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  onUpdate: (feedId: string, patch: FeedPatch) => Promise<void>;
 }
 
 export default function ManageFeedsModal({
@@ -68,6 +79,30 @@ export default function ManageFeedsModal({
   const [devices, setDevices] = useState<number | null>(null);
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState('');
+  // Whether an LLM API key is configured at all. Without one the 译 toggle would be
+  // a switch that does nothing — the feed flag would flip and no title would ever
+  // change — so the row shows it disabled and points at 设置 instead.
+  const [translateReady, setTranslateReady] = useState(false);
+  const [translateBusy, setTranslateBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/llm/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => setTranslateReady(c?.key_set === true))
+      .catch(() => setTranslateReady(false));
+  }, []);
+
+  // Unlike the bell, this has no device dimension: translation is a property of the
+  // feed and its stored results are shared by every client, so there is nothing to
+  // register and nothing that one device can switch off for another.
+  const handleToggleTranslate = async (feed: Feed, next: boolean) => {
+    setTranslateBusy(feed.id);
+    try {
+      await onUpdate(feed.id, { translate_enabled: next });
+    } finally {
+      setTranslateBusy(null);
+    }
+  };
 
   const refreshDevice = async () => {
     const blocker = pushBlocker();
@@ -267,6 +302,9 @@ export default function ManageFeedsModal({
                 onTogglePush={handleTogglePush}
                 pushBusy={pushBusy === feed.id}
                 pushError={pushError?.feedId === feed.id ? pushError.message : null}
+                onToggleTranslate={handleToggleTranslate}
+                translateBusy={translateBusy === feed.id}
+                translateReady={translateReady}
               />
             ))
           )}
@@ -312,13 +350,27 @@ function deviceLabel(state: DeviceState, devices: number | null, anyFeedOn: bool
 interface FeedRowProps {
   feed: Feed;
   onDelete: (feedId: string) => Promise<void>;
-  onUpdate: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  onUpdate: (feedId: string, patch: FeedPatch) => Promise<void>;
   onTogglePush: (feed: Feed, next: boolean) => Promise<void>;
   pushBusy: boolean;
   pushError: string | null;
+  onToggleTranslate: (feed: Feed, next: boolean) => Promise<void>;
+  translateBusy: boolean;
+  /** False when no LLM API key is configured — the toggle then explains itself. */
+  translateReady: boolean;
 }
 
-function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }: FeedRowProps) {
+function FeedRow({
+  feed,
+  onDelete,
+  onUpdate,
+  onTogglePush,
+  pushBusy,
+  pushError,
+  onToggleTranslate,
+  translateBusy,
+  translateReady,
+}: FeedRowProps) {
   // Touch devices have no hover, so the row actions can never reveal themselves
   // there — on mobile they are simply always visible.
   const isMobile = useIsMobile();
@@ -474,6 +526,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
   }
 
   const pushOn = feed.push_enabled === true;
+  const translateOn = feed.translate_enabled === true;
 
   return (
     <div
@@ -520,6 +573,34 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           isMobile={isMobile}
         >
           {pushOn ? <Bell size={11} /> : <BellOff size={11} />}
+        </ActionBtn>
+      )}
+      {/* Same visibility rule as the bell, and for the same reason: an enabled
+          translation is state worth seeing without hovering. */}
+      {(hovered || translateOn || isMobile) && (
+        <ActionBtn
+          onClick={() => {
+            if (!translateBusy && translateReady) void onToggleTranslate(feed, !translateOn);
+          }}
+          title={
+            !translateReady
+              ? '未配置翻译服务 · 请先在设置中填写 API Key'
+              : translateOn
+                ? '关闭标题翻译'
+                : '开启标题翻译'
+          }
+          color={
+            !translateReady
+              ? 'var(--text-tertiary)'
+              : translateOn
+                ? 'var(--accent)'
+                : 'var(--text-tertiary)'
+          }
+          hoverColor={translateReady ? 'var(--accent)' : 'var(--text-tertiary)'}
+          isMobile={isMobile}
+          dimmed={!translateReady}
+        >
+          <Languages size={11} />
         </ActionBtn>
       )}
       {/* Gap, not just spacing: the bell is a state toggle, the three that follow
@@ -581,6 +662,8 @@ interface ActionBtnProps {
   isMobile?: boolean;
   /** Armed buttons keep their highlight instead of fading back on mouse-out. */
   armed?: boolean;
+  /** Dimmed buttons still show their tooltip — that is where the reason lives. */
+  dimmed?: boolean;
   children: React.ReactNode;
 }
 
@@ -591,6 +674,7 @@ function ActionBtn({
   hoverColor,
   isMobile,
   armed,
+  dimmed,
   children,
 }: ActionBtnProps) {
   return (
@@ -609,7 +693,8 @@ function ActionBtn({
         color,
         background: armed ? 'var(--bg-selected)' : 'none',
         border: 'none',
-        cursor: 'pointer',
+        cursor: dimmed ? 'default' : 'pointer',
+        opacity: dimmed ? 0.4 : 1,
         transition: 'color 0.12s, background 0.12s',
       }}
       onMouseEnter={(e) => {

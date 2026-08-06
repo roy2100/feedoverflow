@@ -61,6 +61,7 @@ server-go/          Go backend (cgo binary, port 3002 — chi router, mattn/go-s
   internal/favicon  favicon_cache read-through
   internal/jobs     poller, maintenance (orphan cleanup + size-cap + VACUUM), resource monitor
   internal/push     Web Push (VAPID) sender for per-feed update notifications
+  internal/translate OpenAI-compatible client for per-feed LLM title translation
   internal/feed     gofeed RSS wrapper
   internal/ssrf     SSRF guard for outbound content/favicon fetches
 client/             Vite + React + TypeScript (port 3000)
@@ -176,19 +177,46 @@ language, drop stale/redundant chrome.
   per feed per poll are pushed, one notification each; a busier poll simply drops the surplus —
   never a "有 N 篇新文章" summary, which is an unread count, the one thing this reader has no
   concept of. Rationale + manual test steps: `docs/plan-push-notifications.md`.
+- **Title translation** is opt-in per feed (`feeds.translate_enabled`, default off) and runs in its
+  own 30s worker (`internal/jobs/translator.go`), *not* off the poller the way push does. Push must
+  fire only from the poller because an on-demand refresh must never notify about the article being
+  read; translation has the opposite requirement, so one standalone worker covers every fetch path
+  (poller, `EnsureFresh`, warming) and keeps upstream latency off the request path entirely.
+  **One title per request, never a batch**: batching saves ~¥0.02/day and buys the one failure that
+  must not happen — a model that drops an element in a batched response shifts every following
+  translation onto the wrong article, silently and permanently. One title per request makes that
+  structurally impossible and deletes the index-keyed protocol, the tolerant JSON decoder and the
+  partial-failure semantics a batch would need.
+  Pending work is a **recency window** (`pub_ts > now − 7d AND title_zh IS NULL`), not a per-feed
+  watermark: `title_zh IS NULL` alone matches the whole historical table forever, while the window
+  needs no stored state, backfills 7 days when a feed is switched on, and bounds retries. Trade-off:
+  an article older than the window is never translated. `title_zh` is three-valued — NULL = pending,
+  `''` = settled with no translation (already Chinese, or nothing usable came back), non-empty = the
+  translation. Only the worker distinguishes NULL from `''`; every reader treats both as "show the
+  original". A failed *request* writes nothing and is retried; a successful one always settles the
+  row, so no counters or give-up rules are needed. Chinese titles are detected locally (>30% Han)
+  and never sent. The endpoint is any OpenAI-compatible `/chat/completions`
+  (`llm_config`, editable at runtime from SettingsModal — the worker re-reads it every tick; an
+  empty `api_key` is how the feature is off). `base_url` arrives over HTTP, so it is restricted to
+  https or loopback and upstream response bodies are never echoed to the client. The original title
+  is never overwritten: the list and reader show the translation with the original demoted beneath
+  it, because a machine-translated headline needs to stay checkable.
+  Rationale: `docs/plan-title-translation.md`.
 - Auth: when `AUTH_USER`/`AUTH_PASS` are set, every `/api/*` request on the public router requires
   a valid session cookie (no localhost bypass — gated by socket, not IP). Login is rate-limited.
 
 **SQLite tables:**
-- `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts)`
+- `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts, translate_enabled)`
 - `collections(id, name, position, created_at)` + `collection_rules(id, collection_id, feed_id, include, exclude)` — saved multi-feed streams
-- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at)` — durable record of every fetched article
+- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at, title_zh)` — durable record of every fetched article
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `sessions(token, created_at)` — 30-day TTL
 - `favicon_cache(domain, image, content_type, fetched_at)` — 30-day positive / 1-day negative TTL
 - `push_subscriptions(endpoint, p256dh, auth, user_agent, created_at)` — one row per registered device
 - `push_keys(id, public_key, private_key)` — the single VAPID keypair; deliberately *not* in
   `settings`, which `GET /api/settings` serializes wholesale
+- `llm_config(id, base_url, api_key, model)` — the single translation endpoint; out of `settings`
+  for the same reason as `push_keys`
 
 **API:**
 | Method | Path | Description |
@@ -196,7 +224,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/feeds` | list feeds |
 | POST | `/api/feeds` | add feed |
 | POST | `/api/feeds/import-opml` | bulk import from OPML |
-| PATCH | `/api/feeds/:id` | rename feed and/or toggle `push_enabled` (both fields optional) |
+| PATCH | `/api/feeds/:id` | rename feed and/or toggle `push_enabled` / `translate_enabled` (all fields optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
 | GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1` |
 | GET | `/api/collections` | list collections with their rules |
@@ -223,6 +251,8 @@ language, drop stale/redundant chrome.
 | GET | `/api/auth-check` | whether the request is authed |
 | GET | `/api/push/key` | VAPID public key (generated on first call) + device count |
 | POST | `/api/push/subscribe` `/api/push/unsubscribe` | register/drop this device's push endpoint |
+| GET\|PATCH | `/api/llm/config` | translation endpoint/model + whether a key is stored (`key_set`; the key itself is never returned) |
+| POST | `/api/llm/config/test` | translate one fixed string through the stored config |
 
 ### MCP server (`internal/mcp`)
 

@@ -14,15 +14,22 @@ type Feed struct {
 	// watermark (feeds.last_notified_ts) is deliberately not exposed — it is
 	// poller bookkeeping, not something a client acts on.
 	PushEnabled bool `json:"push_enabled"`
+	// TranslateEnabled is the per-feed LLM title-translation opt-in (default off).
+	// Like PushEnabled it is global to the feed, not per device.
+	TranslateEnabled bool `json:"translate_enabled"`
 }
 
 // Article is the enriched article shape returned by the list/detail endpoints.
 // UpdatedAt is nil (JSON null) until the article was edited upstream.
 type Article struct {
-	ID            string `json:"id"`
-	FeedID        string `json:"feedId"`
-	FeedName      string `json:"feedName"`
-	Title         string `json:"title"`
+	ID       string `json:"id"`
+	FeedID   string `json:"feedId"`
+	FeedName string `json:"feedName"`
+	Title    string `json:"title"`
+	// TitleZh is the LLM translation of Title, empty when there is none (never
+	// translated, still pending, or deliberately skipped — the client cannot and
+	// need not tell those apart). Title itself is never overwritten.
+	TitleZh       string `json:"titleZh"`
 	Summary       string `json:"summary"`
 	Content       string `json:"content"`
 	Link          string `json:"link"`

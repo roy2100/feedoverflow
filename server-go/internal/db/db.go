@@ -140,6 +140,12 @@ func InitSchema(db *sql.DB) error {
     include       TEXT,
     exclude       TEXT
   );
+  CREATE TABLE IF NOT EXISTS llm_config (
+    id       INTEGER PRIMARY KEY CHECK (id = 1),
+    base_url TEXT NOT NULL,
+    api_key  TEXT NOT NULL,
+    model    TEXT NOT NULL
+  );
 `); err != nil {
 		return fmt.Errorf("base schema: %w", err)
 	}
@@ -255,6 +261,16 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("feed_url backfill: %w", err)
 	}
 
+	// Per-feed LLM title-translation opt-in (default off) and the translated title.
+	// title_zh is three-valued: NULL = pending (the translator worker may still pick
+	// it up), '' = settled with no translation (the title was already Chinese, or the
+	// model returned nothing usable), non-empty = the translation. Only the worker
+	// distinguishes NULL from ''; every reader treats both as "show the original".
+	// Appended last, so it lands after the columns the list SELECT already walks —
+	// see the perf note on articleColsNoContent.
+	execIgnore(db, `ALTER TABLE feeds ADD COLUMN translate_enabled INTEGER DEFAULT 0`)
+	execIgnore(db, `ALTER TABLE article_states ADD COLUMN title_zh TEXT`)
+
 	// Drop the retired feed_cache table.
 	if _, err := db.Exec(`DROP TABLE IF EXISTS feed_cache`); err != nil {
 		return fmt.Errorf("drop feed_cache: %w", err)
@@ -272,6 +288,17 @@ func InitSchema(db *sql.DB) error {
 		`INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`,
 	); err != nil {
 		return fmt.Errorf("seed settings: %w", err)
+	}
+	// Seed the single llm_config row. The key starts empty, which is what disables
+	// title translation — the endpoint/model defaults only pre-fill the settings form.
+	// This is deliberately not a `settings` row: GET /api/settings serializes that
+	// table wholesale, so an api_key there would leak on any ordinary settings read
+	// (the same reason push_keys exists).
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO llm_config (id, base_url, api_key, model)
+		 VALUES (1, 'https://api.deepseek.com', '', 'deepseek-chat')`,
+	); err != nil {
+		return fmt.Errorf("seed llm_config: %w", err)
 	}
 	if err := seedDefaultFeeds(db); err != nil {
 		return err

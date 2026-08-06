@@ -19,6 +19,7 @@ type searchArticle struct {
 	FeedID        string `json:"feedId"`
 	FeedName      string `json:"feedName"`
 	Title         string `json:"title"`
+	TitleZh       string `json:"titleZh"`
 	Summary       string `json:"summary"`
 	Content       string `json:"content"`
 	Link          string `json:"link"`
@@ -53,6 +54,7 @@ func (s *Server) getSearch(w http.ResponseWriter, r *http.Request) {
 			FeedID:        row.FeedID.String,
 			FeedName:      row.FeedName.String,
 			Title:         row.Title.String,
+			TitleZh:       row.TitleZh.String,
 			Summary:       utf16Slice(row.Summary.String, 300), // JS .slice(0,300)
 			Content:       "",
 			Link:          row.Link.String,

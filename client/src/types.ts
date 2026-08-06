@@ -6,6 +6,28 @@ export interface Feed {
   url: string;
   /** Per-feed Web Push opt-in. Absent on responses from an older server. */
   push_enabled?: boolean;
+  /** Per-feed LLM title-translation opt-in. Absent on responses from an older server. */
+  translate_enabled?: boolean;
+}
+
+/**
+ * A partial feed update. Every field is optional and only the ones present are sent —
+ * the server applies just what it receives, so a rename never clears an opt-in.
+ */
+export interface FeedPatch {
+  name?: string;
+  push_enabled?: boolean;
+  translate_enabled?: boolean;
+}
+
+/**
+ * The LLM endpoint used for title translation. `key_set` stands in for the API key,
+ * which the server never returns — only whether one is stored.
+ */
+export interface LLMConfig {
+  base_url: string;
+  model: string;
+  key_set: boolean;
 }
 
 export interface Article {
@@ -13,6 +35,12 @@ export interface Article {
   feedId: string;
   feedName: string;
   title: string;
+  /**
+   * The LLM translation of `title`, empty when there is none (feed not enabled, still
+   * pending, or deliberately skipped — indistinguishable and equivalent here). `title`
+   * itself is never overwritten, so the original is always available.
+   */
+  titleZh?: string;
   summary: string;
   content: string;
   link: string;

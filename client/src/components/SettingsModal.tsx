@@ -2,15 +2,91 @@ import { X, CheckCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import type { LLMConfig } from '../types';
+
 interface SettingsModalProps {
   onClose: () => void;
 }
+
+const sectionStyle: React.CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 600,
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase',
+  color: 'var(--text-tertiary)',
+  marginBottom: 12,
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: 11.5,
+  fontWeight: 500,
+  color: 'var(--text-secondary)',
+  marginBottom: 5,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 10px',
+  fontSize: 13,
+  background: 'var(--bg)',
+  border: '1px solid var(--border)',
+  borderRadius: 7,
+  color: 'var(--text-primary)',
+  outline: 'none',
+  transition: 'border-color 0.15s',
+  fontFamily: 'monospace',
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  padding: '8px 16px',
+  borderRadius: 7,
+  fontSize: 13,
+  fontWeight: 500,
+  background: 'var(--accent)',
+  color: '#fff',
+  border: 'none',
+  transition: 'background 0.15s',
+  whiteSpace: 'nowrap',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  padding: '8px 14px',
+  borderRadius: 7,
+  fontSize: 13,
+  fontWeight: 500,
+  background: 'var(--bg-selected)',
+  color: 'var(--text-secondary)',
+  border: 'none',
+  whiteSpace: 'nowrap',
+};
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [rsshubBase, setRsshubBase] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+
+  // Translation service. `keySet` is all the server will say about the API key —
+  // it is never returned, so the input starts empty and only a non-empty submit
+  // replaces it. `editingKey` is what reveals the field once one is stored.
+  const [llmBase, setLlmBase] = useState('');
+  const [llmModel, setLlmModel] = useState('');
+  const [keySet, setKeySet] = useState(false);
+  const [llmKey, setLlmKey] = useState('');
+  const [editingKey, setEditingKey] = useState(false);
+  const [llmDirty, setLlmDirty] = useState(false);
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmSaved, setLlmSaved] = useState(false);
+  const [llmError, setLlmError] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // The key input is on screen when there is nothing stored yet, or when 更改
+  // opened it. This is also what decides whether a save carries the key.
+  const keyEditable = !keySet || editingKey;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -26,6 +102,77 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       .then((s) => setRsshubBase(s.rsshub_base_url || 'http://localhost:1200'))
       .catch(() => setRsshubBase('http://localhost:1200'));
   }, []);
+
+  useEffect(() => {
+    fetch('/api/llm/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: LLMConfig | null) => {
+        if (!c) return;
+        setLlmBase(c.base_url);
+        setLlmModel(c.model);
+        setKeySet(c.key_set);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveLLM = async () => {
+    setLlmSaving(true);
+    setLlmError('');
+    setLlmSaved(false);
+    setTestResult(null);
+    try {
+      // The key rides along exactly when its input is on screen — which is either
+      // because none is stored yet, or because 更改 opened it. Keying this off
+      // `editingKey` alone would silently drop the very first key ever entered,
+      // since the initial empty state shows the input without any 更改 to click.
+      // When it is hidden, a model-only edit cannot blank a stored credential the
+      // browser never saw.
+      const patch: Record<string, string> = {
+        base_url: llmBase.trim(),
+        model: llmModel.trim(),
+      };
+      if (keyEditable) patch.api_key = llmKey.trim();
+      const r = await fetch('/api/llm/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || '保存失败');
+      if (keyEditable) {
+        setKeySet(llmKey.trim() !== '');
+        setLlmKey('');
+        setEditingKey(false);
+      }
+      setLlmDirty(false);
+      setLlmSaved(true);
+      setTimeout(() => setLlmSaved(false), 2500);
+    } catch (err) {
+      setLlmError((err as Error).message || '保存失败');
+    } finally {
+      setLlmSaving(false);
+    }
+  };
+
+  // Runs one real translation through the stored config. A health check would pass
+  // on a wrong model name or a key without chat permission and still leave every
+  // title untranslated, so this exercises the path the worker actually uses.
+  const handleTestLLM = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await fetch('/api/llm/config/test', { method: 'POST' });
+      const body = await r.json().catch(() => ({}));
+      setTestResult(
+        body.ok
+          ? { ok: true, message: '连接成功' }
+          : { ok: false, message: body.error || '连接失败' },
+      );
+    } catch {
+      setTestResult({ ok: false, message: '连接失败' });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const handleSave = async () => {
     const val = rsshubBase.trim();
@@ -113,31 +260,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         {/* Body */}
         <div style={{ padding: '20px 20px 24px' }}>
           {/* Section: RSSHub */}
-          <p
-            style={{
-              fontSize: 10.5,
-              fontWeight: 600,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--text-tertiary)',
-              marginBottom: 12,
-            }}
-          >
-            RSSHub
-          </p>
+          <p style={sectionStyle}>RSSHub</p>
 
           <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 11.5,
-                fontWeight: 500,
-                color: 'var(--text-secondary)',
-                marginBottom: 5,
-              }}
-            >
-              实例地址
-            </label>
+            <label style={labelStyle}>实例地址</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 type="text"
@@ -211,6 +337,138 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </div>
 
           {error && <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{error}</p>}
+
+          {/* Section: translation service */}
+          <p style={{ ...sectionStyle, marginTop: 24 }}>翻译服务</p>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>API 地址</label>
+            <input
+              type="text"
+              value={llmBase}
+              onChange={(e) => {
+                setLlmBase(e.target.value);
+                setLlmDirty(true);
+              }}
+              placeholder="https://api.deepseek.com"
+              style={inputStyle}
+              onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+              onBlur={(e) => (e.target.style.borderColor = 'var(--border)')}
+            />
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>模型</label>
+            <input
+              type="text"
+              value={llmModel}
+              onChange={(e) => {
+                setLlmModel(e.target.value);
+                setLlmDirty(true);
+              }}
+              placeholder="deepseek-chat"
+              style={inputStyle}
+              onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+              onBlur={(e) => (e.target.style.borderColor = 'var(--border)')}
+            />
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>API Key</label>
+            {!keyEditable ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    fontFamily: 'monospace',
+                    color: 'var(--text-tertiary)',
+                    letterSpacing: '0.15em',
+                  }}
+                >
+                  ••••••••••••
+                </span>
+                <button
+                  onClick={() => {
+                    setEditingKey(true);
+                    setLlmDirty(true);
+                  }}
+                  style={secondaryBtnStyle}
+                >
+                  更改
+                </button>
+              </div>
+            ) : (
+              <input
+                type="password"
+                value={llmKey}
+                onChange={(e) => {
+                  setLlmKey(e.target.value);
+                  setLlmDirty(true);
+                }}
+                placeholder="sk-…"
+                autoComplete="off"
+                style={inputStyle}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border)')}
+              />
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={handleSaveLLM}
+              disabled={llmSaving}
+              style={{
+                ...primaryBtnStyle,
+                opacity: llmSaving ? 0.7 : 1,
+                cursor: llmSaving ? 'default' : 'pointer',
+              }}
+            >
+              {llmSaved ? (
+                <>
+                  <CheckCircle size={13} /> 已保存
+                </>
+              ) : llmSaving ? (
+                '保存中…'
+              ) : (
+                '保存'
+              )}
+            </button>
+            {/* Tests what is stored, so unsaved edits would test the wrong thing. */}
+            <button
+              onClick={handleTestLLM}
+              disabled={testing || llmDirty || !keySet}
+              title={llmDirty ? '请先保存' : !keySet ? '请先填写 API Key' : '发送一次真实翻译请求'}
+              style={{
+                ...secondaryBtnStyle,
+                opacity: testing || llmDirty || !keySet ? 0.5 : 1,
+                cursor: testing || llmDirty || !keySet ? 'default' : 'pointer',
+              }}
+            >
+              {testing ? '测试中…' : '测试连接'}
+            </button>
+            {testResult && (
+              <span
+                style={{
+                  fontSize: 12,
+                  color: testResult.ok ? 'var(--accent)' : 'var(--red)',
+                }}
+              >
+                {testResult.message}
+              </span>
+            )}
+          </div>
+          {llmError && (
+            <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{llmError}</p>
+          )}
+          <p
+            style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.6 }}
+          >
+            任何兼容 OpenAI <code style={{ fontFamily: 'monospace' }}>/chat/completions</code>{' '}
+            的服务均可（DeepSeek、Moonshot、OpenRouter、本机 Ollama 等）。
+            配置后在「管理订阅源」中逐个开启需要翻译标题的订阅源；留空 API Key 即关闭翻译。
+          </p>
         </div>
       </div>
 

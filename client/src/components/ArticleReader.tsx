@@ -564,7 +564,9 @@ export default function ArticleReader({
           </div>
         )}
 
-        {/* Title */}
+        {/* Title — translation first when there is one, original underneath. The
+            reader is where a bad machine translation is most worth catching, so the
+            original is always present, never replaced. */}
         <h1
           style={{
             fontFamily: 'var(--font-serif)',
@@ -572,12 +574,24 @@ export default function ArticleReader({
             fontWeight: 600,
             lineHeight: 1.35,
             color: 'var(--text-primary)',
-            marginBottom: 12,
+            marginBottom: article.titleZh?.trim() ? 6 : 12,
             letterSpacing: '-0.01em',
           }}
         >
-          {decodeEntities(article.title)}
+          {decodeEntities(article.titleZh?.trim() || article.title)}
         </h1>
+        {article.titleZh?.trim() && (
+          <div
+            style={{
+              fontSize: isMobile ? 13 : 14,
+              lineHeight: 1.45,
+              color: 'var(--text-tertiary)',
+              marginBottom: 12,
+            }}
+          >
+            {decodeEntities(article.title)}
+          </div>
+        )}
 
         {/* Meta */}
         <div

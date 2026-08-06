@@ -32,6 +32,7 @@ import (
 	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/push"
 	"rss-reader/server-go/internal/store"
+	"rss-reader/server-go/internal/translate"
 )
 
 var allowedOrigins = map[string]bool{
@@ -55,6 +56,9 @@ type Server struct {
 	// Push owns the VAPID keypair the subscribe flow needs. nil disables the
 	// /api/push/* routes (they answer 503) and, in jobs.Runner, notifications.
 	Push *push.Sender
+	// Translator backs POST /api/llm/config/test. nil answers 503 there; it has no
+	// bearing on stored config or on the background worker.
+	Translator translate.Checker
 	// AuthUser/AuthPass gate the public listener when both are set (auth disabled
 	// otherwise), matching registerAuth.
 	AuthUser string
@@ -138,6 +142,9 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/podcast-progress", s.getPodcastProgress)
 	r.Post("/api/podcast-progress", s.postPodcastProgress)
 	r.Delete("/api/podcast-progress/{id}", s.deletePodcastProgress)
+	r.Get("/api/llm/config", s.getLLMConfig)
+	r.Patch("/api/llm/config", s.patchLLMConfig)
+	r.Post("/api/llm/config/test", s.postLLMConfigTest)
 	r.Get("/api/push/key", s.getPushKey)
 	r.Post("/api/push/subscribe", s.postPushSubscribe)
 	r.Post("/api/push/unsubscribe", s.postPushUnsubscribe)
