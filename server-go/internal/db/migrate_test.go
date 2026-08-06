@@ -3,7 +3,6 @@ package db_test
 import (
 	"database/sql"
 	"testing"
-	"time"
 
 	"rss-reader/server-go/internal/db"
 )
@@ -57,8 +56,7 @@ func TestAdoptsRetiredPerFeedTranslateFlag(t *testing.T) {
 	if _, err := h.Writer().Exec(`UPDATE feeds SET translate_enabled = 1 WHERE rowid = 1`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Writer().Exec(
-		`UPDATE llm_config SET enabled = 0, translate_since = NULL WHERE id = 1`); err != nil {
+	if _, err := h.Writer().Exec(`UPDATE llm_config SET enabled = 0 WHERE id = 1`); err != nil {
 		t.Fatal(err)
 	}
 	h.Close()
@@ -70,20 +68,12 @@ func TestAdoptsRetiredPerFeedTranslateFlag(t *testing.T) {
 		t.Fatal("retired per-feed column still present")
 	}
 	var enabled int
-	var since sql.NullInt64
-	if err := h.Reader().QueryRow(`SELECT enabled, translate_since FROM llm_config WHERE id = 1`).
-		Scan(&enabled, &since); err != nil {
+	if err := h.Reader().QueryRow(`SELECT enabled FROM llm_config WHERE id = 1`).
+		Scan(&enabled); err != nil {
 		t.Fatal(err)
 	}
 	if enabled != 1 {
 		t.Fatal("per-feed opt-in was not carried over to the global switch")
-	}
-	if !since.Valid {
-		t.Fatal("watermark not seeded during adoption")
-	}
-	day := int64(24 * time.Hour / time.Millisecond)
-	if delta := time.Now().UnixMilli() - since.Int64; delta < day-60_000 || delta > day+60_000 {
-		t.Fatalf("watermark is %dms back, want ~%dms", delta, day)
 	}
 }
 
@@ -94,13 +84,12 @@ func TestFreshDBLeavesTranslationOff(t *testing.T) {
 	defer h.Close()
 
 	var enabled int
-	var since sql.NullInt64
-	if err := h.Reader().QueryRow(`SELECT enabled, translate_since FROM llm_config WHERE id = 1`).
-		Scan(&enabled, &since); err != nil {
+	if err := h.Reader().QueryRow(`SELECT enabled FROM llm_config WHERE id = 1`).
+		Scan(&enabled); err != nil {
 		t.Fatal(err)
 	}
-	if enabled != 0 || since.Valid {
-		t.Fatalf("fresh DB has translation on: enabled=%d since=%v", enabled, since)
+	if enabled != 0 {
+		t.Fatalf("fresh DB has translation on: enabled=%d", enabled)
 	}
 }
 
@@ -109,7 +98,7 @@ func TestInitSchemaIsIdempotent(t *testing.T) {
 	path := t.TempDir() + "/t.db"
 	h := openInit(t, path)
 	if _, err := h.Writer().Exec(
-		`UPDATE llm_config SET enabled = 1, translate_since = 1234 WHERE id = 1`); err != nil {
+		`UPDATE llm_config SET enabled = 1, model = 'kimi-k2' WHERE id = 1`); err != nil {
 		t.Fatal(err)
 	}
 	h.Close()
@@ -117,12 +106,12 @@ func TestInitSchemaIsIdempotent(t *testing.T) {
 	h = openInit(t, path)
 	defer h.Close()
 	var enabled int
-	var since int64
-	if err := h.Reader().QueryRow(`SELECT enabled, translate_since FROM llm_config WHERE id = 1`).
-		Scan(&enabled, &since); err != nil {
+	var model string
+	if err := h.Reader().QueryRow(`SELECT enabled, model FROM llm_config WHERE id = 1`).
+		Scan(&enabled, &model); err != nil {
 		t.Fatal(err)
 	}
-	if enabled != 1 || since != 1234 {
-		t.Fatalf("re-init clobbered config: enabled=%d since=%d", enabled, since)
+	if enabled != 1 || model != "kimi-k2" {
+		t.Fatalf("re-init clobbered config: enabled=%d model=%q", enabled, model)
 	}
 }

@@ -72,13 +72,8 @@ func (s *Server) patchLLMConfig(w http.ResponseWriter, r *http.Request) {
 		v := strings.TrimSpace(*body.APIKey)
 		body.APIKey = &v
 	}
-	// Switching on stamps the watermark 24h back rather than at now: feed items
-	// routinely carry a pub_date hours older than the fetch, so a watermark pinned
-	// at now would let the next several polls land untranslated and read as broken.
-	// A day is ~300 titles, on the order of ¥0.05.
-	since := time.Now().Add(-24 * time.Hour).UnixMilli()
 	if err := store.SaveLLMConfig(
-		s.DB.Writer(), body.BaseURL, body.APIKey, body.Model, body.Enabled, since); err != nil {
+		s.DB.Writer(), body.BaseURL, body.APIKey, body.Model, body.Enabled); err != nil {
 		serverError(w, err)
 		return
 	}

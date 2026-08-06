@@ -132,8 +132,6 @@ describe('SettingsModal translation switch', () => {
     expect(box).toBeChecked();
   });
 
-  // Sent on every save so the server sees the intended state; the server is what
-  // decides whether that counts as an off→on transition worth re-stamping.
   it('sends the switch state with the save', async () => {
     const patches = stubFetch(true);
     render(<SettingsModal onClose={vi.fn()} />);

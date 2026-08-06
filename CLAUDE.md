@@ -193,14 +193,18 @@ language, drop stale/redundant chrome.
   translation onto the wrong article, silently and permanently. One title per request makes that
   structurally impossible and deletes the index-keyed protocol, the tolerant JSON decoder and the
   partial-failure semantics a batch would need.
-  Pending work is `title_zh IS NULL AND pub_ts > cutoff`, where the cutoff is **the later of two
-  independent bounds**, each with one job: `llm_config.translate_since` (stamped on an off→on
-  transition only) says how far back switching on reaches, and a fixed 7-day recency bound says when
-  to stop retrying. The second is load-bearing, not decoration: a failed request writes nothing and
-  the queue is newest-first, so without it a permanently-failing row would block everything behind
-  it forever. `translate_since` is stamped at **now − 24h**, not now: feed items routinely carry a
-  `pub_date` hours older than the fetch, so a watermark at now would let the next several polls land
-  untranslated and read as broken. That day of backfill is ~300 titles, on the order of ¥0.05.
+  Pending work is `title_zh IS NULL AND pub_ts > now − 24h`. That **one** bound carries three jobs:
+  it keeps `title_zh IS NULL` from matching the entire historical table (every pre-existing row has
+  it NULL); it decides how far back switching on reaches; and it decides when to stop retrying a row
+  that keeps failing — a failed request writes nothing and the queue is newest-first, so without a
+  bound a permanently-failing row would block everything older than it forever. An earlier design
+  split the second job onto a watermark stamped at enable time; with both set to 24h the two are
+  provably identical (the watermark equals `now − 24h` when stamped and is overtaken immediately),
+  so it was deleted rather than kept as a knob that could only hold one value.
+  **This bound is not a spending control** — it permits work, it does not create it. In steady state
+  everything inside it settles within minutes, so the pending set is empty whatever the value. It
+  bites only on a real backlog: an outage longer than a day, or a newly added feed, whose
+  older-than-24h items stay in their original language.
   `title_zh` is three-valued — NULL = pending, `''` = settled with no translation (already Chinese,
   or nothing usable came back), non-empty = the translation. Only the worker distinguishes NULL from
   `''`; every reader treats both as "show the original". A failed *request* writes nothing and is
@@ -228,9 +232,8 @@ language, drop stale/redundant chrome.
 - `push_subscriptions(endpoint, p256dh, auth, user_agent, created_at)` — one row per registered device
 - `push_keys(id, public_key, private_key)` — the single VAPID keypair; deliberately *not* in
   `settings`, which `GET /api/settings` serializes wholesale
-- `llm_config(id, base_url, api_key, model, enabled, translate_since)` — the single translation
-  endpoint + the global switch and its enable watermark; out of `settings` for the same reason as
-  `push_keys`
+- `llm_config(id, base_url, api_key, model, enabled)` — the single translation endpoint + the
+  global on/off switch; out of `settings` for the same reason as `push_keys`
 
 **API:**
 | Method | Path | Description |

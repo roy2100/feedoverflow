@@ -417,3 +417,50 @@ cutoff is now `max(translate_since, now − 7d)` — two bounds, one job each, s
 - Tests: `internal/db/migrate_test.go` covers the adoption path, a fresh DB staying off, and
   InitSchema idempotence; `internal/jobs` gains a watermark test; `internal/httpapi` gains three
   (stamp 24h back, re-stamp on re-enable, no move on a no-op enable).
+
+## Revision: one 24h bound, watermark deleted
+
+The two-bound design above (`max(translate_since, now − 7d)`) was collapsed to a single
+`now − 24h`, and `llm_config.translate_since` removed entirely.
+
+**Why the two bounds could merge.** `translate_since` was stamped at `T_enable − 24h`, which is
+exactly what `now − 24h` equals at that instant — so with both values set to 24h, `now − 24h`
+overtakes the watermark immediately and `max()` never picks the watermark again. Verified against
+the awkward case too: switch off for a month, switch back on, and `now − 24h` selects the same rows
+the watermark would have. The column was provably dead, not merely redundant, so it went rather
+than surviving as a knob that could only ever hold one value.
+
+**Why 24h is safe here.** The argument for 7 days was tolerance of a device being offline longer
+than a day — a closed laptop over a weekend leaves a visible band of untranslated articles, because
+the poller fetches the whole gap on wake and those items carry `pub_date`s outside the window. This
+deployment is an always-on Mac, so the realistic outages (network blips, a provider incident, a
+reboot for updates) are hours, not days.
+
+**What this bound does not do is save money.** It permits work, it does not create it: in steady
+state everything inside it settles within minutes, so the pending set is empty whatever the value.
+Shortening it from 7d to 24h changes spend by approximately nothing. What actually bounds spend is
+that every row is settled after one pass (`''` on anything unusable) and that Chinese titles never
+leave the process.
+
+**Accepted consequences**, both from the bound now being short:
+- An outage longer than 24h leaves a permanent hole — articles published during it stay in their
+  original language even though the poller fetches them on recovery.
+- A newly added feed only gets its last 24h of titles translated; the rest of its initial backlog
+  stays as-is until it publishes fresh items. This is the same "reads as broken" shape that ruled
+  out a zero backfill, just triggered by adding a feed rather than by flipping the switch. Judged
+  acceptable because feeds are added rarely here.
+
+Reverting to a longer window is a one-constant change (`jobs.translateWindow`); reinstating
+*independent* backfill and give-up bounds would mean bringing the watermark back.
+
+### Changes
+
+- `llm_config.translate_since` dropped (with an `execIgnore` DROP COLUMN so DBs from the
+  intermediate build are cleaned up). `SaveLLMConfig` loses its `sinceOnEnable` parameter and the
+  `CASE WHEN` stamp; `enabled` is now a plain `COALESCE` like every other field.
+- `store.TranslateConfig.Since` gone; `jobs.translatePending` computes `cutoff` directly.
+- `adoptFeedTranslateFlag` no longer seeds a watermark — it only carries the on/off state.
+- Tests: the four watermark tests in `internal/httpapi/llm_test.go` and
+  `TestTranslatorIgnoresRowsBeforeEnable` are gone (they pinned a mechanism that no longer exists);
+  `TestTranslatorIgnoresRowsOutsideWindow` now asserts both halves — a row inside the window is
+  translated in the same pass that a row outside it is skipped.

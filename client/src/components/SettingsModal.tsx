@@ -135,9 +135,6 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       const patch: Record<string, string | boolean> = {
         base_url: llmBase.trim(),
         model: llmModel.trim(),
-        // Sent on every save, so switching on always re-stamps the server's
-        // watermark: articles published while it was off were deliberately skipped,
-        // and a later enable must not reach back over them.
         enabled: llmEnabled,
       };
       if (keyEditable) patch.api_key = llmKey.trim();

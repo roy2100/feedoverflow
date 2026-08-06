@@ -17,7 +17,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -142,12 +141,11 @@ func InitSchema(db *sql.DB) error {
     exclude       TEXT
   );
   CREATE TABLE IF NOT EXISTS llm_config (
-    id              INTEGER PRIMARY KEY CHECK (id = 1),
-    base_url        TEXT NOT NULL,
-    api_key         TEXT NOT NULL,
-    model           TEXT NOT NULL,
-    enabled         INTEGER NOT NULL DEFAULT 0,
-    translate_since INTEGER
+    id       INTEGER PRIMARY KEY CHECK (id = 1),
+    base_url TEXT NOT NULL,
+    api_key  TEXT NOT NULL,
+    model    TEXT NOT NULL,
+    enabled  INTEGER NOT NULL DEFAULT 0
   );
 `); err != nil {
 		return fmt.Errorf("base schema: %w", err)
@@ -277,12 +275,14 @@ func InitSchema(db *sql.DB) error {
 	// would exist to keep Chinese feeds from costing anything, and the worker's
 	// local Han-ratio check already does that with no clicks; the residual case
 	// ("this English feed I read fine") did not justify a column, a PATCH field and
-	// a control on every row. translate_since is stamped when the switch is turned
-	// on and never advanced — it bounds how far back enabling reaches.
+	// a control on every row.
 	execIgnore(db, `ALTER TABLE llm_config ADD COLUMN enabled INTEGER NOT NULL DEFAULT 0`)
-	execIgnore(db, `ALTER TABLE llm_config ADD COLUMN translate_since INTEGER`)
 	adoptFeedTranslateFlag(db)
 	execIgnore(db, `ALTER TABLE feeds DROP COLUMN translate_enabled`)
+	// An intermediate build stamped an enable watermark here. It was removed once
+	// backfill-on-enable and give-up-on-retry were set to the same 24h bound, which
+	// makes the two provably identical (see jobs.translateWindow).
+	execIgnore(db, `ALTER TABLE llm_config DROP COLUMN translate_since`)
 
 	// Drop the retired feed_cache table.
 	if _, err := db.Exec(`DROP TABLE IF EXISTS feed_cache`); err != nil {
@@ -347,13 +347,6 @@ func seedDefaultFeeds(db *sql.DB) error {
 // over to the global switch: if any feed had it on, translation stays on. Runs
 // before the DROP COLUMN, and no-ops once the column is gone (the SELECT errors,
 // which is the signal that there is nothing left to carry).
-//
-// translate_since is seeded to 24h ago rather than to now. Feed items routinely
-// carry a pub_date hours older than the moment they are fetched, so a watermark
-// pinned at "now" would let the next several polls arrive untranslated — which
-// reads as the feature being broken. A day of backfill is ~300 titles, on the
-// order of ¥0.05, and it makes "switch it on and the visible list translates"
-// actually true.
 func adoptFeedTranslateFlag(db *sql.DB) {
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM feeds WHERE translate_enabled = 1`).Scan(&n); err != nil {
@@ -362,10 +355,7 @@ func adoptFeedTranslateFlag(db *sql.DB) {
 	if n == 0 {
 		return
 	}
-	since := time.Now().Add(-24 * time.Hour).UnixMilli()
-	_, _ = db.Exec(
-		`UPDATE llm_config SET enabled = 1, translate_since = COALESCE(translate_since, ?) WHERE id = 1`,
-		since)
+	_, _ = db.Exec(`UPDATE llm_config SET enabled = 1 WHERE id = 1`)
 }
 
 // execIgnore runs an idempotent DDL statement, discarding the error a re-run

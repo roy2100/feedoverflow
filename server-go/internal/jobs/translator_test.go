@@ -28,8 +28,7 @@ func (f *fakeTranslator) Translate(_ context.Context, _ translate.Config, title 
 	return f.out, nil
 }
 
-// translateDB gives a DB with one feed, translation switched on, and a watermark
-// far enough back that the seeded articles are in range.
+// translateDB gives a DB with one feed and translation switched on.
 func translateDB(t *testing.T, key string) *db.DB {
 	t.Helper()
 	handle := newTestDB(t)
@@ -37,10 +36,8 @@ func translateDB(t *testing.T, key string) *db.DB {
 		t.Fatal(err)
 	}
 	seedFeed(t, handle.Writer(), "f1")
-	since := time.Now().Add(-24 * time.Hour).UnixMilli()
 	if _, err := handle.Writer().Exec(
-		`UPDATE llm_config SET api_key = ?, enabled = 1, translate_since = ? WHERE id = 1`,
-		key, since); err != nil {
+		`UPDATE llm_config SET api_key = ?, enabled = 1 WHERE id = 1`, key); err != nil {
 		t.Fatal(err)
 	}
 	return handle
@@ -162,47 +159,23 @@ func TestTranslatorFailureAbortsTick(t *testing.T) {
 	}
 }
 
-// The give-up bound: a row older than translateWindow is never selected, so a
-// request that keeps failing cannot sit at the head of a newest-first queue
-// forever and block everything behind it.
+// The window is the only lower bound, and it carries every job at once: it keeps
+// the historical backlog out of scope, it decides how far back switching on
+// reaches, and it stops a permanently-failing row from being retried forever.
 func TestTranslatorIgnoresRowsOutsideWindow(t *testing.T) {
 	handle := translateDB(t, "sk-test")
-	// Push the enable watermark back too, so the window is the only thing excluding
-	// this row.
 	old := time.Now().Add(-jobs.TranslateWindowForTest - time.Hour)
-	if _, err := handle.Writer().Exec(
-		`UPDATE llm_config SET translate_since = ? WHERE id = 1`, old.Add(-time.Hour).UnixMilli(),
-	); err != nil {
-		t.Fatal(err)
-	}
-	seedTitled(t, handle.Writer(), "a1", "f1", "Ancient headline", old)
-
-	tr := &fakeTranslator{out: "x"}
-	runTranslator(handle, tr)
-
-	if len(tr.seen) != 0 {
-		t.Fatalf("a row outside the window was translated: %v", tr.seen)
-	}
-	if _, valid := titleZh(t, handle.Reader(), "a1"); valid {
-		t.Fatal("a row outside the window was written")
-	}
-}
-
-// The enable watermark is the other lower bound, and it is the one that stops
-// switching translation on from reaching back over the whole archive.
-func TestTranslatorIgnoresRowsBeforeEnable(t *testing.T) {
-	handle := translateDB(t, "sk-test")
-	seedTitled(t, handle.Writer(), "old", "f1", "Published before enabling", time.Now().Add(-48*time.Hour))
-	seedTitled(t, handle.Writer(), "new", "f1", "Published after enabling", time.Now())
+	seedTitled(t, handle.Writer(), "old", "f1", "Ancient headline", old)
+	seedTitled(t, handle.Writer(), "new", "f1", "Fresh headline", time.Now())
 
 	tr := &fakeTranslator{out: "译文"}
 	runTranslator(handle, tr)
 
-	if len(tr.seen) != 1 || tr.seen[0] != "Published after enabling" {
-		t.Fatalf("watermark not honoured, translator saw %v", tr.seen)
+	if len(tr.seen) != 1 || tr.seen[0] != "Fresh headline" {
+		t.Fatalf("window not honoured, translator saw %v", tr.seen)
 	}
 	if _, valid := titleZh(t, handle.Reader(), "old"); valid {
-		t.Fatal("a row published before the switch was turned on was written")
+		t.Fatal("a row outside the window was written")
 	}
 }
 

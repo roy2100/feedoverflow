@@ -10,13 +10,28 @@ import (
 
 const (
 	translateInterval = 30 * time.Second
-	// translateWindow is the give-up bound, not a backfill bound: how far back the
-	// worker will keep *retrying*. A failed request writes nothing, and the pending
-	// query is ordered newest-first, so without this a permanently-failing row would
-	// sit at the head of the queue forever and block everything behind it. Reaching
-	// back on enable is a separate concern with its own watermark
-	// (llm_config.translate_since) — the cutoff is the later of the two.
-	translateWindow = 7 * 24 * time.Hour
+	// translateWindow is the only lower bound on what counts as pending, and it
+	// carries three jobs at once:
+	//
+	//   - it keeps `title_zh IS NULL` from matching the entire historical table
+	//     (every pre-existing row has it NULL);
+	//   - it decides how far back switching translation on reaches;
+	//   - it decides when to stop retrying a row that keeps failing. A failed
+	//     request writes nothing and the queue is newest-first, so without a bound a
+	//     permanently-failing row would block everything older than it forever.
+	//
+	// An earlier design split the second job onto its own watermark stamped at
+	// enable time. With both set to 24h the two are provably identical — the
+	// watermark equals now−24h at the moment it is stamped and is overtaken
+	// immediately after — so it was removed rather than kept as a knob that could
+	// only ever hold the same value.
+	//
+	// This bound is not a spending control: it permits work, it does not create it.
+	// In steady state everything inside it settles within minutes, so the pending
+	// set is empty whatever the value. It only bites when there is a real backlog —
+	// an outage, or a newly added feed, whose older-than-a-day items stay in their
+	// original language.
+	translateWindow = 24 * time.Hour
 	// translateBatch caps titles per tick. Requests are sequential, so this is also
 	// the ceiling on how long one tick can run against a slow endpoint.
 	translateBatch = 20
@@ -54,10 +69,7 @@ func (r *Runner) translatePending(ctx context.Context) {
 	if !cfg.Active() {
 		return
 	}
-	// Two independent lower bounds, so neither has to serve both purposes: Since
-	// says how far back switching on reaches, translateWindow says when to stop
-	// retrying. Whichever is later wins.
-	cutoff := max(time.Now().Add(-translateWindow).UnixMilli(), cfg.Since)
+	cutoff := time.Now().Add(-translateWindow).UnixMilli()
 	pending, err := store.PendingTranslations(r.DB.Reader(), cutoff, translateBatch)
 	if err != nil {
 		r.Log.Warn("translate: select pending failed", "err", err)
