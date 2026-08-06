@@ -464,3 +464,40 @@ Reverting to a longer window is a one-constant change (`jobs.translateWindow`); 
   `TestTranslatorIgnoresRowsBeforeEnable` are gone (they pinned a mechanism that no longer exists);
   `TestTranslatorIgnoresRowsOutsideWindow` now asserts both halves — a row inside the window is
   translated in the same pass that a row outside it is skipped.
+
+## Measured: the cost estimate was wrong, and why
+
+The plan's "~¥0.05/day, unverified — check the actual bill" line was right to be flagged. The first
+real day came in at **¥0.42 over 435 requests, 332,388 tokens — 764 per call**, against an estimate
+of ~110. Request count matched the article rate exactly, so the whole discrepancy was per-request
+size.
+
+Per-request usage logging (prompt/completion/total, `prompt_cache_hit_tokens`, and the length of
+`reasoning_content`) found it immediately: **DeepSeek enables thinking by default at `high` effort**,
+and it was spending ~1800 characters of English reasoning per headline to produce ~20 characters of
+Chinese. Reasoning was 95%+ of the completion. `reasoning_effort` has no `"none"` value, so
+`thinking: {"type": "disabled"}` is the only switch.
+
+After the fix, measured over the next batch:
+
+| | before | after | |
+|---|---|---|---|
+| `reasoningRunes` | ~1803 | 0 | |
+| `completionTokens` | ~476 | ~8 | 60× |
+| `promptTokens` | ~136 | ~50 | 2.7× |
+| `totalTokens` | **764** | **~58** | **13×** |
+
+≈ **¥0.03/day (~¥1/month)** — back to the original order of magnitude.
+
+The prompt drop was not predicted: the system prompt is byte-identical either way, so thinking mode
+was also injecting scaffolding into the *input*. Worth knowing for any future capability on this
+provider — disabling thinking saves more than the reasoning tokens alone.
+
+**Not pursued: prefix caching.** `prompt_cache_hit_tokens` is 0 on every call. DeepSeek caches in
+64-token blocks and the cacheable prefix (the system message) is ~35 tokens, so it never qualifies.
+Reaching the threshold would mean padding the prompt with filler to clear a provider constant that
+can change — for a few mao a month. Stopped here instead.
+
+**Lesson for the next capability:** a provider dashboard reports totals, which cannot distinguish an
+expensive prompt from a model thinking out loud. The per-request `usage` log paid for itself in one
+deploy, and it is worth having *before* the first bill rather than after.
