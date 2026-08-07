@@ -195,7 +195,26 @@ language, drop stale/redundant chrome.
     feed text and all of it stays in the *user* message — that separation, not its length, is the
     injection mitigation; `clean`'s growth check still measures the answer against the **title**.
   - The system prompt must stay **byte-identical across calls** (cacheable prefix, and long enough
-    to fix 翻译腔). Nothing per-article may move into it.
+    to fix 翻译腔). Nothing per-article may move into it. Same rule for `exampleTurns`, which rides
+    in that prefix.
+  - **The wire is `system → fixed demonstration turns → the real request`.** A labelled multi-line
+    user message reads as a form, and a form's likeliest completion is the same form filled in —
+    which is how `来源：Hacker News\n标题：网页服务器…` got stored as a headline. `examplePairs` shows
+    one such message answered with a bare line, in **both** shapes `userMessage` produces (with and
+    without 摘要 — the two-line one is what actually failed). The example user messages are built by
+    calling `userMessage`, never hand-written, so the demonstrated format cannot drift from the sent
+    one. Format compliance comes from demonstration; prose rules are the fallback when there is
+    nothing to demonstrate.
+  - Sampling parameters are deliberately **not** sent — no `temperature`. Each title is translated
+    exactly once and the result is permanent, so there is no run-to-run variance to converge; low
+    temperature pushes output toward the literal register this prompt exists to avoid; and reasoning
+    models (o-series, R1) reject `temperature != 1`, which the 400 retry would surface as
+    "模型不可用". `response_format: json_object` was rejected for the same portability reason, plus it
+    cannot help: a mirrored label lands inside the JSON value and still needs `clean`.
+  - Model output is **untrusted input** — instruct, demonstrate, then validate. The prompt says
+    不加引号 and `unwrapQuotes` exists anyway; 不加解释 and `maxGrowth` exists anyway; 不要重复标签 and
+    `stripEchoedLabels` exists anyway. A demonstration moves the failure rate, never to zero, so
+    none of those backstops may be dropped as "the prompt handles it".
   - Pending work is `title_zh IS NULL AND pub_ts > now − 24h`. That one bound keeps `title_zh IS
     NULL` from matching the whole historical table, decides how far back switching on reaches, and
     stops a permanently-failing row from blocking everything older than it.

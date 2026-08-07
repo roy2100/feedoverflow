@@ -57,13 +57,19 @@ const maxGrowth = 4
 // ~250 tokens it finally clears DeepSeek's 64-token block floor that the old
 // 53-token prompt missed. Nothing per-article may move in here — that would
 // fragment the cache per feed and buy nothing.
+//
+// The arrow examples below and the demonstration turns in exampleTurns do
+// different jobs and neither replaces the other: the arrows are five register
+// patterns for ~120 runes, the turns show what a whole *message* gets answered
+// with. Rendering all five as full exchanges would cost several times as much and
+// teach nothing extra about register.
 const systemPrompt = `你是科技资讯编辑，把外语新闻标题改写成简体中文标题。
 
 规则：
 - 按中文新闻标题的习惯重写，不要逐字直译，不要有翻译腔。
 - 人名、公司名、产品名、版本号、缩写用通行译法或保留原文，不要生造译名。
 - 英文的冒号副标题、Why/How to 一类句式，换成中文里自然的说法。
-- 只输出译文本身：不加引号，不加解释，不加书名号。
+- 只输出译文本身一行：不加引号，不加解释，不加书名号，不要重复「来源」「摘要」「标题」这些标签。
 - 数字日期一律原样保留，不要改写成中文格式：8/7/2026 的月日顺序无法从标题判断，改写就是猜。
 - 标题本来就是中文，就原样输出。
 
@@ -76,6 +82,65 @@ Why Your CI Is Slow — And How to Fix It → CI 为什么这么慢，又该怎�
 Apple's M5 Chip: Everything We Know So Far → 苹果 M5 芯片：目前已知的全部信息
 Markets Wrap 8/7/2026 → 市场综述 8/7/2026
 Show HN: I built a tiny SQLite ORM → Show HN：我写了一个极简的 SQLite ORM`
+
+// examplePairs is the demonstration behind exampleTurns: one exchange for each
+// shape userMessage can produce.
+//
+// This is the actual fix for the model answering `来源：Hacker News\n标题：网页服务器…`
+// (see stripEchoedLabels). The user message is a labelled multi-line form, and the
+// most probable continuation of a form is the same form filled in. Telling the
+// model not to do that is an instruction competing with the structure of its own
+// input; showing it one such message answered with a bare headline changes what the
+// structure implies. Format compliance comes from demonstration — instructions are
+// what you fall back on when you have nothing to demonstrate.
+//
+// The second pair is the two-line shape specifically, because that is the one that
+// failed in production: feeds whose <description> summaryContext drops (Hacker News)
+// leave 来源 + 标题, which reads even more like a form with a blank to fill than the
+// three-line version does.
+//
+// Neither answer folds in anything from its 摘要 line — the summary disambiguates
+// the title, it is not material to append to it. The rule says so; this shows it.
+var examplePairs = []struct {
+	req Request
+	out string
+}{{
+	req: Request{
+		FeedName: "Ars Technica",
+		Summary:  "The company says the new silicon is 40 percent faster than last year's M4 on multithreaded workloads.",
+		Title:    "Apple unveils M5 chip",
+	},
+	out: "苹果发布 M5 芯片",
+}, {
+	req: Request{
+		FeedName: "Hacker News",
+		Title:    "Rust drops support for 32-bit Apple targets",
+	},
+	out: "Rust 停止支持 32 位苹果平台",
+}}
+
+// exampleTurns is the fixed user/assistant demonstration inserted between the
+// system prompt and the real request.
+//
+// The example user messages are built by userMessage, not written out by hand, so
+// the demonstration cannot drift from the format actually being sent — a change to
+// the labels updates what the model is shown in the same commit.
+//
+// Like systemPrompt it is part of the cacheable prefix and must stay byte-identical
+// across calls: it is package-level and derived from constants, so nothing
+// per-article can reach it. It also lengthens that prefix, which only helps against
+// DeepSeek's cache-block floor.
+var exampleTurns = buildExampleTurns()
+
+func buildExampleTurns() []chatMessage {
+	turns := make([]chatMessage, 0, 2*len(examplePairs))
+	for _, e := range examplePairs {
+		turns = append(turns,
+			chatMessage{Role: "user", Content: userMessage(e.req)},
+			chatMessage{Role: "assistant", Content: e.out})
+	}
+	return turns
+}
 
 // Client is the OpenAI-compatible chat-completions caller.
 type Client struct {
@@ -183,13 +248,17 @@ func (c *Client) Translate(ctx context.Context, cfg Config, req Request) (string
 func (c *Client) post(
 	ctx context.Context, cfg Config, in string, disableThinking bool,
 ) (chatResponse, int, error) {
+	msgs := make([]chatMessage, 0, len(exampleTurns)+2)
+	msgs = append(msgs, chatMessage{Role: "system", Content: systemPrompt})
+	msgs = append(msgs, exampleTurns...)
+	// The real request goes last: every provider expects the conversation to end on
+	// a user turn, and trailing position is where the task belongs.
+	msgs = append(msgs, chatMessage{Role: "user", Content: in})
+
 	r := chatRequest{
-		Model: cfg.Model,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: in},
-		},
-		Stream: false,
+		Model:    cfg.Model,
+		Messages: msgs,
+		Stream:   false,
 	}
 	if disableThinking {
 		r.Thinking = &thinkingParam{Type: "disabled"}
@@ -352,7 +421,7 @@ func statusError(code int) error {
 // answer that grew far beyond the input (an explanation, not a translation).
 // Returning "" means "settled, no translation" — the caller will not retry.
 func clean(out, in string) string {
-	out = unwrapQuotes(strings.TrimSpace(out))
+	out = unwrapQuotes(stripEchoedLabels(strings.TrimSpace(out)))
 	if out == "" {
 		return ""
 	}
@@ -360,6 +429,53 @@ func clean(out, in string) string {
 		return ""
 	}
 	return truncateRunes(out, maxTitleRunes)
+}
+
+// reLabel matches one of userMessage's labels at the start of a line, with either
+// colon width — a model mirroring the shape back does not necessarily mirror the
+// punctuation.
+var reLabel = regexp.MustCompile(`^(来源|摘要|标题)[：:]\s*`)
+
+// stripEchoedLabels reduces a mirrored-back user message to just the translation.
+//
+// `来源：Hacker News\n标题：网页服务器部署模式在业余规模下行不通` was a real row: stored
+// verbatim it rendered as a run-on headline, because the newline collapses to a
+// space in HTML and the browser showed 来源 and 标题 as part of the title.
+//
+// examplePairs is what addresses the cause — this bounds the consequence, and both
+// are wanted. The model is a probabilistic component, so its output is untrusted
+// input no matter how good the prompt is; a demonstration moves the failure rate,
+// never to zero. That is already the established pattern here rather than a new
+// concession: the prompt says 不加引号 and unwrapQuotes exists anyway, it says 不加解释
+// and maxGrowth exists anyway. Instruct, demonstrate, then validate.
+//
+// Only the 标题 line is the answer; 来源 and 摘要 are reference material the model
+// was told not to translate, so an echo of either is dropped rather than kept. With
+// no labels at all the first non-empty line is the answer — that also trims the
+// commentary a model sometimes appends under the headline, while one that *only*
+// explains itself still has nothing but prose on line one and is rejected by
+// clean()'s growth check.
+func stripEchoedLabels(s string) string {
+	var title, first string
+	for line := range strings.SplitSeq(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if m := reLabel.FindStringSubmatch(line); m != nil {
+			if m[1] == "标题" && title == "" {
+				title = strings.TrimSpace(strings.TrimPrefix(line, m[0]))
+			}
+			continue
+		}
+		if first == "" {
+			first = line
+		}
+	}
+	if title != "" {
+		return title
+	}
+	return first
 }
 
 // quotePairs is the openers clean() will unwrap, each mapped to the closer that
