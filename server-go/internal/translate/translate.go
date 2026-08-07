@@ -13,6 +13,11 @@
 // With one title per request that misalignment is structurally impossible, which
 // also removes the index-keyed wire protocol, the tolerant JSON decoder and the
 // partial-failure semantics a batch would need.
+//
+// Batching one feed's titles together was reconsidered as a way to give the model
+// context, and rejected again: what a headline needs is its *own* article, not its
+// siblings, and that fits in a per-row Request with the failure mode above still
+// impossible. See docs/plan-translation-context.md.
 package translate
 
 import (
@@ -33,14 +38,31 @@ func (c Config) Ready() bool {
 	return c.APIKey != "" && c.BaseURL != "" && c.Model != ""
 }
 
+// Request is one title plus the context that disambiguates it.
+//
+// FeedName and Summary are optional and exist for one reason: a headline is terse
+// by construction, and most bad translations are the model not knowing what the
+// article is about ("Rust drops…", a pun that only resolves once you know the
+// subject). The article's own summary answers that; sibling headlines from the
+// same feed, the other candidate, do not.
+//
+// Both are attacker-controlled feed text and both travel in the user message —
+// that separation, not their length, is what keeps them out of the instruction
+// channel. See userMessage.
+type Request struct {
+	Title    string
+	FeedName string
+	Summary  string
+}
+
 // Translator is the seam the jobs worker depends on, so its tests run offline
 // against a fake and never touch the network.
 type Translator interface {
-	// Translate returns the Chinese rendering of title. An empty string (with a nil
-	// error) means the endpoint answered but gave nothing usable — the caller
+	// Translate returns the Chinese rendering of req.Title. An empty string (with a
+	// nil error) means the endpoint answered but gave nothing usable — the caller
 	// settles the row rather than retrying. A non-nil error means the request
 	// itself failed and is worth retrying.
-	Translate(ctx context.Context, cfg Config, title string) (string, error)
+	Translate(ctx context.Context, cfg Config, req Request) (string, error)
 }
 
 // Checker is the seam POST /api/llm/config/test depends on. It is separate from

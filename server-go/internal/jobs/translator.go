@@ -85,7 +85,14 @@ func (r *Runner) translatePending(ctx context.Context) {
 			r.saveTranslation(p.ArticleID, "")
 			continue
 		}
-		out, err := r.Translator.Translate(ctx, cfg.Conn, p.Title)
+		// Feed name and summary ride along as context: a headline is terse by
+		// construction, and most bad translations are the model not knowing what the
+		// article is about. Both are optional — the client omits what is empty.
+		out, err := r.Translator.Translate(ctx, cfg.Conn, translate.Request{
+			Title:    p.Title,
+			FeedName: p.FeedName,
+			Summary:  p.Summary,
+		})
 		if err != nil {
 			// Write nothing: the row stays NULL and is retried next tick, until it
 			// ages out of the window. Abort the rest of the batch rather than

@@ -12,20 +12,29 @@ import (
 	"rss-reader/server-go/internal/translate"
 )
 
-// fakeTranslator records every title it was asked to translate and replays a
+// fakeTranslator records every request it was asked to translate and replays a
 // scripted answer, so the worker's decisions are testable without a network.
 type fakeTranslator struct {
-	seen []string
+	reqs []translate.Request
 	out  string
 	err  error
 }
 
-func (f *fakeTranslator) Translate(_ context.Context, _ translate.Config, title string) (string, error) {
-	f.seen = append(f.seen, title)
+func (f *fakeTranslator) Translate(_ context.Context, _ translate.Config, req translate.Request) (string, error) {
+	f.reqs = append(f.reqs, req)
 	if f.err != nil {
 		return "", f.err
 	}
 	return f.out, nil
+}
+
+// seen is the titles alone, which is what most assertions here care about.
+func (f *fakeTranslator) seen() []string {
+	out := make([]string, len(f.reqs))
+	for i, r := range f.reqs {
+		out[i] = r.Title
+	}
+	return out
 }
 
 // translateDB gives a DB with one feed and translation switched on.
@@ -81,8 +90,32 @@ func TestTranslatorStoresTranslation(t *testing.T) {
 	if !valid || got != "苹果发布 M5 芯片" {
 		t.Fatalf("title_zh = %q valid=%v, want the translation", got, valid)
 	}
-	if len(tr.seen) != 1 || tr.seen[0] != "Apple unveils M5 chip" {
-		t.Fatalf("translator saw %v", tr.seen)
+	if len(tr.seen()) != 1 || tr.seen()[0] != "Apple unveils M5 chip" {
+		t.Fatalf("translator saw %v", tr.seen())
+	}
+}
+
+// The prompt context has to actually reach the client. It comes from columns
+// article_states already has, so the only thing that can break is the SELECT
+// forgetting to read them — which would degrade silently into worse translations.
+func TestTranslatorPassesArticleContext(t *testing.T) {
+	handle := translateDB(t, "sk-test")
+	seedTitled(t, handle.Writer(), "a1", "f1", "Apple unveils M5 chip", time.Now())
+	if _, err := handle.Writer().Exec(
+		`UPDATE article_states SET feed_name = ?, summary = ? WHERE article_id = 'a1'`,
+		"Hacker News", "The new chip is 40% faster than the M4."); err != nil {
+		t.Fatal(err)
+	}
+
+	tr := &fakeTranslator{out: "苹果发布 M5 芯片"}
+	runTranslator(handle, tr)
+
+	if len(tr.reqs) != 1 {
+		t.Fatalf("want 1 request, got %d", len(tr.reqs))
+	}
+	got := tr.reqs[0]
+	if got.FeedName != "Hacker News" || got.Summary != "The new chip is 40% faster than the M4." {
+		t.Fatalf("context not passed through: %+v", got)
 	}
 }
 
@@ -95,8 +128,8 @@ func TestTranslatorSkipsChineseWithoutCalling(t *testing.T) {
 	tr := &fakeTranslator{out: "should not be used"}
 	runTranslator(handle, tr)
 
-	if len(tr.seen) != 0 {
-		t.Fatalf("translator was called for a Chinese title: %v", tr.seen)
+	if len(tr.seen()) != 0 {
+		t.Fatalf("translator was called for a Chinese title: %v", tr.seen())
 	}
 	got, valid := titleZh(t, handle.Reader(), "a1")
 	if !valid || got != "" {
@@ -120,8 +153,8 @@ func TestTranslatorEmptyAnswerSettlesRow(t *testing.T) {
 	// And the settled row is no longer pending.
 	tr := &fakeTranslator{out: "x"}
 	runTranslator(handle, tr)
-	if len(tr.seen) != 0 {
-		t.Fatalf("settled row was retried: %v", tr.seen)
+	if len(tr.seen()) != 0 {
+		t.Fatalf("settled row was retried: %v", tr.seen())
 	}
 }
 
@@ -137,8 +170,8 @@ func TestTranslatorFailureLeavesRowPending(t *testing.T) {
 
 	tr := &fakeTranslator{out: "苹果发布 M5 芯片"}
 	runTranslator(handle, tr)
-	if len(tr.seen) != 1 {
-		t.Fatalf("row was not retried after a failure: %v", tr.seen)
+	if len(tr.seen()) != 1 {
+		t.Fatalf("row was not retried after a failure: %v", tr.seen())
 	}
 }
 
@@ -154,8 +187,8 @@ func TestTranslatorFailureAbortsTick(t *testing.T) {
 	tr := &fakeTranslator{err: errors.New("boom")}
 	runTranslator(handle, tr)
 
-	if len(tr.seen) != 1 {
-		t.Fatalf("tick continued past a failure, saw %d titles: %v", len(tr.seen), tr.seen)
+	if len(tr.seen()) != 1 {
+		t.Fatalf("tick continued past a failure, saw %d titles: %v", len(tr.seen()), tr.seen())
 	}
 }
 
@@ -171,8 +204,8 @@ func TestTranslatorIgnoresRowsOutsideWindow(t *testing.T) {
 	tr := &fakeTranslator{out: "译文"}
 	runTranslator(handle, tr)
 
-	if len(tr.seen) != 1 || tr.seen[0] != "Fresh headline" {
-		t.Fatalf("window not honoured, translator saw %v", tr.seen)
+	if len(tr.seen()) != 1 || tr.seen()[0] != "Fresh headline" {
+		t.Fatalf("window not honoured, translator saw %v", tr.seen())
 	}
 	if _, valid := titleZh(t, handle.Reader(), "old"); valid {
 		t.Fatal("a row outside the window was written")
@@ -191,8 +224,8 @@ func TestTranslatorNoOpsWhenDisabled(t *testing.T) {
 	tr := &fakeTranslator{out: "x"}
 	runTranslator(handle, tr)
 
-	if len(tr.seen) != 0 {
-		t.Fatalf("worker ran with the switch off: %v", tr.seen)
+	if len(tr.seen()) != 0 {
+		t.Fatalf("worker ran with the switch off: %v", tr.seen())
 	}
 }
 
@@ -206,7 +239,7 @@ func TestTranslatorNoOpsWithoutKey(t *testing.T) {
 	tr := &fakeTranslator{out: "x"}
 	runTranslator(handle, tr)
 
-	if len(tr.seen) != 0 {
-		t.Fatalf("worker ran without an API key: %v", tr.seen)
+	if len(tr.seen()) != 0 {
+		t.Fatalf("worker ran without an API key: %v", tr.seen())
 	}
 }

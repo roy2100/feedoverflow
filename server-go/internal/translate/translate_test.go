@@ -49,6 +49,49 @@ func TestCleanStripsWrappers(t *testing.T) {
 	}
 }
 
+// Quotes inside a headline are punctuation, not a wrapper, and must survive.
+//
+// These are real rows from the deployed DB, produced when clean() trimmed a
+// cutset of quote characters off both ends unconditionally: a translation ending
+// in a quoted phrase lost its closer and kept a dangling opener, and one opening
+// with a quotation lost its opener. Only a matching pair at both ends is a
+// wrapper.
+func TestCleanKeepsQuotesInsideTheHeadline(t *testing.T) {
+	cases := []struct{ name, raw, in, want string }{{
+		name: "closing quote at the end is not a wrapper",
+		raw:  "莱茵金属CEO对失去海军合同“非常不满”",
+		in:   "Rheinmetall CEO 'Very Unhappy' With Naval Contract Loss",
+		want: "莱茵金属CEO对失去海军合同“非常不满”",
+	}, {
+		name: "opening quote at the start is not a wrapper",
+		raw:  "“机不可失”：欧盟真的准备接纳新成员吗？",
+		in:   "'It's now or never.' Is the EU serious about letting in new members?",
+		want: "“机不可失”：欧盟真的准备接纳新成员吗？",
+	}, {
+		name: "a real wrapper is still removed",
+		raw:  "“苹果发布 M5 芯片”",
+		in:   "Apple unveils M5 chip",
+		want: "苹果发布 M5 芯片",
+	}, {
+		name: "nested wrappers unwind",
+		raw:  `"「苹果发布 M5 芯片」"`,
+		in:   "Apple unveils M5 chip",
+		want: "苹果发布 M5 芯片",
+	}, {
+		name: "mismatched ends are left alone",
+		raw:  "“苹果发布 M5 芯片」",
+		in:   "Apple unveils M5 chip",
+		want: "“苹果发布 M5 芯片」",
+	}}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := clean(c.raw, c.in); got != c.want {
+				t.Fatalf("clean(%q) = %q, want %q", c.raw, got, c.want)
+			}
+		})
+	}
+}
+
 // A model that explains itself instead of translating must not have its essay
 // stored as a headline. Returning "" settles the row without retrying.
 func TestCleanRejectsRunawayAnswer(t *testing.T) {
@@ -64,6 +107,111 @@ func TestCleanTruncates(t *testing.T) {
 	out := clean(strings.Repeat("好", maxTitleRunes+50), in)
 	if n := len([]rune(out)); n != maxTitleRunes {
 		t.Fatalf("len = %d, want %d", n, maxTitleRunes)
+	}
+}
+
+// The user message is the only channel feed content travels in, and the system
+// prompt refers to its labels ("only the 标题 line is the task"), so the shape is
+// part of the contract rather than formatting.
+func TestUserMessageCarriesContext(t *testing.T) {
+	got := userMessage(Request{
+		Title:    "Apple unveils M5 chip",
+		FeedName: "Hacker News",
+		Summary:  "The new chip is 40% faster than the M4.",
+	})
+	want := "来源：Hacker News\n摘要：The new chip is 40% faster than the M4.\n标题：Apple unveils M5 chip"
+	if got != want {
+		t.Fatalf("userMessage =\n%q\nwant\n%q", got, want)
+	}
+	// The title is last: it is the thing to act on, and trailing position is the
+	// most reliable place to put it.
+	if !strings.HasSuffix(got, "标题：Apple unveils M5 chip") {
+		t.Fatal("the title is not the last line")
+	}
+}
+
+// A feed with no context must produce the same bare request this made before the
+// feature existed — no empty labels for the model to interpret.
+func TestUserMessageOmitsEmptyContext(t *testing.T) {
+	got := userMessage(Request{Title: "Apple unveils M5 chip"})
+	if got != "标题：Apple unveils M5 chip" {
+		t.Fatalf("userMessage = %q", got)
+	}
+}
+
+func TestSummaryContext(t *testing.T) {
+	cases := []struct {
+		name, summary, title, want string
+	}{{
+		// article_states usually holds a stripped snippet already, but atom's raw
+		// <summary> fallback is not stripped, so tags must not reach the prompt.
+		name:    "strips tags",
+		summary: "<p>The new chip is <b>40%</b> faster.</p>",
+		want:    "The new chip is 40% faster.",
+	}, {
+		// Newlines would compete with the line-per-label structure above.
+		name:    "collapses whitespace",
+		summary: "The new chip\n\n  is faster.",
+		want:    "The new chip is faster.",
+	}, {
+		// Link-blog feeds routinely set summary = title. Sending it back is pure
+		// cost and tells the model nothing it is not already looking at.
+		name:    "drops a repeat of the title",
+		summary: "Apple unveils M5 chip",
+		title:   "Apple unveils M5 chip",
+		want:    "",
+	}, {
+		name:    "drops an empty summary",
+		summary: "   ",
+		want:    "",
+	}, {
+		// Hacker News' <description> is `<a href="…">Comments</a>`. Labelling that
+		// 摘要： is worse than no context: it is noise in the channel meant to carry
+		// meaning, on the feed whose headlines need context most.
+		name:    "drops boilerplate too short to disambiguate",
+		summary: `<a href="https://news.ycombinator.com/item?id=1">Comments</a>`,
+		want:    "",
+	}, {
+		name:    "keeps a summary just over the floor",
+		summary: "A short but real précis.",
+		want:    "A short but real précis.",
+	}}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := summaryContext(c.summary, c.title); got != c.want {
+				t.Fatalf("summaryContext = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// The summary is the only near-unbounded input; some feeds put the whole article
+// body in it.
+func TestSummaryContextTruncates(t *testing.T) {
+	got := summaryContext(strings.Repeat("长", maxSummaryRunes+100), "t")
+	if n := len([]rune(got)); n != maxSummaryRunes {
+		t.Fatalf("len = %d, want %d", n, maxSummaryRunes)
+	}
+}
+
+// clean's growth check must keep measuring against the title. Measuring against
+// the whole prompt would let a model that was talked into echoing the summary
+// store the body as a headline.
+func TestCleanGrowthIgnoresSummaryLength(t *testing.T) {
+	title := "Apple unveils M5 chip"
+	body := strings.Repeat("这是被回显的正文内容。", 40)
+	if got := clean(body, title); got != "" {
+		t.Fatalf("an echoed body was accepted as a headline (%d runes)", len([]rune(got)))
+	}
+}
+
+// The system prompt is the cacheable prefix. Under DeepSeek's 64-token block
+// floor it never caches at all, which is what the previous 53-token prompt hit.
+// Runes are a proxy, but a coarse one is enough to catch a rewrite that shrinks
+// it back under.
+func TestSystemPromptClearsCacheFloor(t *testing.T) {
+	if n := len([]rune(systemPrompt)); n < 200 {
+		t.Fatalf("system prompt is %d runes; too short to reach a prefix-cache block", n)
 	}
 }
 
@@ -121,7 +269,7 @@ func serve(t *testing.T, status int, body string) Config {
 func TestTranslateReadsChoice(t *testing.T) {
 	cfg := serve(t, http.StatusOK,
 		`{"choices":[{"message":{"role":"assistant","content":"苹果发布 M5 芯片"}}]}`)
-	got, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	got, err := New(nil).Translate(context.Background(), cfg, Request{Title: "Apple unveils M5 chip"})
 	if err != nil {
 		t.Fatalf("Translate: %v", err)
 	}
@@ -134,7 +282,7 @@ func TestTranslateReadsChoice(t *testing.T) {
 // nil error, so the caller settles the row instead of retrying forever.
 func TestTranslateEmptyChoicesIsNotAnError(t *testing.T) {
 	cfg := serve(t, http.StatusOK, `{"choices":[]}`)
-	got, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	got, err := New(nil).Translate(context.Background(), cfg, Request{Title: "Apple unveils M5 chip"})
 	if err != nil || got != "" {
 		t.Fatalf("got (%q, %v), want (\"\", nil)", got, err)
 	}
@@ -155,7 +303,7 @@ func TestTranslateNormalizesStatuses(t *testing.T) {
 	}
 	for _, c := range cases {
 		cfg := serve(t, c.status, `{"error":{"message":"secret upstream detail"}}`)
-		_, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+		_, err := New(nil).Translate(context.Background(), cfg, Request{Title: "Apple unveils M5 chip"})
 		if !errors.Is(err, c.want) {
 			t.Errorf("status %d → %v, want %v", c.status, err, c.want)
 		}
@@ -192,7 +340,7 @@ func TestTranslateDisablesThinking(t *testing.T) {
 	defer srv.Close()
 	cfg := Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "m"}
 
-	if _, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip"); err != nil {
+	if _, err := New(nil).Translate(context.Background(), cfg, Request{Title: "Apple unveils M5 chip"}); err != nil {
 		t.Fatalf("Translate: %v", err)
 	}
 	thinking, ok := got["thinking"].(map[string]any)
@@ -227,7 +375,7 @@ func TestTranslateRetriesWithoutThinkingOn400(t *testing.T) {
 	defer srv.Close()
 	cfg := Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "m"}
 
-	got, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	got, err := New(nil).Translate(context.Background(), cfg, Request{Title: "Apple unveils M5 chip"})
 	if err != nil {
 		t.Fatalf("Translate: %v", err)
 	}
@@ -256,7 +404,7 @@ func TestTranslateGivesUpWhenRetryAlso400s(t *testing.T) {
 	defer srv.Close()
 	cfg := Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "nope"}
 
-	_, err := New(nil).Translate(context.Background(), cfg, "Apple unveils M5 chip")
+	_, err := New(nil).Translate(context.Background(), cfg, Request{Title: "Apple unveils M5 chip"})
 	if !errors.Is(err, ErrModel) {
 		t.Fatalf("err = %v, want ErrModel", err)
 	}

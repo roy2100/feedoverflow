@@ -519,3 +519,20 @@ a native tooltip firing on every row while scanning is the same noise in a diffe
 
 `ArticleList` goes back to its original single-`div` title markup, with `displayTitle` substituted
 for `article.title`. The reader is unchanged.
+
+## Superseded: the prompt, and "one title per request" as a context argument
+
+Two of this plan's conclusions were revisited after living with the output. See
+`docs/plan-translation-context.md`.
+
+- **"Translation quality on headlines … some translations will be bad"** (Risks) was treated as
+  inherent to the task. Part of it was self-inflicted: the system prompt was compressed to three
+  lines to save tokens, which the deployed log later priced at ~¥0.3/month. It now carries a role,
+  style rules and four examples, and the headline context (feed name + summary) travels in the user
+  message.
+- **"Not pursued: prefix caching"** stands as written — padding a prompt to clear a provider
+  constant is not worth doing for its own sake. It became moot rather than wrong: the prompt is
+  ~250 tokens for quality reasons and clears the 64-token floor on the way past.
+- **One title per request** stands. It was re-examined as a way to feed the model context from a
+  feed's other headlines, and rejected again — the article's own summary is better context and needs
+  no batch.

@@ -7,9 +7,15 @@ import (
 )
 
 // PendingTitle is one row the translator worker is about to handle.
+//
+// FeedName and Summary are context for the prompt, not state: they disambiguate a
+// terse headline and are never written back. Both are read from columns that
+// already exist on article_states, so this costs a wider SELECT and nothing else.
 type PendingTitle struct {
 	ArticleID string
 	Title     string
+	FeedName  string
+	Summary   string
 }
 
 // TranslateConfig is the llm_config row: how to reach the endpoint (Conn) plus
@@ -74,7 +80,7 @@ func SaveLLMConfig(w *sql.DB, baseURL, apiKey, model *string, enabled *bool) err
 // rather than two.
 func PendingTranslations(r *sql.DB, cutoff int64, limit int) ([]PendingTitle, error) {
 	rows, err := r.Query(`
-		SELECT article_id, title
+		SELECT article_id, title, feed_name, summary
 		  FROM article_states
 		 WHERE title_zh IS NULL AND pub_ts > ?
 		 ORDER BY pub_ts DESC LIMIT ?`, cutoff, limit)
@@ -85,11 +91,11 @@ func PendingTranslations(r *sql.DB, cutoff int64, limit int) ([]PendingTitle, er
 	var out []PendingTitle
 	for rows.Next() {
 		var p PendingTitle
-		var title sql.NullString
-		if err := rows.Scan(&p.ArticleID, &title); err != nil {
+		var title, feedName, summary sql.NullString
+		if err := rows.Scan(&p.ArticleID, &title, &feedName, &summary); err != nil {
 			return nil, err
 		}
-		p.Title = title.String
+		p.Title, p.FeedName, p.Summary = title.String, feedName.String, summary.String
 		out = append(out, p)
 	}
 	return out, rows.Err()
