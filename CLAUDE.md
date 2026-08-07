@@ -71,7 +71,9 @@ client/             Vite + React + TypeScript (port 3000)
   src/App.tsx       top-level layout/auth/audio owner
   src/store.ts      zustand store — feeds/articles/views + all fetch logic
   src/types.ts      shared client types, mirrors server-go/internal/model
-  src/components/   FeedSidebar, ArticleList, ArticleReader, ModalOverlay, AddFeedModal, ManageFeedsModal, ManageCollectionsModal, SettingsModal, PodcastPlayer, LoginForm
+  src/components/   FeedSidebar, ArticleList, ArticleReader, ModalOverlay, ManageModal (+ its
+                    FeedsPanel / CollectionsPanel / AddFeedPanel bodies), SettingsModal,
+                    PodcastPlayer, LoginForm
   src/pages/        mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
 ```
 
@@ -84,8 +86,25 @@ Every modal renders through `ModalOverlay` — one portal, one backdrop, one Esc
 of the keyframes. Backdrop dismiss requires the backdrop to own **both** the `pointerdown` and the
 `click`: a `click` targets the nearest common ancestor of press and release, so an
 `e.target === e.currentTarget` check alone closes the modal when a text drag-selection ends on the
-backdrop. `onEscape` exists for modals whose Escape unwinds an inner step first
-(ManageCollectionsModal's sub-editor); the backdrop still closes outright.
+backdrop. `onEscape` exists for modals whose Escape unwinds an inner step first (ManageModal's
+sub-views); the backdrop still closes outright.
+
+**Everything the sidebar lists is managed in one modal.** `ManageModal` is a shell — tab bar,
+title, close button, Escape — over three bodies: `FeedsPanel` (订阅源), `CollectionsPanel` (合集),
+and `AddFeedPanel`, which is a *sub-view* of the 订阅源 tab rather than a tab of its own. Its
+`手动添加 | 导入 OPML` strip is two **methods**; the shell's tabs are two **things** — different
+axes never share a row, and a sub-view replaces the tab bar rather than nesting under it (which is
+also why an open collection editor can't have its unsaved rules swapped out from under it). The
+shell owns all navigation, so the panels hold no `editing` state and no `ModalOverlay` of their
+own. Entering at a sub-view (the toolbar's `+`) makes backing out of it *close* the modal —
+`subIsEntry` — so a mis-clicked `+` never costs two Escapes. Rationale:
+`docs/plan-merge-manage-modals.md`.
+
+Three sidebar controls, three meanings, no overlap: 刷新, 管理 (`SquarePen` → ManageModal), 添加订阅
+(`+` → ManageModal's add sub-view). The gear belongs to 设置 in the footer alone — it is
+configuration, not content, and a second gear in the header meant two different things. 合集 has no
+control of its own in the nav: the section is a plain list that renders only when non-empty, like
+订阅源.
 
 TypeScript, type-stripped by Vite/Vitest. `npm run typecheck` (`tsc --noEmit`, in `client/`) is
 the type gate — Vite does not type-check.
@@ -153,7 +172,7 @@ language, drop stale/redundant chrome.
 - Push has two independent axes, deliberately not merged: `feeds.push_enabled` says *this source is
   worth a notification* (global, one row shared by every device), `push_subscriptions` says *this
   device receives* (one row per device). A device that never subscribed sees every bell as on and
-  receives nothing — hence the explicit device row above the list in ManageFeedsModal.
+  receives nothing — hence the explicit device row above the list in FeedsPanel.
   Deregistering is only ever that control's job: never a side effect of toggling a feed, or one
   device could silently cut off all the others.
 - Push notifications are opt-in per feed (`feeds.push_enabled`, default off) and are sent **only

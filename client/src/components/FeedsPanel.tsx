@@ -1,4 +1,4 @@
-import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck, Bell, BellOff } from 'lucide-react';
+import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck, Bell, BellOff, Plus } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 import { faviconDomain } from '../faviconDomain';
@@ -11,7 +11,6 @@ import {
   unsubscribeDevice,
 } from '../lib/push';
 import type { Feed, FeedPatch } from '../types';
-import ModalOverlay from './ModalOverlay';
 
 function fallbackCopy(text: string, onDone: () => void) {
   const ta = document.createElement('textarea');
@@ -48,19 +47,17 @@ function FeedIcon({ url }: { url: string }) {
 // without this row there would be no way to notice, let alone fix it.
 type DeviceState = 'checking' | 'unsupported' | 'needs-install' | 'on' | 'off';
 
-interface ManageFeedsModalProps {
+interface FeedsPanelProps {
   feeds: Feed[];
-  onClose: () => void;
   onDelete: (feedId: string) => Promise<void>;
   onUpdate: (feedId: string, patch: FeedPatch) => Promise<void>;
+  /** Opens the add sub-view of this same tab — see ManageModal. */
+  onAdd: () => void;
 }
 
-export default function ManageFeedsModal({
-  feeds,
-  onClose,
-  onDelete,
-  onUpdate,
-}: ManageFeedsModalProps) {
+// The 订阅源 tab of ManageModal. The shell owns the frame, the title and the
+// close button; this is only the body.
+export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPanelProps) {
   // Only one row can be mid-toggle or showing a push error at a time.
   const [pushBusy, setPushBusy] = useState<string | null>(null);
   const [pushError, setPushError] = useState<{ feedId: string; message: string } | null>(null);
@@ -122,140 +119,110 @@ export default function ManageFeedsModal({
   };
 
   return (
-    <ModalOverlay onClose={onClose}>
+    <>
+      {/* This device's push registration */}
       <div
         style={{
-          background: 'var(--bg-reader)',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          // Fixed 500 would overflow a phone; this modal is reachable on mobile
-          // because it owns the per-feed notification toggle.
-          width: 'min(500px, calc(100vw - 32px))',
-          maxHeight: '80vh',
+          padding: '10px 20px',
+          borderBottom: '1px solid var(--border-light)',
           display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)',
-          animation: 'modalSlideUp 0.18s cubic-bezier(0.34,1.2,0.64,1)',
+          alignItems: 'center',
+          gap: 8,
+          flexShrink: 0,
+          flexWrap: 'wrap',
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--border-light)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
-            管理订阅源
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{feeds.length} 个</span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
+          {deviceLabel(
+            device,
+            devices,
+            feeds.some((f) => f.push_enabled),
+          )}
+        </span>
+        {(device === 'on' || device === 'off') && (
           <button
-            onClick={onClose}
+            onClick={handleToggleDevice}
+            disabled={deviceBusy}
             style={{
-              width: 28,
-              height: 28,
+              padding: '4px 10px',
               borderRadius: 6,
-              background: 'var(--bg-hover)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+              background: device === 'on' ? 'var(--bg-selected)' : 'var(--accent)',
+              color: device === 'on' ? 'var(--text-secondary)' : '#fff',
               border: 'none',
-              transition: 'background 0.12s',
+              cursor: deviceBusy ? 'default' : 'pointer',
+              opacity: deviceBusy ? 0.6 : 1,
+              whiteSpace: 'nowrap',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-selected)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
           >
-            <X size={14} />
+            {device === 'on' ? '不再接收' : '在本设备接收'}
           </button>
-        </div>
+        )}
+        {deviceError && (
+          <p style={{ flexBasis: '100%', margin: 0, fontSize: 11.5, color: 'var(--red)' }}>
+            {deviceError}
+          </p>
+        )}
+      </div>
 
-        {/* This device's push registration */}
-        <div
+      {/* Feed list */}
+      <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0 4px' }}>
+        {feeds.length === 0 ? (
+          <p
+            style={{
+              fontSize: 13,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+              padding: '32px 0',
+            }}
+          >
+            暂无订阅源
+          </p>
+        ) : (
+          feeds.map((feed) => (
+            <FeedRow
+              key={feed.id}
+              feed={feed}
+              onDelete={onDelete}
+              onUpdate={onUpdate}
+              onTogglePush={handleTogglePush}
+              pushBusy={pushBusy === feed.id}
+              pushError={pushError?.feedId === feed.id ? pushError.message : null}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Same footer button as the 合集 tab: each tab can create its own kind, so
+          the toolbar's + is a shortcut into this view rather than the only door. */}
+      <div style={{ padding: '10px 20px 14px', borderTop: '1px solid var(--border-light)' }}>
+        <button
+          onClick={onAdd}
           style={{
-            padding: '10px 20px',
-            borderBottom: '1px solid var(--border-light)',
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            flexShrink: 0,
-            flexWrap: 'wrap',
+            gap: 6,
+            padding: '7px 12px',
+            borderRadius: 7,
+            fontSize: 13,
+            fontWeight: 500,
+            background: 'var(--accent)',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
           }}
         >
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
-            {deviceLabel(
-              device,
-              devices,
-              feeds.some((f) => f.push_enabled),
-            )}
-          </span>
-          {(device === 'on' || device === 'off') && (
-            <button
-              onClick={handleToggleDevice}
-              disabled={deviceBusy}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: 500,
-                background: device === 'on' ? 'var(--bg-selected)' : 'var(--accent)',
-                color: device === 'on' ? 'var(--text-secondary)' : '#fff',
-                border: 'none',
-                cursor: deviceBusy ? 'default' : 'pointer',
-                opacity: deviceBusy ? 0.6 : 1,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {device === 'on' ? '不再接收' : '在本设备接收'}
-            </button>
-          )}
-          {deviceError && (
-            <p style={{ flexBasis: '100%', margin: 0, fontSize: 11.5, color: 'var(--red)' }}>
-              {deviceError}
-            </p>
-          )}
-        </div>
-
-        {/* Feed list */}
-        <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0 12px' }}>
-          {feeds.length === 0 ? (
-            <p
-              style={{
-                fontSize: 13,
-                color: 'var(--text-tertiary)',
-                textAlign: 'center',
-                padding: '32px 0',
-              }}
-            >
-              暂无订阅源
-            </p>
-          ) : (
-            feeds.map((feed) => (
-              <FeedRow
-                key={feed.id}
-                feed={feed}
-                onDelete={onDelete}
-                onUpdate={onUpdate}
-                onTogglePush={handleTogglePush}
-                pushBusy={pushBusy === feed.id}
-                pushError={pushError?.feedId === feed.id ? pushError.message : null}
-              />
-            ))
-          )}
-        </div>
+          <Plus size={13} /> 添加订阅源
+        </button>
       </div>
-    </ModalOverlay>
+    </>
   );
 }
 
 // Every string names 更新推送 explicitly — the same term the bells' tooltips use.
-// "接收中" alone has no object, and the surrounding context (a modal titled
-// 管理订阅源) supplies the wrong one: it reads as receiving *articles*. The row is
+// "接收中" alone has no object, and the surrounding context (a tab listing 订阅源)
+// supplies the wrong one: it reads as receiving *articles*. The row is
 // also the only place the concept is stated in plain sight, since the tooltips
 // below need a hover to appear.
 function deviceLabel(state: DeviceState, devices: number | null, anyFeedOn: boolean): string {

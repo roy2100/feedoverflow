@@ -7,7 +7,7 @@ import {
   Podcast,
   Rss,
   Layers,
-  Settings,
+  SquarePen,
   SlidersHorizontal,
   PanelLeft,
   Search,
@@ -47,7 +47,6 @@ interface FeedSidebarProps {
   onToggleSidebar?: (() => void) | null;
   onOpenAddModal: () => void;
   onOpenManageModal?: (() => void) | null;
-  onOpenCollectionsModal?: (() => void) | null;
   onOpenSettings?: (() => void) | null;
   onSearch?: (query: string) => void;
   // Scoped-search toggle (desktop only). `scopeLabel` is non-null only when the base view is
@@ -67,7 +66,6 @@ export default function FeedSidebar({
   onToggleSidebar,
   onOpenAddModal,
   onOpenManageModal,
-  onOpenCollectionsModal,
   onOpenSettings,
   onSearch,
   scopedSearch,
@@ -181,9 +179,11 @@ export default function FeedSidebar({
           <IconBtn onClick={onRefresh} title="刷新" isMobile={isMobile}>
             <RefreshCw size={isMobile ? 17 : 13} />
           </IconBtn>
+          {/* Not a gear: the gear is 设置 in the footer, and two of them meant two
+              different things. This one manages content — 订阅源 and 合集. */}
           {onOpenManageModal && (
-            <IconBtn onClick={onOpenManageModal} title="管理订阅源" isMobile={isMobile}>
-              <Settings size={isMobile ? 17 : 13} />
+            <IconBtn onClick={onOpenManageModal} title="管理订阅源与合集" isMobile={isMobile}>
+              <SquarePen size={isMobile ? 17 : 13} />
             </IconBtn>
           )}
           <IconBtn onClick={onOpenAddModal} title="添加订阅" isMobile={isMobile}>
@@ -325,21 +325,10 @@ export default function FeedSidebar({
           onClick={() => onSelectView({ type: 'podcast' })}
         />
 
-        {/* Collections — saved streams merging several feeds. The section keeps its
-            header even when empty: it is the only entry point to the editor, and a
-            feature with no discoverable way in is a feature nobody uses. */}
-        {onOpenCollectionsModal && (
-          <SectionLabel
-            style={{ marginTop: 8 }}
-            action={
-              <IconBtn onClick={onOpenCollectionsModal} title="管理合集" isMobile={isMobile}>
-                <Plus size={isMobile ? 15 : 12} />
-              </IconBtn>
-            }
-          >
-            合集
-          </SectionLabel>
-        )}
+        {/* Collections — saved streams merging several feeds. Purely a list, like
+            订阅源 below: creating and editing them lives in the 管理 modal's 合集
+            tab, so an empty section has nothing to offer and doesn't render. */}
+        {collections.length > 0 && <SectionLabel style={{ marginTop: 8 }}>合集</SectionLabel>}
         {collections.map((collection) => (
           <NavItem
             key={collection.id}
@@ -413,19 +402,26 @@ function IconBtn({ onClick, title, isMobile, children }: IconBtnProps) {
     <button
       onClick={onClick}
       title={title}
+      aria-label={title}
       style={{
         color: 'var(--text-tertiary)',
         padding: isMobile ? 6 : 4,
         borderRadius: 6,
-        transition: 'color 0.15s',
+        transition: 'color 0.15s, background 0.15s',
         background: 'none',
         border: 'none',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = 'var(--accent)';
+        e.currentTarget.style.background = 'var(--bg-hover)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = 'var(--text-tertiary)';
+        e.currentTarget.style.background = 'none';
+      }}
     >
       {children}
     </button>
@@ -435,11 +431,9 @@ function IconBtn({ onClick, title, isMobile, children }: IconBtnProps) {
 interface SectionLabelProps {
   children: React.ReactNode;
   style?: React.CSSProperties;
-  /** Optional control pinned to the right of the label (e.g. "add"). */
-  action?: React.ReactNode;
 }
 
-function SectionLabel({ children, style, action }: SectionLabelProps) {
+function SectionLabel({ children, style }: SectionLabelProps) {
   return (
     <div
       style={{
@@ -449,14 +443,10 @@ function SectionLabel({ children, style, action }: SectionLabelProps) {
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
         color: 'var(--text-tertiary)',
-        display: action ? 'flex' : undefined,
-        alignItems: action ? 'center' : undefined,
-        justifyContent: action ? 'space-between' : undefined,
         ...style,
       }}
     >
-      <span>{children}</span>
-      {action}
+      {children}
     </div>
   );
 }

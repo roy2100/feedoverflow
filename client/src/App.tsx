@@ -5,6 +5,7 @@ import ArticleList from './components/ArticleList';
 import ArticleReader from './components/ArticleReader';
 import FeedSidebar from './components/FeedSidebar';
 import LoginForm from './components/LoginForm';
+import type { ManageTab } from './components/ManageModal';
 import { useIsMobile } from './hooks/useIsMobile';
 import {
   clearProgress,
@@ -29,9 +30,7 @@ import { viewTitle } from './viewTitle';
 // Rationale: docs/plan-drop-mobile-history.md.
 const PANEL_DEPTH: Record<MobilePage, number> = { feeds: 0, list: 1, article: 2 };
 
-const AddFeedModal = lazy(() => import('./components/AddFeedModal'));
-const ManageFeedsModal = lazy(() => import('./components/ManageFeedsModal'));
-const ManageCollectionsModal = lazy(() => import('./components/ManageCollectionsModal'));
+const ManageModal = lazy(() => import('./components/ManageModal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const PodcastPlayer = lazy(() => import('./components/PodcastPlayer'));
 
@@ -39,9 +38,9 @@ export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null); // null=checking, false=unauthed, true=authed
   const isMobile = useIsMobile();
   const [mobilePage, navigateMobile] = useState<MobilePage>('feeds');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showManageModal, setShowManageModal] = useState(false);
-  const [showCollectionsModal, setShowCollectionsModal] = useState(false);
+  // One modal manages both 订阅源 and 合集; `sub` opens it straight into the add
+  // form, which is what keeps the toolbar's + a one-click path.
+  const [manage, setManage] = useState<{ tab: ManageTab; sub?: 'add-feed' } | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [readingMode, setReadingMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -101,7 +100,7 @@ export default function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (isMobile) return;
-      if (showAddModal || showManageModal || showCollectionsModal || showSettingsModal) return;
+      if (manage || showSettingsModal) return;
       const target = e.target as HTMLElement;
       const tag = target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable)
@@ -127,17 +126,7 @@ export default function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [
-    articles,
-    selectedArticle,
-    showAddModal,
-    showManageModal,
-    showCollectionsModal,
-    showSettingsModal,
-    isMobile,
-    selectArticle,
-    readingMode,
-  ]);
+  }, [articles, selectedArticle, manage, showSettingsModal, isMobile, selectArticle, readingMode]);
 
   // Never leave the reader stuck fullscreen with nothing to show
   useEffect(() => {
@@ -350,34 +339,23 @@ export default function App() {
     onClosePlayer: handleClosePlayer,
   };
 
-  const addModal = showAddModal && (
-    <Suspense fallback={null}>
-      <AddFeedModal onClose={() => setShowAddModal(false)} onAdd={addFeed} onImport={importFeeds} />
-    </Suspense>
-  );
-
-  // Shared by both layouts: 管理订阅源 is also the only place to switch a feed's
+  // Shared by both layouts: the 订阅源 tab is also the only place to switch a feed's
   // update notifications on, and phones are where those matter most.
-  const manageModal = showManageModal && (
+  const manageModal = manage && (
     <Suspense fallback={null}>
-      <ManageFeedsModal
+      <ManageModal
         feeds={feeds}
-        onClose={() => setShowManageModal(false)}
-        onDelete={deleteFeed}
-        onUpdate={updateFeed}
-      />
-    </Suspense>
-  );
-
-  const collectionsModal = showCollectionsModal && (
-    <Suspense fallback={null}>
-      <ManageCollectionsModal
         collections={collections}
-        feeds={feeds}
-        onClose={() => setShowCollectionsModal(false)}
-        onCreate={addCollection}
-        onUpdate={updateCollection}
-        onDelete={deleteCollection}
+        initialTab={manage.tab}
+        initialSub={manage.sub}
+        onClose={() => setManage(null)}
+        onAddFeed={addFeed}
+        onImportFeeds={importFeeds}
+        onDeleteFeed={deleteFeed}
+        onUpdateFeed={updateFeed}
+        onCreateCollection={addCollection}
+        onUpdateCollection={updateCollection}
+        onDeleteCollection={deleteCollection}
       />
     </Suspense>
   );
@@ -456,9 +434,8 @@ export default function App() {
             {panel(
               0,
               <FeedsPage
-                onOpenAddModal={() => setShowAddModal(true)}
-                onOpenManageModal={() => setShowManageModal(true)}
-                onOpenCollectionsModal={() => setShowCollectionsModal(true)}
+                onOpenAddModal={() => setManage({ tab: 'feeds', sub: 'add-feed' })}
+                onOpenManageModal={() => setManage({ tab: 'feeds' })}
                 onNavigate={navigateMobile}
               />,
             )}
@@ -478,9 +455,7 @@ export default function App() {
             </Suspense>
           )}
         </div>
-        {addModal}
         {manageModal}
-        {collectionsModal}
       </AudioContext.Provider>
     );
   }
@@ -503,9 +478,8 @@ export default function App() {
             onSelectView={selectView}
             onRefresh={() => loadArticles(selectedView)}
             onToggleSidebar={toggleSidebar}
-            onOpenAddModal={() => setShowAddModal(true)}
-            onOpenManageModal={() => setShowManageModal(true)}
-            onOpenCollectionsModal={() => setShowCollectionsModal(true)}
+            onOpenAddModal={() => setManage({ tab: 'feeds', sub: 'add-feed' })}
+            onOpenManageModal={() => setManage({ tab: 'feeds' })}
             onOpenSettings={() => setShowSettingsModal(true)}
             onSearch={search}
             scopedSearch={scopedSearch}
@@ -566,9 +540,7 @@ export default function App() {
             </Suspense>
           )}
         </div>
-        {addModal}
         {manageModal}
-        {collectionsModal}
         {showSettingsModal && (
           <Suspense fallback={null}>
             <SettingsModal onClose={() => setShowSettingsModal(false)} />

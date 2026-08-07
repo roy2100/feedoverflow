@@ -1,116 +1,78 @@
-import { X, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useRef, forwardRef } from 'react';
 
 import type { Feed } from '../types';
-import ModalOverlay from './ModalOverlay';
 
-interface AddFeedModalProps {
-  onClose: () => void;
+interface AddFeedPanelProps {
   onAdd: (input: { url: string }) => Promise<void>;
   onImport: (newFeeds: Feed[]) => void;
+  /** Finished or cancelled — the shell decides whether that means back or close. */
+  onDone: () => void;
 }
 
-export default function AddFeedModal({ onClose, onAdd, onImport }: AddFeedModalProps) {
+// A sub-view of ManageModal's 订阅源 tab, not a modal of its own. Its own strip is
+// two *ways to add one thing*; the shell's tab bar is two *things* — they are
+// different axes, so they never share a row. The shell swaps its tabs for a title
+// while this is open, which keeps exactly one strip on screen.
+export default function AddFeedPanel({ onAdd, onImport, onDone }: AddFeedPanelProps) {
   const [tab, setTab] = useState<'manual' | 'opml'>('manual');
 
   return (
-    <ModalOverlay onClose={onClose}>
-      <div
-        style={{
-          background: 'var(--bg-reader)',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          width: 420,
-          boxShadow: '0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)',
-          animation: 'modalSlideUp 0.18s cubic-bezier(0.34,1.2,0.64,1)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header */}
+    <div style={{ overflowY: 'auto', flex: 1 }}>
+      <div style={{ padding: '14px 20px 0' }}>
         <div
           style={{
-            padding: '18px 20px 14px',
-            borderBottom: '1px solid var(--border-light)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            display: 'inline-flex',
+            gap: 2,
+            background: 'var(--bg-panel)',
+            borderRadius: 7,
+            padding: 3,
           }}
         >
-          {/* Tabs */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 2,
-              background: 'var(--bg-panel)',
-              borderRadius: 7,
-              padding: 3,
-            }}
-          >
-            {(
-              [
-                ['manual', '手动添加'],
-                ['opml', '导入 OPML'],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                style={{
-                  padding: '4px 12px',
-                  borderRadius: 5,
-                  fontSize: 12.5,
-                  fontWeight: 500,
-                  background: tab === key ? 'var(--bg-reader)' : 'transparent',
-                  color: tab === key ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  border: tab === key ? '1px solid var(--border)' : '1px solid transparent',
-                  cursor: 'pointer',
-                  boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              background: 'var(--bg-hover)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              border: 'none',
-              transition: 'background 0.12s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-selected)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-          >
-            <X size={14} />
-          </button>
+          {(
+            [
+              ['manual', '手动添加'],
+              ['opml', '导入 OPML'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 5,
+                fontSize: 12.5,
+                fontWeight: 500,
+                background: tab === key ? 'var(--bg-reader)' : 'transparent',
+                color: tab === key ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                border: tab === key ? '1px solid var(--border)' : '1px solid transparent',
+                cursor: 'pointer',
+                boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.07)' : 'none',
+                transition: 'all 0.15s',
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-
-        {tab === 'manual' ? (
-          <ManualTab onAdd={onAdd} onClose={onClose} />
-        ) : (
-          <OpmlTab onImport={onImport} onClose={onClose} />
-        )}
       </div>
-    </ModalOverlay>
+
+      {tab === 'manual' ? (
+        <ManualTab onAdd={onAdd} onDone={onDone} />
+      ) : (
+        <OpmlTab onImport={onImport} onDone={onDone} />
+      )}
+    </div>
   );
 }
 
 // ── Manual Tab ────────────────────────────────────────────────────────────────
 interface ManualTabProps {
   onAdd: (input: { url: string }) => Promise<void>;
-  onClose: () => void;
+  onDone: () => void;
 }
 
-function ManualTab({ onAdd, onClose }: ManualTabProps) {
+function ManualTab({ onAdd, onDone }: ManualTabProps) {
   const [url, setUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
@@ -141,7 +103,7 @@ function ManualTab({ onAdd, onClose }: ManualTabProps) {
     setError('');
     try {
       await onAdd({ url: url.trim() });
-      onClose();
+      onDone();
     } catch (err) {
       setError((err as Error).message || '添加失败，请检查 URL 是否正确');
     } finally {
@@ -186,7 +148,7 @@ function ManualTab({ onAdd, onClose }: ManualTabProps) {
       )}
       {error && <p style={{ fontSize: 12, color: 'var(--red)', marginBottom: 14 }}>{error}</p>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <GhostBtn onClick={onClose}>取消</GhostBtn>
+        <GhostBtn onClick={onDone}>取消</GhostBtn>
         <PrimaryBtn type="submit" disabled={adding || !url.trim()}>
           {adding ? '解析中…' : '添加'}
         </PrimaryBtn>
@@ -198,7 +160,7 @@ function ManualTab({ onAdd, onClose }: ManualTabProps) {
 // ── OPML Tab ──────────────────────────────────────────────────────────────────
 interface OpmlTabProps {
   onImport: (newFeeds: Feed[]) => void;
-  onClose: () => void;
+  onDone: () => void;
 }
 
 interface ImportResult {
@@ -207,7 +169,7 @@ interface ImportResult {
   feeds: Feed[];
 }
 
-function OpmlTab({ onImport, onClose }: OpmlTabProps) {
+function OpmlTab({ onImport, onDone }: OpmlTabProps) {
   const [phase, setPhase] = useState<'idle' | 'importing' | 'done' | 'error'>('idle');
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -370,7 +332,7 @@ function OpmlTab({ onImport, onClose }: OpmlTabProps) {
             >
               再次导入
             </GhostBtn>
-            <PrimaryBtn onClick={onClose}>完成</PrimaryBtn>
+            <PrimaryBtn onClick={onDone}>完成</PrimaryBtn>
           </div>
         </div>
       ) : (

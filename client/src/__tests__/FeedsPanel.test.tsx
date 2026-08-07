@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import ManageFeedsModal from '../components/ManageFeedsModal';
+import FeedsPanel from '../components/FeedsPanel';
 import {
   currentSubscription,
   deviceCount,
@@ -23,15 +23,15 @@ vi.mock('../lib/push', () => ({
 
 const feeds = [{ id: '1', name: 'HN', url: 'https://hn.example/rss' } as Feed];
 
-function renderModal(overrides: Partial<Parameters<typeof ManageFeedsModal>[0]> = {}) {
+function renderModal(overrides: Partial<Parameters<typeof FeedsPanel>[0]> = {}) {
   const onDelete = vi.fn().mockResolvedValue(undefined);
   const onUpdate = vi.fn().mockResolvedValue(undefined);
   render(
-    <ManageFeedsModal
+    <FeedsPanel
       feeds={feeds}
-      onClose={vi.fn()}
       onDelete={onDelete}
       onUpdate={onUpdate}
+      onAdd={vi.fn()}
       {...overrides}
     />,
   );
@@ -56,7 +56,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('ManageFeedsModal delete confirmation', () => {
+describe('FeedsPanel delete confirmation', () => {
   it('does not delete on the first click', () => {
     const { onDelete } = renderModal();
 
@@ -100,8 +100,8 @@ describe('ManageFeedsModal delete confirmation', () => {
   });
 });
 
-describe('ManageFeedsModal edit', () => {
-  function openEditor(overrides: Partial<Parameters<typeof ManageFeedsModal>[0]> = {}) {
+describe('FeedsPanel edit', () => {
+  function openEditor(overrides: Partial<Parameters<typeof FeedsPanel>[0]> = {}) {
     const handles = renderModal(overrides);
     fireEvent.click(screen.getByTitle('编辑'));
     return handles;
@@ -149,7 +149,7 @@ describe('ManageFeedsModal edit', () => {
   });
 });
 
-describe('ManageFeedsModal push toggle', () => {
+describe('FeedsPanel push toggle', () => {
   it('registers the device, then sends push_enabled alone', async () => {
     const { onUpdate } = renderModal();
 
@@ -179,11 +179,11 @@ describe('ManageFeedsModal push toggle', () => {
 
   it('shows an enabled feed as on without hovering', () => {
     render(
-      <ManageFeedsModal
+      <FeedsPanel
         feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
-        onClose={vi.fn()}
         onDelete={vi.fn()}
         onUpdate={vi.fn()}
+        onAdd={vi.fn()}
       />,
     );
 
@@ -193,21 +193,21 @@ describe('ManageFeedsModal push toggle', () => {
   });
 });
 
-describe('ManageFeedsModal device registration', () => {
+describe('FeedsPanel device registration', () => {
   it('says this device is not receiving even when a feed is enabled', async () => {
     // The trap this row exists for: push_enabled is global, so a device that
     // never subscribed (another browser, or the same phone after reinstalling
     // the PWA) shows every bell as on and receives nothing.
     render(
-      <ManageFeedsModal
+      <FeedsPanel
         feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
-        onClose={vi.fn()}
         onDelete={vi.fn()}
         onUpdate={vi.fn()}
+        onAdd={vi.fn()}
       />,
     );
 
-    // Names 更新推送 outright: inside a modal titled 管理订阅源, a bare "不接收"
+    // Names 更新推送 outright: inside a tab listing 订阅源, a bare "不接收"
     // reads as "not receiving articles".
     expect(
       await screen.findByText('本设备不接收更新推送 · 已开启的订阅源不会推送到这里'),
@@ -218,9 +218,7 @@ describe('ManageFeedsModal device registration', () => {
 
   it('registers this device without touching any feed', async () => {
     const onUpdate = vi.fn();
-    render(
-      <ManageFeedsModal feeds={feeds} onClose={vi.fn()} onDelete={vi.fn()} onUpdate={onUpdate} />,
-    );
+    render(<FeedsPanel feeds={feeds} onDelete={vi.fn()} onUpdate={onUpdate} onAdd={vi.fn()} />);
     // No feed is enabled here, so the "已开启的订阅源…" clause would be noise.
     await screen.findByText('本设备不接收更新推送');
     vi.mocked(currentSubscription).mockResolvedValue({ endpoint: 'x' } as PushSubscription);
@@ -237,11 +235,11 @@ describe('ManageFeedsModal device registration', () => {
     vi.mocked(deviceCount).mockResolvedValue(2);
     const onUpdate = vi.fn();
     render(
-      <ManageFeedsModal
+      <FeedsPanel
         feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
-        onClose={vi.fn()}
         onDelete={vi.fn()}
         onUpdate={onUpdate}
+        onAdd={vi.fn()}
       />,
     );
     expect(await screen.findByText('本设备正在接收更新推送 · 共 2 台设备')).toBeInTheDocument();
@@ -261,11 +259,11 @@ describe('ManageFeedsModal device registration', () => {
   it('turning a feed off no longer deregisters the device', async () => {
     vi.mocked(currentSubscription).mockResolvedValue({ endpoint: 'x' } as PushSubscription);
     render(
-      <ManageFeedsModal
+      <FeedsPanel
         feeds={[{ id: '1', name: 'HN', url: 'https://hn.example/rss', push_enabled: true }]}
-        onClose={vi.fn()}
         onDelete={vi.fn()}
         onUpdate={vi.fn().mockResolvedValue(undefined)}
+        onAdd={vi.fn()}
       />,
     );
     await screen.findByText(/本设备正在接收更新推送/);
@@ -278,9 +276,7 @@ describe('ManageFeedsModal device registration', () => {
 
   it('explains an iOS device that has not been installed to the home screen', async () => {
     vi.mocked(pushBlocker).mockReturnValue('needs-install');
-    render(
-      <ManageFeedsModal feeds={feeds} onClose={vi.fn()} onDelete={vi.fn()} onUpdate={vi.fn()} />,
-    );
+    render(<FeedsPanel feeds={feeds} onDelete={vi.fn()} onUpdate={vi.fn()} onAdd={vi.fn()} />);
 
     expect(await screen.findByText('本设备需先添加到主屏幕，才能接收更新推送')).toBeInTheDocument();
     // No control to click: installing is a step only the user can take.

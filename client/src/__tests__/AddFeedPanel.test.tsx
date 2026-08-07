@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import AddFeedModal from '../components/AddFeedModal';
+import AddFeedPanel from '../components/AddFeedPanel';
 
 let mockFetch: ReturnType<typeof vi.fn>;
-const onClose = vi.fn();
+const onDone = vi.fn();
 const onAdd = vi.fn();
 const onImport = vi.fn();
 
@@ -16,7 +16,7 @@ function routeFetch(routes: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  onClose.mockReset();
+  onDone.mockReset();
   onAdd.mockReset().mockResolvedValue(undefined);
   onImport.mockReset();
   mockFetch = routeFetch({ '/api/settings': {} });
@@ -27,26 +27,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// The panel is a sub-view of ManageModal, which owns dismissal — see
+// ManageModal.test.tsx for what 取消 and Escape resolve to from here.
 function renderModal() {
-  return render(<AddFeedModal onClose={onClose} onAdd={onAdd} onImport={onImport} />);
+  return render(<AddFeedPanel onDone={onDone} onAdd={onAdd} onImport={onImport} />);
 }
 
-describe('AddFeedModal — dismissal', () => {
-  it('closes on Escape', () => {
-    renderModal();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('closes when the cancel button is clicked', () => {
+describe('AddFeedPanel — manual tab', () => {
+  it('leaves the panel when the cancel button is clicked', () => {
     renderModal();
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
-    expect(onClose).toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalled();
   });
-});
 
-describe('AddFeedModal — manual tab', () => {
-  it('submits the trimmed URL and closes on success', async () => {
+  it('submits the trimmed URL and leaves on success', async () => {
     renderModal();
     fireEvent.change(screen.getByPlaceholderText(/feed\.xml/), {
       target: { value: '  https://example.com/rss  ' },
@@ -54,10 +48,10 @@ describe('AddFeedModal — manual tab', () => {
     fireEvent.click(screen.getByRole('button', { name: '添加' }));
 
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith({ url: 'https://example.com/rss' }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 
-  it('shows the error and stays open when adding fails', async () => {
+  it('shows the error and stays put when adding fails', async () => {
     onAdd.mockRejectedValue(new Error('feed not reachable'));
     renderModal();
     fireEvent.change(screen.getByPlaceholderText(/feed\.xml/), {
@@ -66,7 +60,7 @@ describe('AddFeedModal — manual tab', () => {
     fireEvent.click(screen.getByRole('button', { name: '添加' }));
 
     expect(await screen.findByText('feed not reachable')).toBeInTheDocument();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('disables the add button when the URL is empty', () => {
@@ -75,7 +69,7 @@ describe('AddFeedModal — manual tab', () => {
   });
 });
 
-describe('AddFeedModal — OPML tab', () => {
+describe('AddFeedPanel — OPML tab', () => {
   function switchToOpml() {
     fireEvent.click(screen.getByRole('button', { name: '导入 OPML' }));
   }
@@ -96,7 +90,6 @@ describe('AddFeedModal — OPML tab', () => {
     renderModal();
     switchToOpml();
 
-    // The modal portals to document.body, so query the document, not the render container.
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['<opml></opml>'], 'feeds.opml', { type: 'text/x-opml' });
     fireEvent.change(fileInput, { target: { files: [file] } });

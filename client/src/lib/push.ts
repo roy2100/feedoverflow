@@ -110,7 +110,7 @@ export async function ensureSubscribed(): Promise<void> {
 
 /**
  * Unregister this device. Driven only by the explicit device control in
- * ManageFeedsModal — never as a side effect of toggling a feed, since which
+ * FeedsPanel — never as a side effect of toggling a feed, since which
  * feeds are worth notifying about and which devices receive are separate
  * questions, and one device must not be able to silently deregister itself by
  * changing a setting that is global.

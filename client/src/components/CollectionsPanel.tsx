@@ -1,121 +1,18 @@
-import { X, Check, Trash2, Pencil, Plus, Layers } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { Check, Trash2, Pencil, Plus, Layers } from 'lucide-react';
+import { useState } from 'react';
 
 import { useIsMobile } from '../hooks/useIsMobile';
 import type { Collection, CollectionRule, Feed } from '../types';
-import ModalOverlay from './ModalOverlay';
 
 // A collection is the union of its rules, each `feed AND include AND NOT exclude`.
 // The editor below is a direct rendering of that: one row per rule, three fields,
 // no query syntax to learn. Rationale: docs/plan-collections.md.
+//
+// The 合集 tab of ManageModal, in two halves: the list and the editor are separate
+// exports because the shell — not this file — owns which one is showing. That is
+// what lets one Escape handler unwind the editor before the modal.
 
 const EMPTY_RULE: CollectionRule = { feedId: '', include: '', exclude: '' };
-
-interface ManageCollectionsModalProps {
-  collections: Collection[];
-  feeds: Feed[];
-  onClose: () => void;
-  onCreate: (input: { name: string; rules: CollectionRule[] }) => Promise<void>;
-  onUpdate: (id: string, patch: { name?: string; rules?: CollectionRule[] }) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}
-
-export default function ManageCollectionsModal({
-  collections,
-  feeds,
-  onClose,
-  onCreate,
-  onUpdate,
-  onDelete,
-}: ManageCollectionsModalProps) {
-  // null = list view; '' = creating a new one; otherwise the id being edited.
-  const [editing, setEditing] = useState<string | null>(null);
-
-  const target = editing ? collections.find((c) => c.id === editing) : undefined;
-
-  // Escape unwinds the sub-editor first; only the list view exits the modal.
-  const onEscape = useCallback(() => {
-    if (editing !== null) setEditing(null);
-    else onClose();
-  }, [editing, onClose]);
-
-  return (
-    <ModalOverlay onClose={onClose} onEscape={onEscape}>
-      <div
-        style={{
-          background: 'var(--bg-reader)',
-          border: '1px solid var(--border)',
-          borderRadius: 12,
-          width: 'min(560px, calc(100vw - 32px))',
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)',
-          animation: 'modalSlideUp 0.18s cubic-bezier(0.34,1.2,0.64,1)',
-        }}
-      >
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--border-light)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
-            {editing === null ? '管理合集' : editing === '' ? '新建合集' : '编辑合集'}
-          </span>
-          {editing === null && (
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-              {collections.length} 个
-            </span>
-          )}
-          <button
-            onClick={onClose}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              background: 'var(--bg-hover)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              border: 'none',
-            }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        {editing === null ? (
-          <CollectionList
-            collections={collections}
-            feeds={feeds}
-            onEdit={setEditing}
-            onDelete={onDelete}
-            onNew={() => setEditing('')}
-          />
-        ) : (
-          <CollectionEditor
-            key={editing}
-            collection={target}
-            feeds={feeds}
-            onCancel={() => setEditing(null)}
-            onSave={async (name, rules) => {
-              if (target) await onUpdate(target.id, { name, rules });
-              else await onCreate({ name, rules });
-              setEditing(null);
-            }}
-          />
-        )}
-      </div>
-    </ModalOverlay>
-  );
-}
 
 // ruleSummary renders a rule as the sentence it means, so the list view explains a
 // collection without opening it.
@@ -130,7 +27,7 @@ function ruleSummary(rule: CollectionRule, feeds: Feed[]): string {
   return parts.join(' · ');
 }
 
-interface CollectionListProps {
+export interface CollectionListProps {
   collections: Collection[];
   feeds: Feed[];
   onEdit: (id: string) => void;
@@ -138,7 +35,13 @@ interface CollectionListProps {
   onNew: () => void;
 }
 
-function CollectionList({ collections, feeds, onEdit, onDelete, onNew }: CollectionListProps) {
+export function CollectionList({
+  collections,
+  feeds,
+  onEdit,
+  onDelete,
+  onNew,
+}: CollectionListProps) {
   const isMobile = useIsMobile();
   return (
     <>
@@ -205,7 +108,7 @@ interface CollectionRowProps {
 
 function CollectionRow({ collection, feeds, isMobile, onEdit, onDelete }: CollectionRowProps) {
   const [hovered, setHovered] = useState(false);
-  // Two-step delete, same as ManageFeedsModal: the first click arms, the second
+  // Two-step delete, same as FeedsPanel: the first click arms, the second
   // commits, and leaving the row disarms so nothing stays armed unattended.
   const [confirming, setConfirming] = useState(false);
 
@@ -261,14 +164,14 @@ function CollectionRow({ collection, feeds, isMobile, onEdit, onDelete }: Collec
   );
 }
 
-interface CollectionEditorProps {
+export interface CollectionEditorProps {
   collection?: Collection;
   feeds: Feed[];
   onCancel: () => void;
   onSave: (name: string, rules: CollectionRule[]) => Promise<void>;
 }
 
-function CollectionEditor({ collection, feeds, onCancel, onSave }: CollectionEditorProps) {
+export function CollectionEditor({ collection, feeds, onCancel, onSave }: CollectionEditorProps) {
   const [name, setName] = useState(collection?.name ?? '');
   const [rules, setRules] = useState<CollectionRule[]>(
     collection?.rules.length ? collection.rules : [{ ...EMPTY_RULE }],
