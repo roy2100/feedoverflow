@@ -140,6 +140,13 @@ func InitSchema(db *sql.DB) error {
     include       TEXT,
     exclude       TEXT
   );
+  CREATE TABLE IF NOT EXISTS llm_config (
+    id       INTEGER PRIMARY KEY CHECK (id = 1),
+    base_url TEXT NOT NULL,
+    api_key  TEXT NOT NULL,
+    model    TEXT NOT NULL,
+    enabled  INTEGER NOT NULL DEFAULT 0
+  );
 `); err != nil {
 		return fmt.Errorf("base schema: %w", err)
 	}
@@ -255,6 +262,28 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("feed_url backfill: %w", err)
 	}
 
+	// The LLM translation of an article's title. Three-valued: NULL = pending (the
+	// translator worker may still pick it up), '' = settled with no translation (the
+	// title was already Chinese, or the model returned nothing usable), non-empty =
+	// the translation. Only the worker distinguishes NULL from ''; every reader
+	// treats both as "show the original". Appended last, so it lands after the
+	// columns the list SELECT already walks — see the perf note on
+	// articleColsNoContent.
+	execIgnore(db, `ALTER TABLE article_states ADD COLUMN title_zh TEXT`)
+
+	// Title translation is one global switch, not a per-feed opt-in. A per-feed flag
+	// would exist to keep Chinese feeds from costing anything, and the worker's
+	// local Han-ratio check already does that with no clicks; the residual case
+	// ("this English feed I read fine") did not justify a column, a PATCH field and
+	// a control on every row.
+	execIgnore(db, `ALTER TABLE llm_config ADD COLUMN enabled INTEGER NOT NULL DEFAULT 0`)
+	adoptFeedTranslateFlag(db)
+	execIgnore(db, `ALTER TABLE feeds DROP COLUMN translate_enabled`)
+	// An intermediate build stamped an enable watermark here. It was removed once
+	// backfill-on-enable and give-up-on-retry were set to the same 24h bound, which
+	// makes the two provably identical (see jobs.translateWindow).
+	execIgnore(db, `ALTER TABLE llm_config DROP COLUMN translate_since`)
+
 	// Drop the retired feed_cache table.
 	if _, err := db.Exec(`DROP TABLE IF EXISTS feed_cache`); err != nil {
 		return fmt.Errorf("drop feed_cache: %w", err)
@@ -272,6 +301,17 @@ func InitSchema(db *sql.DB) error {
 		`INSERT OR IGNORE INTO settings (key, value) VALUES ('rsshub_base_url', 'http://localhost:1200')`,
 	); err != nil {
 		return fmt.Errorf("seed settings: %w", err)
+	}
+	// Seed the single llm_config row. The key starts empty and enabled starts 0 —
+	// the endpoint/model defaults only pre-fill the settings form.
+	// This is deliberately not a `settings` row: GET /api/settings serializes that
+	// table wholesale, so an api_key there would leak on any ordinary settings read
+	// (the same reason push_keys exists).
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO llm_config (id, base_url, api_key, model)
+		 VALUES (1, 'https://api.deepseek.com', '', 'deepseek-chat')`,
+	); err != nil {
+		return fmt.Errorf("seed llm_config: %w", err)
 	}
 	if err := seedDefaultFeeds(db); err != nil {
 		return err
@@ -301,6 +341,21 @@ func seedDefaultFeeds(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// adoptFeedTranslateFlag carries the retired per-feed title-translation opt-in
+// over to the global switch: if any feed had it on, translation stays on. Runs
+// before the DROP COLUMN, and no-ops once the column is gone (the SELECT errors,
+// which is the signal that there is nothing left to carry).
+func adoptFeedTranslateFlag(db *sql.DB) {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM feeds WHERE translate_enabled = 1`).Scan(&n); err != nil {
+		return
+	}
+	if n == 0 {
+		return
+	}
+	_, _ = db.Exec(`UPDATE llm_config SET enabled = 1 WHERE id = 1`)
 }
 
 // execIgnore runs an idempotent DDL statement, discarding the error a re-run

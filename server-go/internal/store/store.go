@@ -13,7 +13,7 @@ import (
 )
 
 // The article_states columns RowToArticle needs, in scan order.
-const articleCols = `article_id, feed_id, feed_name, title, link, pub_date,
+const articleCols = `article_id, feed_id, feed_name, title, title_zh, link, pub_date,
 	summary, content, author, audio_url, audio_duration, is_starred, content_updated_at`
 
 // Same columns in the same scan order, but with `content` replaced by a literal —
@@ -28,7 +28,7 @@ const articleCols = `article_id, feed_id, feed_name, title, link, pub_date,
 // page reads, invisible while the OS cache was warm and a ~450 ms stall on the
 // first request after a restart. Content stays behind /api/articles/:id/content
 // and the two reads that genuinely need it (Starred, ArticleByID).
-const articleColsNoContent = `article_id, feed_id, feed_name, title, link, pub_date,
+const articleColsNoContent = `article_id, feed_id, feed_name, title, title_zh, link, pub_date,
 	summary, '' AS content, author, audio_url, audio_duration, is_starred, content_updated_at`
 
 func scanArticleRows(rows *sql.Rows) ([]articles.Row, error) {
@@ -37,7 +37,7 @@ func scanArticleRows(rows *sql.Rows) ([]articles.Row, error) {
 	for rows.Next() {
 		var r articles.Row
 		if err := rows.Scan(
-			&r.ArticleID, &r.FeedID, &r.FeedName, &r.Title, &r.Link, &r.PubDate,
+			&r.ArticleID, &r.FeedID, &r.FeedName, &r.Title, &r.TitleZh, &r.Link, &r.PubDate,
 			&r.Summary, &r.Content, &r.Author, &r.AudioURL, &r.AudioDuration,
 			&r.IsStarred, &r.ContentUpdatedAt,
 		); err != nil {
@@ -255,9 +255,13 @@ func LikeEscape(s string) string { return likeEscaper.Replace(s) }
 // the caller ever re-sorts. Port of routes/search.ts. `like` is the already-escaped
 // pattern (ESCAPE '\'); scope is "starred" | "feed" | "".
 func Search(r *sql.DB, like, scope, feedID string) ([]articles.Row, error) {
+	// title_zh is searched alongside title: when a feed has translation on, the
+	// Chinese headline is what the list actually shows, so a query typed from what
+	// is on screen has to match it.
 	q := `SELECT ` + articleColsNoContent + ` FROM article_states
-		WHERE (title LIKE ? ESCAPE '\' OR summary LIKE ? ESCAPE '\' OR content LIKE ? ESCAPE '\')`
-	args := []any{like, like, like}
+		WHERE (title LIKE ? ESCAPE '\' OR title_zh LIKE ? ESCAPE '\'
+		       OR summary LIKE ? ESCAPE '\' OR content LIKE ? ESCAPE '\')`
+	args := []any{like, like, like, like}
 	switch {
 	case scope == "starred":
 		q += ` AND is_starred = 1`

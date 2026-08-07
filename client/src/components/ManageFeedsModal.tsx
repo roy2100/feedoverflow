@@ -11,7 +11,7 @@ import {
   pushBlocker,
   unsubscribeDevice,
 } from '../lib/push';
-import type { Feed } from '../types';
+import type { Feed, FeedPatch } from '../types';
 
 function fallbackCopy(text: string, onDone: () => void) {
   const ta = document.createElement('textarea');
@@ -52,7 +52,7 @@ interface ManageFeedsModalProps {
   feeds: Feed[];
   onClose: () => void;
   onDelete: (feedId: string) => Promise<void>;
-  onUpdate: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  onUpdate: (feedId: string, patch: FeedPatch) => Promise<void>;
 }
 
 export default function ManageFeedsModal({
@@ -312,7 +312,7 @@ function deviceLabel(state: DeviceState, devices: number | null, anyFeedOn: bool
 interface FeedRowProps {
   feed: Feed;
   onDelete: (feedId: string) => Promise<void>;
-  onUpdate: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  onUpdate: (feedId: string, patch: FeedPatch) => Promise<void>;
   onTogglePush: (feed: Feed, next: boolean) => Promise<void>;
   pushBusy: boolean;
   pushError: string | null;

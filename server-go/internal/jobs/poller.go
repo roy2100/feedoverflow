@@ -11,6 +11,7 @@ import (
 	"rss-reader/server-go/internal/db"
 	"rss-reader/server-go/internal/push"
 	"rss-reader/server-go/internal/store"
+	"rss-reader/server-go/internal/translate"
 )
 
 const (
@@ -34,6 +35,10 @@ type Runner struct {
 	// Push notifies subscribed devices about newly published articles. nil
 	// disables notifications entirely (tests, and any build without a Sender).
 	Push Notifier
+	// Translator renders article titles into Chinese for translate-enabled feeds.
+	// nil disables the worker outright; a configured-but-keyless llm_config row
+	// disables it at runtime (see translatePending).
+	Translator translate.Translator
 }
 
 // Notifier is the slice of push.Sender the poller uses. It is an interface so the
@@ -49,6 +54,7 @@ type Notifier interface {
 func (r *Runner) Start(ctx context.Context) {
 	r.StartPoller(ctx)
 	r.StartResourceMonitor(ctx)
+	r.StartTranslator(ctx)
 }
 
 // StartPoller ports startPoller: run maintenance now + every 24h, checkpoint the

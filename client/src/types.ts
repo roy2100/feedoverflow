@@ -8,11 +8,40 @@ export interface Feed {
   push_enabled?: boolean;
 }
 
+/**
+ * A partial feed update. Every field is optional and only the ones present are sent —
+ * the server applies just what it receives, so a rename never clears an opt-in.
+ */
+export interface FeedPatch {
+  name?: string;
+  push_enabled?: boolean;
+}
+
+/**
+ * Title translation is one global setting, not a per-feed opt-in: feeds that need no
+ * translation are detected by script rather than declared, so there is nothing to
+ * decide per source. `key_set` stands in for the API key, which the server never
+ * returns — only whether one is stored. `enabled` is the intent, `key_set` the
+ * capability; both are required before anything is translated.
+ */
+export interface LLMConfig {
+  base_url: string;
+  model: string;
+  key_set: boolean;
+  enabled: boolean;
+}
+
 export interface Article {
   id: string;
   feedId: string;
   feedName: string;
   title: string;
+  /**
+   * The LLM translation of `title`, empty when there is none (feed not enabled, still
+   * pending, or deliberately skipped — indistinguishable and equivalent here). `title`
+   * itself is never overwritten, so the original is always available.
+   */
+  titleZh?: string;
   summary: string;
   content: string;
   link: string;

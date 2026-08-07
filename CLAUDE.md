@@ -18,9 +18,9 @@ npm run fmt && npm run lint:fix   # after changes — auto-format + auto-fix
 npm run fmt:check && npm run lint # before commit — must both pass clean
 
 # Deploy (full runbook: docs/rathole-vps-tunnel.md)
-./scripts/deploy.sh              # build + sync to ~/Deploy, kickstart the launchd service
-launchctl kickstart -k "gui/$(id -u)/com.rss-reader.app"   # force restart
-tail -f ~/Deploy/rss-reader/logs/app.log      # structured NDJSON (slog)
+./scripts/deploy.sh              # build + sync to ~/Deploy/feedoverflow, kickstart the launchd service
+launchctl kickstart -k "gui/$(id -u)/com.feedoverflow.app"   # force restart
+tail -f ~/Deploy/feedoverflow/logs/app.log    # structured NDJSON (slog)
 ```
 
 Do not silence lint errors or rewrite business logic just to make `lint` pass — if a correctness
@@ -61,6 +61,7 @@ server-go/          Go backend (cgo binary, port 3002 — chi router, mattn/go-s
   internal/favicon  favicon_cache read-through
   internal/jobs     poller, maintenance (orphan cleanup + size-cap + VACUUM), resource monitor
   internal/push     Web Push (VAPID) sender for per-feed update notifications
+  internal/translate OpenAI-compatible client for per-feed LLM title translation
   internal/feed     gofeed RSS wrapper
   internal/ssrf     SSRF guard for outbound content/favicon fetches
 client/             Vite + React + TypeScript (port 3000)
@@ -176,19 +177,65 @@ language, drop stale/redundant chrome.
   per feed per poll are pushed, one notification each; a busier poll simply drops the surplus —
   never a "有 N 篇新文章" summary, which is an unread count, the one thing this reader has no
   concept of. Rationale + manual test steps: `docs/plan-push-notifications.md`.
+- **Title translation** is **one global switch** (`llm_config.enabled`, default off), deliberately
+  *not* a per-feed opt-in. A per-feed flag would exist to keep Chinese feeds from costing anything,
+  and the worker's local Han-ratio check (>30% Han → skipped, never sent) already does that with no
+  clicks; the residual case ("this English feed I read fine") did not justify a column, a PATCH
+  field and a control on every row. The API key is the *capability* and the switch is the *intent* —
+  both required, the same split as the VAPID keypair versus a push opt-in.
+  It runs in its own 30s worker (`internal/jobs/translator.go`), *not* off the poller the way push
+  does. Push must fire only from the poller because an on-demand refresh must never notify about the
+  article being read; translation has the opposite requirement, so one standalone worker covers
+  every fetch path (poller, `EnsureFresh`, warming) and keeps upstream latency off the request path
+  entirely.
+  **One title per request, never a batch**: batching saves ~¥0.02/day and buys the one failure that
+  must not happen — a model that drops an element in a batched response shifts every following
+  translation onto the wrong article, silently and permanently. One title per request makes that
+  structurally impossible and deletes the index-keyed protocol, the tolerant JSON decoder and the
+  partial-failure semantics a batch would need.
+  Pending work is `title_zh IS NULL AND pub_ts > now − 24h`. That **one** bound carries three jobs:
+  it keeps `title_zh IS NULL` from matching the entire historical table (every pre-existing row has
+  it NULL); it decides how far back switching on reaches; and it decides when to stop retrying a row
+  that keeps failing — a failed request writes nothing and the queue is newest-first, so without a
+  bound a permanently-failing row would block everything older than it forever. An earlier design
+  split the second job onto a watermark stamped at enable time; with both set to 24h the two are
+  provably identical (the watermark equals `now − 24h` when stamped and is overtaken immediately),
+  so it was deleted rather than kept as a knob that could only hold one value.
+  **This bound is not a spending control** — it permits work, it does not create it. In steady state
+  everything inside it settles within minutes, so the pending set is empty whatever the value. It
+  bites only on a real backlog: an outage longer than a day, or a newly added feed, whose
+  older-than-24h items stay in their original language.
+  `title_zh` is three-valued — NULL = pending, `''` = settled with no translation (already Chinese,
+  or nothing usable came back), non-empty = the translation. Only the worker distinguishes NULL from
+  `''`; every reader treats both as "show the original". A failed *request* writes nothing and is
+  retried; a successful one always settles the row, so no counters or give-up rules are needed.
+  The endpoint is any OpenAI-compatible `/chat/completions` (`llm_config`, editable at runtime from
+  SettingsModal — the worker re-reads it every tick). `base_url` arrives over HTTP, so it is
+  restricted to https or loopback and upstream response bodies are never echoed to the client. The
+  original title is never overwritten in the data. The **list shows only the translation** — a muted
+  second line doubled every row's height and was clipped mid-word, and scanning is the one place the
+  original earns nothing. **ArticleReader shows both**, which is where a suspect translation is
+  actually checked, and search matches `title` and `title_zh` alike.
+  Future article-level AI output (body translation, summaries) should **not** follow this shape:
+  those are only needed for what you actually open, so they belong on-demand from the reader, and
+  their output belongs in a side table — a body-sized column on `article_states` is exactly what the
+  `articleColsNoContent` perf note warns about.
+  Rationale: `docs/plan-title-translation.md`.
 - Auth: when `AUTH_USER`/`AUTH_PASS` are set, every `/api/*` request on the public router requires
   a valid session cookie (no localhost bypass — gated by socket, not IP). Login is rate-limited.
 
 **SQLite tables:**
 - `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts)`
 - `collections(id, name, position, created_at)` + `collection_rules(id, collection_id, feed_id, include, exclude)` — saved multi-feed streams
-- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at)` — durable record of every fetched article
+- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at, title_zh)` — durable record of every fetched article
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `sessions(token, created_at)` — 30-day TTL
 - `favicon_cache(domain, image, content_type, fetched_at)` — 30-day positive / 1-day negative TTL
 - `push_subscriptions(endpoint, p256dh, auth, user_agent, created_at)` — one row per registered device
 - `push_keys(id, public_key, private_key)` — the single VAPID keypair; deliberately *not* in
   `settings`, which `GET /api/settings` serializes wholesale
+- `llm_config(id, base_url, api_key, model, enabled)` — the single translation endpoint + the
+  global on/off switch; out of `settings` for the same reason as `push_keys`
 
 **API:**
 | Method | Path | Description |
@@ -223,6 +270,8 @@ language, drop stale/redundant chrome.
 | GET | `/api/auth-check` | whether the request is authed |
 | GET | `/api/push/key` | VAPID public key (generated on first call) + device count |
 | POST | `/api/push/subscribe` `/api/push/unsubscribe` | register/drop this device's push endpoint |
+| GET\|PATCH | `/api/llm/config` | translation endpoint/model/`enabled` + whether a key is stored (`key_set`; the key itself is never returned) |
+| POST | `/api/llm/config/test` | translate one fixed string through the stored config |
 
 ### MCP server (`internal/mcp`)
 

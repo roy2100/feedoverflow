@@ -5,6 +5,7 @@ import type {
   Collection,
   CollectionRule,
   Feed,
+  FeedPatch,
   ListMode,
   SearchScope,
   View,
@@ -58,7 +59,7 @@ interface StoreState {
   addFeed: (input: { url: string }) => Promise<void>;
   importFeeds: (newFeeds: Feed[]) => void;
   deleteFeed: (feedId: string) => Promise<void>;
-  updateFeed: (feedId: string, patch: { name?: string; push_enabled?: boolean }) => Promise<void>;
+  updateFeed: (feedId: string, patch: FeedPatch) => Promise<void>;
   addCollection: (input: { name: string; rules: CollectionRule[] }) => Promise<void>;
   updateCollection: (
     id: string,
@@ -286,8 +287,8 @@ export const useStore = create<StoreState>((set, get) => ({
     if (wasViewing) get().selectView({ type: 'today' });
   },
 
-  // Both fields are optional and only sent when present: the server applies just
-  // what it receives, so a rename never clears the push opt-in and vice versa.
+  // Every field is optional and only sent when present: the server applies just
+  // what it receives, so a rename never clears an opt-in and vice versa.
   updateFeed: async (feedId, patch) => {
     await apiFetch(`${API}/feeds/${feedId}`, {
       method: 'PATCH',

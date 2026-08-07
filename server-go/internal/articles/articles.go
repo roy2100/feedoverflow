@@ -71,6 +71,7 @@ type Row struct {
 	FeedID           sql.NullString
 	FeedName         sql.NullString
 	Title            sql.NullString
+	TitleZh          sql.NullString
 	Link             sql.NullString
 	PubDate          sql.NullString
 	Summary          sql.NullString
@@ -91,10 +92,14 @@ type Row struct {
 // string value is exact.
 func RowToArticle(r Row, withSummary, withContent bool) model.Article {
 	a := model.Article{
-		ID:            r.ArticleID,
-		FeedID:        r.FeedID.String,
-		FeedName:      r.FeedName.String,
-		Title:         r.Title.String,
+		ID:       r.ArticleID,
+		FeedID:   r.FeedID.String,
+		FeedName: r.FeedName.String,
+		Title:    r.Title.String,
+		// Carried unconditionally: a translated headline is a few dozen bytes, so it
+		// gets no withX flag of its own — unlike Summary/Content, which are the two
+		// columns worth stripping.
+		TitleZh:       r.TitleZh.String,
 		Link:          r.Link.String,
 		PubDate:       r.PubDate.String,
 		Author:        r.Author.String,

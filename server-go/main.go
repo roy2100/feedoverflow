@@ -21,6 +21,7 @@ import (
 	"rss-reader/server-go/internal/jobs"
 	applog "rss-reader/server-go/internal/logger"
 	"rss-reader/server-go/internal/push"
+	"rss-reader/server-go/internal/translate"
 )
 
 func main() {
@@ -62,8 +63,12 @@ func main() {
 	c := cache.New(handle, nil, cache.WithConcurrency(cfg.RefreshConcurrency)) // nil fetch → feed.ParseURL
 	fav := favicon.New(handle, nil)                                            // nil fetch → Google s2
 	pusher := &push.Sender{DB: handle, Log: appLogger, Subject: cfg.PushSubject}
+	// One client shared by the settings 测试连接 endpoint and the background worker,
+	// so what the test exercises is exactly what the worker will run. It holds no
+	// credentials — every call reads llm_config, which is editable at runtime.
+	translator := translate.New(appLogger)
 	srv := &httpapi.Server{
-		DB: handle, Cache: c, Favicon: fav, Push: pusher,
+		DB: handle, Cache: c, Favicon: fav, Push: pusher, Translator: translator,
 		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,
 		LocalAPIPort: cfg.LocalAPIPort,
 	}
@@ -85,7 +90,7 @@ func main() {
 			appLogger.Warn("cache warming failed to start", "err", err)
 		}
 		runner := &jobs.Runner{
-			DB: handle, Cache: c, Log: appLogger, Push: pusher,
+			DB: handle, Cache: c, Log: appLogger, Push: pusher, Translator: translator,
 			CapBytes: cfg.DBMaxSizeBytes, DBPath: cfg.DBPath,
 		}
 		runner.Start(context.Background())

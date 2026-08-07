@@ -360,6 +360,14 @@ function ArticleItem({
     color: 'var(--text-tertiary)',
     flexShrink: 0,
   };
+  // A translation replaces the title outright here; the original is not shown.
+  // It was, on a muted second line, and it doubled the height of every row while
+  // being clipped mid-word — a reference nobody could finish reading. Scanning a
+  // list is the one place the original earns nothing: checking a suspect
+  // translation is something you do on the article you opened, and ArticleReader
+  // still shows both. `title` itself is never overwritten in the data, and search
+  // matches both, so nothing is actually lost by hiding it here.
+  const displayTitle = article.titleZh?.trim() || article.title;
 
   return (
     <div
@@ -390,7 +398,7 @@ function ArticleItem({
               }}
             >
               <div style={{ ...titleStyle, flex: 1, minWidth: 0 }}>
-                {decodeEntities(article.title)}
+                {decodeEntities(displayTitle)}
               </div>
               <span style={{ ...timeStyle, marginTop: 1 }}>{formatDate(article.pubDate)}</span>
             </div>
@@ -420,7 +428,7 @@ function ArticleItem({
                 </span>
               </div>
               <div style={{ ...titleStyle, marginBottom: article.audioUrl ? 4 : 0 }}>
-                {decodeEntities(article.title)}
+                {decodeEntities(displayTitle)}
               </div>
             </>
           )}

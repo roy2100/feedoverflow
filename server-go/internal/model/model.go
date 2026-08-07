@@ -19,10 +19,14 @@ type Feed struct {
 // Article is the enriched article shape returned by the list/detail endpoints.
 // UpdatedAt is nil (JSON null) until the article was edited upstream.
 type Article struct {
-	ID            string `json:"id"`
-	FeedID        string `json:"feedId"`
-	FeedName      string `json:"feedName"`
-	Title         string `json:"title"`
+	ID       string `json:"id"`
+	FeedID   string `json:"feedId"`
+	FeedName string `json:"feedName"`
+	Title    string `json:"title"`
+	// TitleZh is the LLM translation of Title, empty when there is none (never
+	// translated, still pending, or deliberately skipped — the client cannot and
+	// need not tell those apart). Title itself is never overwritten.
+	TitleZh       string `json:"titleZh"`
 	Summary       string `json:"summary"`
 	Content       string `json:"content"`
 	Link          string `json:"link"`
