@@ -1,9 +1,9 @@
 import { X, Check, Trash2, Pencil, Plus, Layers } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useState } from 'react';
 
 import { useIsMobile } from '../hooks/useIsMobile';
 import type { Collection, CollectionRule, Feed } from '../types';
+import ModalOverlay from './ModalOverlay';
 
 // A collection is the union of its rules, each `feed AND include AND NOT exclude`.
 // The editor below is a direct rendering of that: one row per rule, three fields,
@@ -31,36 +31,16 @@ export default function ManageCollectionsModal({
   // null = list view; '' = creating a new one; otherwise the id being edited.
   const [editing, setEditing] = useState<string | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (editing !== null) setEditing(null);
-        else onClose();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, editing]);
-
   const target = editing ? collections.find((c) => c.id === editing) : undefined;
 
-  return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(20,18,16,0.45)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        animation: 'fadeInOverlay 0.15s ease',
-      }}
-    >
+  // Escape unwinds the sub-editor first; only the list view exits the modal.
+  const onEscape = useCallback(() => {
+    if (editing !== null) setEditing(null);
+    else onClose();
+  }, [editing, onClose]);
+
+  return (
+    <ModalOverlay onClose={onClose} onEscape={onEscape}>
       <div
         style={{
           background: 'var(--bg-reader)',
@@ -133,13 +113,7 @@ export default function ManageCollectionsModal({
           />
         )}
       </div>
-
-      <style>{`
-        @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
-        @keyframes modalSlideUp { from{opacity:0;transform:translateY(12px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-      `}</style>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
 

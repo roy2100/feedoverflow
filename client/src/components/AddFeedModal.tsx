@@ -1,8 +1,8 @@
 import { X, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useRef, forwardRef } from 'react';
-import { createPortal } from 'react-dom';
 
 import type { Feed } from '../types';
+import ModalOverlay from './ModalOverlay';
 
 interface AddFeedModalProps {
   onClose: () => void;
@@ -13,31 +13,8 @@ interface AddFeedModalProps {
 export default function AddFeedModal({ onClose, onAdd, onImport }: AddFeedModalProps) {
   const [tab, setTab] = useState<'manual' | 'opml'>('manual');
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(20,18,16,0.45)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        animation: 'fadeInOverlay 0.15s ease',
-      }}
-    >
+  return (
+    <ModalOverlay onClose={onClose}>
       <div
         style={{
           background: 'var(--bg-reader)',
@@ -123,13 +100,7 @@ export default function AddFeedModal({ onClose, onAdd, onImport }: AddFeedModalP
           <OpmlTab onImport={onImport} onClose={onClose} />
         )}
       </div>
-
-      <style>{`
-        @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
-        @keyframes modalSlideUp { from{opacity:0;transform:translateY(12px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-      `}</style>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
 

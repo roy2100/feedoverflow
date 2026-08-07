@@ -68,7 +68,7 @@ client/             Vite + React + TypeScript (port 3000)
   src/App.tsx       top-level layout/auth/audio owner
   src/store.ts      zustand store — feeds/articles/views + all fetch logic
   src/types.ts      shared client types, mirrors server-go/internal/model
-  src/components/   FeedSidebar, ArticleList, ArticleReader, AddFeedModal, ManageFeedsModal, ManageCollectionsModal, SettingsModal, PodcastPlayer, LoginForm
+  src/components/   FeedSidebar, ArticleList, ArticleReader, ModalOverlay, AddFeedModal, ManageFeedsModal, ManageCollectionsModal, SettingsModal, PodcastPlayer, LoginForm
   src/pages/        mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
 ```
 
@@ -78,6 +78,14 @@ history navigation that we then animated a second time from `popstate`, and that
 long run of iOS-only rendering bugs (frozen overlapping panels, dead scroll, buried deep-link
 stacks). Back is the in-app ← arrow only; the edge-swipe does nothing. Don't reintroduce
 `pushState` here — see `docs/plan-drop-mobile-history.md`.
+
+Every modal renders through `ModalOverlay` — one portal, one backdrop, one Escape handler, one copy
+of the keyframes. Backdrop dismiss requires the backdrop to own **both** the `pointerdown` and the
+`click`: a `click` targets the nearest common ancestor of press and release, so drag-selecting text
+out of the panel and letting go on the backdrop reports the backdrop as `e.target` and an
+`e.target === e.currentTarget` check alone closed the modal mid-selection. `onEscape` exists for
+modals whose Escape unwinds an inner step first (ManageCollectionsModal's sub-editor); the backdrop
+still closes outright.
 
 TypeScript, type-stripped by Vite/Vitest. `npm run typecheck` (`tsc --noEmit`, in `client/`) is
 the type gate — Vite does not type-check.

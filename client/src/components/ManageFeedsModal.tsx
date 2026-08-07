@@ -1,6 +1,5 @@
 import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck, Bell, BellOff } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 
 import { faviconDomain } from '../faviconDomain';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -12,6 +11,7 @@ import {
   unsubscribeDevice,
 } from '../lib/push';
 import type { Feed, FeedPatch } from '../types';
+import ModalOverlay from './ModalOverlay';
 
 function fallbackCopy(text: string, onDone: () => void) {
   const ta = document.createElement('textarea');
@@ -121,31 +121,8 @@ export default function ManageFeedsModal({
     }
   };
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(20,18,16,0.45)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        animation: 'fadeInOverlay 0.15s ease',
-      }}
-    >
+  return (
+    <ModalOverlay onClose={onClose}>
       <div
         style={{
           background: 'var(--bg-reader)',
@@ -272,13 +249,7 @@ export default function ManageFeedsModal({
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
-        @keyframes modalSlideUp { from{opacity:0;transform:translateY(12px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-      `}</style>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
 

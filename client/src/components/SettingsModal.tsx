@@ -1,8 +1,8 @@
 import { X, CheckCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 
 import type { LLMConfig } from '../types';
+import ModalOverlay from './ModalOverlay';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -91,14 +91,6 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   // The key input is on screen when there is nothing stored yet, or when 更改
   // opened it. This is also what decides whether a save carries the key.
   const keyEditable = !keySet || editingKey;
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -202,23 +194,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
-  return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(20,18,16,0.45)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        animation: 'fadeInOverlay 0.15s ease',
-      }}
-    >
+  return (
+    <ModalOverlay onClose={onClose}>
       <div
         style={{
           background: 'var(--bg-reader)',
@@ -503,12 +480,6 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </p>
         </div>
       </div>
-
-      <style>{`
-        @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
-        @keyframes modalSlideUp { from{opacity:0;transform:translateY(12px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-      `}</style>
-    </div>,
-    document.body,
+    </ModalOverlay>
   );
 }
