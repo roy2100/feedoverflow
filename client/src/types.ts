@@ -11,9 +11,15 @@ export interface Feed {
 /**
  * A partial feed update. Every field is optional and only the ones present are sent —
  * the server applies just what it receives, so a rename never clears an opt-in.
+ *
+ * `url` repoints the feed at a new source and keeps its articles: the feed's id never
+ * changes, so its existing rows stay under it and items from the new address are
+ * inserted alongside them. Delete + re-add, the only way to switch before, purged every
+ * non-starred article on the way out.
  */
 export interface FeedPatch {
   name?: string;
+  url?: string;
   push_enabled?: boolean;
 }
 

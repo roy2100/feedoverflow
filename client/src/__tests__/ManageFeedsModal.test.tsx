@@ -100,6 +100,55 @@ describe('ManageFeedsModal delete confirmation', () => {
   });
 });
 
+describe('ManageFeedsModal edit', () => {
+  function openEditor(overrides: Partial<Parameters<typeof ManageFeedsModal>[0]> = {}) {
+    const handles = renderModal(overrides);
+    fireEvent.click(screen.getByTitle('编辑'));
+    return handles;
+  }
+
+  it('sends the new address alone when only it changed', async () => {
+    const { onUpdate } = openEditor();
+
+    fireEvent.change(screen.getByPlaceholderText('订阅地址'), {
+      target: { value: 'rsshub://hn/best' },
+    });
+    fireEvent.click(screen.getByTitle('保存'));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    // Repointing a feed keeps its articles — but only because the feed row
+    // survives, so this must be a PATCH and never a delete + re-add.
+    expect(onUpdate).toHaveBeenCalledWith('1', { url: 'rsshub://hn/best' });
+  });
+
+  it('sends the new name alone when only it changed', async () => {
+    const { onUpdate } = openEditor();
+
+    fireEvent.change(screen.getByPlaceholderText('名称'), { target: { value: 'Hacker News' } });
+    fireEvent.click(screen.getByTitle('保存'));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    // An unchanged url riding along would make every rename look like a source
+    // switch, and on the server it costs a dupe check it doesn't need.
+    expect(onUpdate).toHaveBeenCalledWith('1', { name: 'Hacker News' });
+  });
+
+  it('stays in the editor and says why when the address is rejected', async () => {
+    const onUpdate = vi.fn().mockRejectedValue(new Error('无法解析该 Feed，请检查 URL 是否正确'));
+    openEditor({ onUpdate });
+
+    fireEvent.change(screen.getByPlaceholderText('订阅地址'), {
+      target: { value: 'https://typo.example/rss' },
+    });
+    fireEvent.click(screen.getByTitle('保存'));
+
+    expect(await screen.findByText('无法解析该 Feed，请检查 URL 是否正确')).toBeInTheDocument();
+    // The rejected address stays on screen: closing the editor would discard the
+    // one copy of what needs fixing.
+    expect(screen.getByPlaceholderText('订阅地址')).toHaveValue('https://typo.example/rss');
+  });
+});
+
 describe('ManageFeedsModal push toggle', () => {
   it('registers the device, then sends push_enabled alone', async () => {
     const { onUpdate } = renderModal();

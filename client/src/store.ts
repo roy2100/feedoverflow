@@ -289,12 +289,18 @@ export const useStore = create<StoreState>((set, get) => ({
 
   // Every field is optional and only sent when present: the server applies just
   // what it receives, so a rename never clears an opt-in and vice versa.
+  //
+  // A rejected PATCH must throw rather than merge: `url` can fail on a typo, an
+  // unreachable source or a URL another feed already holds, and swallowing that
+  // would leave the new address on screen while the feed quietly kept fetching
+  // the old one.
   updateFeed: async (feedId, patch) => {
-    await apiFetch(`${API}/feeds/${feedId}`, {
+    const r = await apiFetch(`${API}/feeds/${feedId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || '保存失败');
     set((state) => ({
       feeds: state.feeds.map((f) => (f.id === feedId ? { ...f, ...patch } : f)),
     }));

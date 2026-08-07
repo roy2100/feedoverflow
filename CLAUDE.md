@@ -116,6 +116,18 @@ language, drop stale/redundant chrome.
   stamps only on genuine content changes.
 - Deleting a feed purges its non-starred rows; starred rows keep `feed_url`, so re-adding the same
   URL re-adopts them (`adopt-orphans`).
+- **Replacing a dead source is an edit, not a delete + re-add.** `PATCH /api/feeds/:id` takes a
+  `url`, and since `feeds.id` never changes, the feed's existing rows stay under it while items
+  from the new address are inserted with that same `feed_id` — the history is continuous, and
+  articles both sources carry just upsert on their shared `article_id`. Delete + re-add cannot do
+  this: it purges every non-starred row, and the starred survivors carry the *old* `feed_url`, so
+  `adopt-orphans` can't match them against the new one either. The edit rewrites its own rows'
+  `feed_url` for exactly that reason. It also clears `last_fetched_at`, so `EnsureFresh` takes its
+  `last==0 && hasRows` branch — background refresh, history readable immediately. The new URL is
+  parsed upstream before it is stored (a typo would otherwise be silent: the feed just stops
+  updating). None of this loosens the persist upsert, where `feed_id`/`feed_name`/`feed_url` stay
+  insert-only — that rule stops *another* feed's fetch from re-homing rows, which is a different
+  thing from a feed restating its own address. Rationale: `docs/plan-edit-feed-url.md`.
 - Maintenance (`internal/jobs/maintenance.go`): orphan cleanup (non-starred rows whose feed is
   gone) + size cap (`DB_MAX_SIZE_MB`, default 2GB — trims oldest non-starred articles to 90%, then
   `VACUUM`s). Starred articles are never deleted.
@@ -267,7 +279,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/feeds` | list feeds |
 | POST | `/api/feeds` | add feed |
 | POST | `/api/feeds/import-opml` | bulk import from OPML |
-| PATCH | `/api/feeds/:id` | rename feed and/or toggle `push_enabled` (both fields optional) |
+| PATCH | `/api/feeds/:id` | rename feed, repoint its `url`, and/or toggle `push_enabled` (all optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
 | GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1` |
 | GET | `/api/collections` | list collections with their rules |

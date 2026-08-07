@@ -295,6 +295,8 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
   const isMobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(feed.name);
+  const [url, setUrl] = useState(feed.url);
+  const [error, setError] = useState('');
   const [hovered, setHovered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -325,6 +327,10 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
     setName(feed.name);
   }, [feed.name]);
 
+  useEffect(() => {
+    setUrl(feed.url);
+  }, [feed.url]);
+
   // Never leave a row armed: an unattended armed delete is exactly the state
   // where the next stray click destroys something.
   const disarm = () => {
@@ -350,16 +356,38 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
     [],
   );
 
+  // Only changed fields are sent. An unchanged url would settle as a no-op
+  // server-side anyway, but sending it makes every rename look like a source
+  // switch in the logs, and push_enabled must never ride along either way.
   const handleSave = async () => {
-    if (!name.trim()) return;
+    const nextName = name.trim();
+    const nextURL = url.trim();
+    if (!nextName || !nextURL) return;
+    const patch: FeedPatch = {};
+    if (nextName !== feed.name) patch.name = nextName;
+    if (nextURL !== feed.url) patch.url = nextURL;
+    if (Object.keys(patch).length === 0) {
+      setEditing(false);
+      return;
+    }
     setSaving(true);
-    await onUpdate(feed.id, { name: name.trim() });
-    setSaving(false);
-    setEditing(false);
+    setError('');
+    try {
+      await onUpdate(feed.id, patch);
+      setEditing(false);
+    } catch (e) {
+      // Stay in the editor: the rejected address is still in the box, which is
+      // the only place it can be corrected.
+      setError((e as Error).message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
     setName(feed.name);
+    setUrl(feed.url);
+    setError('');
     setEditing(false);
   };
 
@@ -384,62 +412,94 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          padding: '6px 20px',
-          gap: 8,
+          flexDirection: 'column',
+          padding: '8px 20px',
+          gap: 6,
           background: 'var(--bg-hover)',
         }}
       >
-        <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <FeedIcon url={feed.url} />
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <FeedIcon url={feed.url} />
+          </span>
+          <input
+            ref={nameRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="名称"
+            autoFocus
+            style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving || !name.trim() || !url.trim()}
+            title="保存"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 5,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: saving ? 'var(--bg-selected)' : 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              cursor: saving ? 'default' : 'pointer',
+            }}
+          >
+            <Check size={12} />
+          </button>
+          <button
+            onClick={handleCancel}
+            title="取消"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 5,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--bg-selected)',
+              color: 'var(--text-secondary)',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+        {/* Editing the address is how a dead source is replaced without losing
+            its articles — the feed keeps its id, so its history stays under it. */}
         <input
-          ref={nameRef}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          autoFocus
-          style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-        />
-        <button
-          onClick={handleSave}
-          disabled={saving || !name.trim()}
-          title="保存"
+          placeholder="订阅地址"
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
           style={{
-            width: 26,
-            height: 26,
-            borderRadius: 5,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: saving ? 'var(--bg-selected)' : 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            cursor: saving ? 'default' : 'pointer',
-          }}
-        >
-          <Check size={12} />
-        </button>
-        <button
-          onClick={handleCancel}
-          title="取消"
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 5,
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--bg-selected)',
+            ...inputStyle,
+            marginLeft: 22,
+            fontSize: 12,
             color: 'var(--text-secondary)',
-            border: 'none',
-            cursor: 'pointer',
           }}
-        >
-          <X size={12} />
-        </button>
+        />
+        {error && (
+          <p
+            style={{
+              margin: '0 0 2px 22px',
+              fontSize: 11.5,
+              color: 'var(--red)',
+              lineHeight: 1.5,
+            }}
+          >
+            {error}
+          </p>
+        )}
       </div>
     );
   }

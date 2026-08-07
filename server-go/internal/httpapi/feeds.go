@@ -131,22 +131,33 @@ func (s *Server) postImportOPML(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// patchFeed is PATCH /api/feeds/:id: rename a feed and/or flip its push opt-in
-// (404 if missing). Both fields are optional pointers so each is only applied
-// when the client actually sent it — a rename-only body (the original contract,
-// still what the MCP rename_feed tool sends) must not clear push_enabled, and a
-// push-only body must not have to echo the name back.
+// patchFeed is PATCH /api/feeds/:id: rename a feed, repoint it at a new URL,
+// and/or flip its push opt-in (404 if missing). Every field is an optional
+// pointer so each is only applied when the client actually sent it — a
+// rename-only body (the original contract, still what the MCP rename_feed tool
+// sends) must not clear push_enabled, and a push-only body must not have to echo
+// the name back.
+//
+// The URL is applied first because it is the only field whose write can fail on
+// something other than a bad request — it parses the new address upstream. Doing
+// it first means a feed never ends up renamed to match a source it failed to
+// switch to.
 func (s *Server) patchFeed(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name        *string `json:"name"`
+		URL         *string `json:"url"`
 		PushEnabled *bool   `json:"push_enabled"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	if body.Name == nil && body.PushEnabled == nil {
+	if body.Name == nil && body.URL == nil && body.PushEnabled == nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "name required"})
 		return
 	}
 	id := chi.URLParam(r, "id")
+
+	if body.URL != nil && !s.applyFeedURL(w, r, id, strings.TrimSpace(*body.URL)) {
+		return
+	}
 
 	if body.Name != nil {
 		// feeds.name is NOT NULL, so an empty rename must be rejected up front rather
@@ -181,6 +192,76 @@ func (s *Server) patchFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// applyFeedURL repoints one feed at url for patchFeed. It reports whether the
+// caller may continue; on false the response has already been written.
+//
+// Replacing a dead source is exactly when a typo is most likely and least
+// visible — the feed simply stops updating, with nothing on screen to say so —
+// so the new address is parsed upstream before it is stored, the same check
+// postFeed makes. A URL equal to the current one settles as a no-op: the client
+// may echo the whole feed back, and that must not cost an upstream fetch.
+func (s *Server) applyFeedURL(w http.ResponseWriter, r *http.Request, id, url string) bool {
+	if url == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "URL required"})
+		return false
+	}
+	current, ok, err := store.GetFeed(s.DB.Reader(), id)
+	if err != nil {
+		serverError(w, err)
+		return false
+	}
+	if !ok {
+		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
+		return false
+	}
+	if current.URL == url {
+		return true
+	}
+
+	taken, err := store.FeedURLTakenByOther(s.DB.Reader(), url, id)
+	if err != nil {
+		serverError(w, err)
+		return false
+	}
+	if taken {
+		httpx.WriteJSON(w, http.StatusConflict, map[string]any{"error": "该 Feed 已存在"})
+		return false
+	}
+
+	resolved, err := store.ResolveURL(s.DB.Reader(), url)
+	if err != nil {
+		serverError(w, err)
+		return false
+	}
+	parse := s.Parse
+	if parse == nil {
+		parse = feed.ParseURL
+	}
+	if _, err := parse(r.Context(), resolved); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
+			"error":  "无法解析该 Feed，请检查 URL 是否正确",
+			"detail": err.Error(),
+		})
+		return false
+	}
+
+	changes, err := store.UpdateFeedURL(s.DB.Writer(), id, url)
+	if err != nil {
+		// Backstop for the concurrent-edit race the SELECT above can't close.
+		if store.IsUniqueViolation(err) {
+			httpx.WriteJSON(w, http.StatusConflict, map[string]any{"error": "该 Feed 已存在"})
+			return false
+		}
+		serverError(w, err)
+		return false
+	}
+	if changes == 0 {
+		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
+		return false
+	}
+	return true
 }
 
 // deleteFeed is the port of DELETE /api/feeds/:id: remove the feed + purge its

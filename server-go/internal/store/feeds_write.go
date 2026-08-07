@@ -42,6 +42,21 @@ func FeedURLExists(r *sql.DB, url string) (bool, error) {
 	return true, nil
 }
 
+// FeedURLTakenByOther reports whether some *other* feed already uses this URL —
+// the dupe guard for PATCH, where FeedURLExists is useless: it also matches the
+// feed's own current URL.
+func FeedURLTakenByOther(r *sql.DB, url, id string) (bool, error) {
+	var one int
+	err := r.QueryRow(`SELECT 1 FROM feeds WHERE url = ? AND id <> ? LIMIT 1`, url, id).Scan(&one)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // FeedURLSet returns every registered feed URL as a set, for the OPML importer's
 // skip-dupes check (mirrors the Set built from SELECT url FROM feeds).
 func FeedURLSet(r *sql.DB) (map[string]bool, error) {
@@ -96,6 +111,51 @@ func RenameFeed(w *sql.DB, id, name string) (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// UpdateFeedURL repoints a feed at a new address without disturbing its
+// articles: feeds.id never changes, so every existing row keeps its feed_id and
+// stays under this feed, and items fetched from the new URL are inserted with
+// that same feed_id — the history is continuous across the switch. Returns the
+// feeds-row change count (0 = not found).
+//
+// The article rows' feed_url is rewritten alongside. Reads never consult it (the
+// list queries key on feed_id), but AdoptStarredOrphans matches on it, so leaving
+// the old address behind would strand this feed's starred articles the next time
+// it is deleted and re-added. This does not contradict feed_url being insert-only
+// in the persist upsert: that rule stops *another* feed's fetch from re-homing
+// rows, whereas this is the feed restating its own address, the same kind of
+// explicit rewrite AdoptStarredOrphans performs.
+//
+// last_fetched_at is cleared so the new address is fetched now rather than up to
+// CacheTTL later. The feed still has rows, so EnsureFresh takes its
+// last==0 && hasRows branch and refreshes in the background — history stays
+// readable immediately instead of blocking on the first fetch of the new source.
+func UpdateFeedURL(w *sql.DB, id, url string) (int64, error) {
+	tx, err := w.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	res, err := tx.Exec(`UPDATE feeds SET url = ?, last_fetched_at = NULL WHERE id = ?`, url, id)
+	if err != nil {
+		return 0, err
+	}
+	changes, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if changes == 0 {
+		return 0, tx.Commit()
+	}
+	if _, err := tx.Exec(
+		`UPDATE article_states SET feed_url = ? WHERE feed_id = ?`, url, id); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return changes, nil
 }
 
 // DeleteFeed removes a feed and purges its non-starred articles in one

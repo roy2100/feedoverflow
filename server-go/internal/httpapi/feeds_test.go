@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -118,6 +120,153 @@ func TestFeedRenameEmpty(t *testing.T) {
 	// The name is untouched after the rejected renames.
 	if name, _, _ := feedRow(t, s, added.ID); name != "Orig" {
 		t.Fatalf("rejected rename mutated name: %q", name)
+	}
+}
+
+// stubParse is fakeParse with two knobs the URL-edit tests need: it counts calls
+// (to prove a no-op PATCH costs no upstream fetch) and can be made to fail
+// mid-test (to prove an unparseable new URL is rejected before anything is
+// written).
+func stubParse(calls *int, failWith *error) cache.FetchFunc {
+	return func(_ context.Context, _ string) (*feed.Parsed, error) {
+		*calls++
+		if *failWith != nil {
+			return nil, *failWith
+		}
+		return &feed.Parsed{Title: "F"}, nil
+	}
+}
+
+func articleHome(t *testing.T, s *Server, articleID string) (feedID, feedURL string) {
+	t.Helper()
+	err := s.DB.Reader().QueryRow(
+		`SELECT feed_id, feed_url FROM article_states WHERE article_id = ?`, articleID).
+		Scan(&feedID, &feedURL)
+	if err != nil {
+		t.Fatalf("articleHome(%s): %v", articleID, err)
+	}
+	return feedID, feedURL
+}
+
+// TestFeedURLEdit is the point of the feature: repointing a feed at a new source
+// keeps every article it already has. The delete+re-add that used to be the only
+// way to switch would have purged the non-starred one outright.
+func TestFeedURLEdit(t *testing.T) {
+	const oldURL, newURL = "https://old.example/rss", "https://new.example/rss"
+	calls := 0
+	var failWith error
+	s := newFeedsServer(t, stubParse(&calls, &failWith))
+	h := s.NewLocalRouter()
+
+	rec := do(h, "POST", "/api/feeds", `{"url":"`+oldURL+`"}`, jsonHdr())
+	var added struct{ ID string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &added)
+
+	seedStarred(t, s, "kept", added.ID, oldURL, 1)
+	seedStarred(t, s, "plain", added.ID, oldURL, 0)
+	// A fetched feed: the edit must clear this, or the new URL wouldn't be read
+	// for up to CacheTTL.
+	if _, err := s.DB.Writer().Exec(
+		`UPDATE feeds SET last_fetched_at = 1 WHERE id = ?`, added.ID); err != nil {
+		t.Fatalf("seed last_fetched_at: %v", err)
+	}
+
+	if rec := do(h, "PATCH", "/api/feeds/"+added.ID,
+		`{"url":"`+newURL+`"}`, jsonHdr()); rec.Code != 200 {
+		t.Fatalf("edit url: %d %s", rec.Code, rec.Body.String())
+	}
+
+	if _, url, ok := feedRow(t, s, added.ID); !ok || url != newURL {
+		t.Fatalf("after edit: url=%q ok=%v", url, ok)
+	}
+	var last sql.NullInt64
+	_ = s.DB.Reader().QueryRow(`SELECT last_fetched_at FROM feeds WHERE id = ?`, added.ID).Scan(&last)
+	if last.Valid {
+		t.Errorf("last_fetched_at not cleared: %d", last.Int64)
+	}
+
+	// Both articles survive, still homed to the same feed, now carrying the new
+	// feed_url so a later delete+re-add can still adopt the starred one.
+	for _, id := range []string{"kept", "plain"} {
+		feedID, feedURL := articleHome(t, s, id)
+		if feedID != added.ID {
+			t.Errorf("%s re-homed: feed_id=%q, want %q", id, feedID, added.ID)
+		}
+		if feedURL != newURL {
+			t.Errorf("%s feed_url=%q, want %q", id, feedURL, newURL)
+		}
+	}
+}
+
+// TestFeedURLEditRejected: every rejection path leaves the feed and its articles
+// exactly as they were — a refused edit must not half-apply.
+func TestFeedURLEditRejected(t *testing.T) {
+	const urlA, urlB = "https://a.example/rss", "https://b.example/rss"
+	calls := 0
+	var failWith error
+	s := newFeedsServer(t, stubParse(&calls, &failWith))
+	h := s.NewLocalRouter()
+
+	rec := do(h, "POST", "/api/feeds", `{"url":"`+urlA+`"}`, jsonHdr())
+	var a struct{ ID string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &a)
+	do(h, "POST", "/api/feeds", `{"url":"`+urlB+`"}`, jsonHdr())
+	seedStarred(t, s, "art", a.ID, urlA, 1)
+
+	// Another feed already holds this URL.
+	if rec := do(h, "PATCH", "/api/feeds/"+a.ID, `{"url":"`+urlB+`"}`, jsonHdr()); rec.Code != 409 {
+		t.Fatalf("taken url: want 409, got %d", rec.Code)
+	}
+	// Empty / whitespace-only.
+	for _, body := range []string{`{"url":""}`, `{"url":"   "}`} {
+		if rec := do(h, "PATCH", "/api/feeds/"+a.ID, body, jsonHdr()); rec.Code != 400 {
+			t.Fatalf("empty url %s: want 400, got %d", body, rec.Code)
+		}
+	}
+	// Unknown feed.
+	if rec := do(h, "PATCH", "/api/feeds/nope", `{"url":"`+urlB+`"}`, jsonHdr()); rec.Code != 404 {
+		t.Fatalf("unknown id: want 404, got %d", rec.Code)
+	}
+	// The new address doesn't parse.
+	failWith = errors.New("boom")
+	if rec := do(h, "PATCH", "/api/feeds/"+a.ID,
+		`{"url":"https://broken.example/rss"}`, jsonHdr()); rec.Code != 400 {
+		t.Fatalf("unparseable url: want 400, got %d", rec.Code)
+	}
+	failWith = nil
+
+	if _, url, _ := feedRow(t, s, a.ID); url != urlA {
+		t.Errorf("rejected edit changed url: %q", url)
+	}
+	if _, feedURL := articleHome(t, s, "art"); feedURL != urlA {
+		t.Errorf("rejected edit changed article feed_url: %q", feedURL)
+	}
+}
+
+// TestFeedURLEditNoop: the client may echo the whole feed back, so a PATCH whose
+// url matches the stored one must not fetch upstream to "validate" what is
+// already in the database. A rename riding along still applies.
+func TestFeedURLEditNoop(t *testing.T) {
+	const url = "https://same.example/rss"
+	calls := 0
+	var failWith error
+	s := newFeedsServer(t, stubParse(&calls, &failWith))
+	h := s.NewLocalRouter()
+
+	rec := do(h, "POST", "/api/feeds", `{"url":"`+url+`"}`, jsonHdr())
+	var added struct{ ID string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &added)
+	afterAdd := calls
+
+	if rec := do(h, "PATCH", "/api/feeds/"+added.ID,
+		`{"url":"`+url+`","name":"Renamed"}`, jsonHdr()); rec.Code != 200 {
+		t.Fatalf("noop edit: %d %s", rec.Code, rec.Body.String())
+	}
+	if calls != afterAdd {
+		t.Errorf("unchanged url fetched upstream: %d calls, want %d", calls, afterAdd)
+	}
+	if name, _, _ := feedRow(t, s, added.ID); name != "Renamed" {
+		t.Errorf("rename alongside a no-op url not applied: %q", name)
 	}
 }
 
