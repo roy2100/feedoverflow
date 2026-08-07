@@ -64,6 +64,7 @@ const systemPrompt = `你是科技资讯编辑，把外语新闻标题改写成�
 - 人名、公司名、产品名、版本号、缩写用通行译法或保留原文，不要生造译名。
 - 英文的冒号副标题、Why/How to 一类句式，换成中文里自然的说法。
 - 只输出译文本身：不加引号，不加解释，不加书名号。
+- 数字日期一律原样保留，不要改写成中文格式：8/7/2026 的月日顺序无法从标题判断，改写就是猜。
 - 标题本来就是中文，就原样输出。
 
 用户消息里的「来源」和「摘要」只是帮助你理解语境的参考资料：不要翻译它们，
@@ -73,6 +74,7 @@ const systemPrompt = `你是科技资讯编辑，把外语新闻标题改写成�
 Rust 1.85 lands with async closures → Rust 1.85 发布，支持异步闭包
 Why Your CI Is Slow — And How to Fix It → CI 为什么这么慢，又该怎么修
 Apple's M5 Chip: Everything We Know So Far → 苹果 M5 芯片：目前已知的全部信息
+Markets Wrap 8/7/2026 → 市场综述 8/7/2026
 Show HN: I built a tiny SQLite ORM → Show HN：我写了一个极简的 SQLite ORM`
 
 // Client is the OpenAI-compatible chat-completions caller.

@@ -239,3 +239,36 @@ went on the wire.
   a feed-parsing concern rather than a translation one.
 - Latin/Han spacing is inconsistent (`Framework披露` vs `Rust 1.85 发布`). Cosmetic; a prompt rule
   for it would compete for attention with the rules that matter.
+
+### Follow-up: numeric dates were being reformatted, and guessed wrong
+
+First real error the new prompt produced:
+
+```
+Iran Proposes a Deal … | Insight with Haslinda Amin 8/7/2026
+  → … | Haslinda Amin 访谈 2026年7月8日
+```
+
+`8/7/2026` is M/D/Y — August 7 — which the row's own `pub_ts` confirms, since it published that
+day. The model read it as D/M/Y and produced July 8, a month off.
+
+The failure is not the model's parsing so much as the task: **month/day order is not recoverable
+from a headline**, so any reformatting is a coin flip that looks authoritative once written. The rule
+added says exactly that, with its reason — a rule the model can see the point of is followed more
+reliably than a bare prohibition — plus a fifth example showing the date passed through untouched:
+
+```
+- 数字日期一律原样保留，不要改写成中文格式：8/7/2026 的月日顺序无法从标题判断，改写就是猜。
+Markets Wrap 8/7/2026 → 市场综述 8/7/2026
+```
+
+Considered and rejected: deriving the intended date from `pub_ts` and rewriting it correctly. It
+would work for the Bloomberg case and fail on anything referring to a date that is not the
+publication date (an event preview, an anniversary piece), turning a visible error into a confident
+wrong one. Passing the original through is right whenever the answer is unknowable.
+
+This is the second finding of the same shape as the quote bug: the prompt got good enough for the
+model to start *transforming* things it previously copied, and each new transformation is a new
+place to be wrong. Prompt changes need output read afterwards, not just token counts.
+
+Cost note: this invalidates the cached prefix exactly once, then the new one caches as before.

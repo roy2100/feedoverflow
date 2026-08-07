@@ -210,7 +210,7 @@ language, drop stale/redundant chrome.
   message — that separation, not its length, is the injection mitigation, and `clean`'s growth check
   still measures the answer against the **title**, so a model talked into echoing the body is
   rejected as "nothing usable".
-  The system prompt is ~250 tokens (role, style rules, four examples) and must stay **byte-identical
+  The system prompt is ~270 tokens (role, six rules, five examples) and must stay **byte-identical
   across calls**: it is the cacheable prefix, and at that size it clears DeepSeek's 64-token block
   floor that the previous 53-token prompt missed. Nothing per-article may move into it — that
   fragments the cache per feed for nothing. Caching was never the goal, only what makes a prompt
