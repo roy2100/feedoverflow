@@ -11,9 +11,9 @@
 </p>
 
 A self-hosted, full-stack RSS reader with a clean reading-first UI, full-text article
-extraction, and a podcast player. It also has a built-in **MCP server** that lets an LLM
-(Claude, etc.) read and manage your feeds as tools — including summarizing the article
-you're currently reading.
+extraction, a podcast player, and optional **AI title translation**. It also has a built-in
+**MCP server** that lets an LLM (Claude, etc.) read and manage your feeds as tools —
+including summarizing the article you're currently reading.
 
 React + PWA client (TypeScript), and a single-binary **Go backend** (`server-go/`) over
 SQLite that serves the API and the static client.
@@ -44,14 +44,48 @@ SQLite that serves the API and the static client.
 - **Full-text extraction** — when a feed only ships a truncated summary, fetch the
   original page and extract clean readable content with Mozilla Readability.
 - **Podcast support** — feeds with audio enclosures get an inline player.
+- **Collections (合集)** — saved cross-feed streams. A collection is the *union* of its
+  rules, each rule `feed AND include-keyword AND NOT exclude-keyword`, matched against
+  titles and summaries. It's a lens over articles already stored, not a source: it fetches
+  nothing and costs no extra polling. Latin keywords match whole words only, so `AI` never
+  hits `said`.
+- **AI title translation** — optional, off by default: non-Chinese titles are rendered into
+  Chinese by any OpenAI-compatible endpoint. See [AI features](#ai-features) below.
+- **Push notifications** — opt-in per feed, delivered over Web Push with a VAPID keypair the
+  server generates on first use. Sent **only** from the background poller, so an on-demand
+  refresh never notifies you about the article you're already reading; capped at 3 per feed
+  per poll, and tapping one deep-links straight to that article. Each device subscribes
+  separately (on iOS, install the PWA to the home screen first).
 - **Full-text search** with feed-scoped filtering.
 - **OPML import** — migrate your subscriptions from any other reader.
 - **Durable archive** — every fetched article is persisted for search/research; a
   size-capped maintenance pass prunes the oldest non-starred items automatically.
 - **Optional auth** — cookie-session basic auth gates non-localhost access, so the same
-  binary runs fully-private on localhost or publicly behind a Cloudflare Tunnel.
+  binary runs fully-private on localhost or publicly behind a tunnel.
 
-## AI / MCP integration
+## AI features
+
+### Title translation
+
+Non-Chinese article titles can be translated into Chinese by any OpenAI-compatible
+`/chat/completions` endpoint — base URL, model and API key are set in Settings, behind one
+global switch that is off by default. Bring your own key; nothing is sent anywhere until you
+turn it on.
+
+- **One title per request, never a batch.** A model that drops an element from a batched
+  response shifts every following translation onto the wrong article — silently, and
+  permanently.
+- **Context, not a bare string.** Each request carries the article's feed name and summary
+  alongside the title, so a title is translated as what the piece is actually about.
+- **Chinese feeds cost nothing.** A title that is more than 30% Han characters is skipped
+  before any request is made — the switch is global precisely because it doesn't need to be
+  per-feed.
+- **The original is never overwritten.** The list shows the translation, the reader shows
+  both, and search matches either.
+- Translation runs in its own background worker, so it covers every fetch path and never adds
+  upstream latency to a page load. Turning it on reaches back 24 hours, not the whole archive.
+
+### MCP server
 
 The Go server exposes a [Model Context Protocol](https://modelcontextprotocol.io) endpoint
 (Streamable HTTP transport) with **13 tools**, mounted at `/mcp` on the loopback-only,
@@ -75,9 +109,11 @@ this and find related posts"* and have it just work.
 ```
 client/     React 19 + TypeScript + Vite + Zustand + react-router, PWA
 server-go/  Go + go-sqlite3 (SQLite), chi router — a single compiled binary
-            ├─ jobs        scheduled feed fetch/persist + maintenance
+            ├─ jobs        scheduled feed fetch/persist + maintenance + translation worker
             ├─ content     go-readability full-text extraction
             ├─ favicon     fetched + cached per feed
+            ├─ translate   OpenAI-compatible client for title translation
+            ├─ push        Web Push (VAPID) sender for per-feed notifications
             ├─ mcp         Model Context Protocol server (13 tools), loopback-only
             └─ maintenance DB size cap / old-article pruning
 ```
@@ -104,7 +140,7 @@ npm run dev
 Open http://localhost:3000, then add a feed URL or import an OPML file.
 
 The loopback-only, no-auth companion listener (`LOCAL_API_PORT`, default 4002) also serves
-the MCP endpoint at `/mcp` (see the AI / MCP integration section above).
+the MCP endpoint at `/mcp` (see the AI features section above).
 
 ### Auth (optional)
 
@@ -118,8 +154,9 @@ Every setting is an environment variable, all of them optional — with no envir
 all the server runs on `:3002` against `./rss.db`. Only `AUTH_USER`/`AUTH_PASS` become
 effectively required, and only once you expose the app beyond localhost.
 
-Runtime settings that belong to *content* rather than deployment — the RSSHub base URL,
-per-feed push — live in the app's Settings UI and the database, not here.
+Runtime settings that belong to *content* rather than deployment — the RSSHub base URL, the
+translation endpoint/model/API key, per-feed push — live in the app's Settings UI and the
+database, not here.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -192,7 +229,9 @@ articles and stars.
 
 - **Frontend:** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
 - **Backend:** Go 1.26, chi, mattn/go-sqlite3, go-readability, gofeed, lumberjack
-- **AI:** Model Context Protocol (Streamable HTTP), via `modelcontextprotocol/go-sdk`
+- **AI:** Model Context Protocol (Streamable HTTP), via `modelcontextprotocol/go-sdk`;
+  title translation over any OpenAI-compatible `/chat/completions` endpoint
+- **Notifications:** Web Push (VAPID), `SherClockHolmes/webpush-go`
 - **Tooling:** go test + staticcheck (server), oxlint + oxfmt + Vitest (client)
 
 ## License

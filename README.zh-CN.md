@@ -10,9 +10,9 @@
   <a href="README.md">English</a> · <strong>简体中文</strong>
 </p>
 
-一个自托管的全栈 RSS 阅读器，界面简洁、以阅读体验为核心，内置全文提取和播客播放器。
-它还内置了一个 **MCP 服务器**，让 LLM（Claude 等）能以工具的形式读取和管理你的订阅
-——包括总结你正在阅读的这篇文章。
+一个自托管的全栈 RSS 阅读器，界面简洁、以阅读体验为核心，内置全文提取、播客播放器和
+可选的 **AI 标题翻译**。它还内置了一个 **MCP 服务器**，让 LLM（Claude 等）能以工具的
+形式读取和管理你的订阅——包括总结你正在阅读的这篇文章。
 
 前端是 React + PWA 客户端（TypeScript），后端是单二进制的 **Go 服务**（`server-go/`），
 基于 SQLite，同时提供 API 和静态客户端资源。
@@ -42,14 +42,42 @@
 - **全文提取** —— 当订阅源只提供截断摘要时，抓取原始页面并用 Mozilla Readability
   提取干净的可读内容。
 - **播客支持** —— 带音频 enclosure 的订阅会显示内嵌播放器。
+- **合集** —— 跨订阅源的保存式文章流。一个合集是它所有规则的**并集**，每条规则形如
+  `订阅源 AND 包含关键词 AND NOT 排除关键词`，匹配标题和摘要。它是架在已存文章上的
+  一层透镜，而不是一个源：自己不抓取任何东西，也不占用轮询。英文关键词按整词匹配，
+  `AI` 不会命中 `said`。
+- **AI 标题翻译** —— 可选，默认关闭：非中文标题会由任意 OpenAI 兼容接口译成中文。
+  详见下方 [AI 能力](#ai-能力)。
+- **更新推送** —— 逐个订阅源开启，通过 Web Push 下发，VAPID 密钥对由服务端首次使用时
+  自动生成。**只**从后台轮询发出，所以手动刷新永远不会为你正在读的这篇推送通知；每个
+  源每轮最多 3 条，点击通知直达那篇文章。每台设备各自订阅（iOS 需先把 PWA 添加到主
+  屏幕）。
 - **全文搜索**，支持按订阅源过滤。
 - **OPML 导入** —— 从其他阅读器一键迁移订阅列表。
 - **持久归档** —— 每一篇抓取到的文章都会被持久化用于搜索/研究；一个带体积上限的
   维护任务会自动清理最旧的未加星文章。
 - **可选鉴权** —— cookie session 形式的基础鉴权可以拦截非本地访问，同一个二进制
-  既能在本地完全私有运行，也能通过 Cloudflare Tunnel 公开访问。
+  既能在本地完全私有运行，也能通过公网隧道公开访问。
 
-## AI / MCP 集成
+## AI 能力
+
+### 标题翻译
+
+非中文的文章标题可以由任意 OpenAI 兼容的 `/chat/completions` 接口译成中文——base URL、
+模型和 API Key 在设置里填，由一个默认关闭的全局开关控制。用你自己的 key；不打开开关就
+不会有任何数据发出去。
+
+- **一次一个标题，绝不批量。** 模型在批量回复里漏掉一项，就会让后面每一条翻译都错位到
+  别的文章上——而且是静默、永久的。
+- **带上下文，而不是一个孤零零的字符串。** 每次请求都会连同文章所属的订阅源名称和摘要
+  一起发送，让标题按这篇文章真正在讲什么来翻译。
+- **中文源不花一分钱。** 汉字占比超过 30% 的标题在发请求之前就被跳过——开关之所以是
+  全局的而不是逐源的，正是因为它不需要逐源。
+- **原标题永远不会被覆盖。** 列表显示译文，阅读页两个都显示，搜索两边都能匹配。
+- 翻译跑在独立的后台 worker 里，因此覆盖所有抓取路径，也不会给页面加载引入上游延迟。
+  打开开关只回溯最近 24 小时，而不是整个归档。
+
+### MCP 服务器
 
 Go 服务暴露了一个 [Model Context Protocol](https://modelcontextprotocol.io) 端点
 （Streamable HTTP 传输），提供 **13 个工具**，挂载在仅监听本地回环、无需鉴权的
@@ -72,9 +100,11 @@ Go 服务暴露了一个 [Model Context Protocol](https://modelcontextprotocol.i
 ```
 client/     React 19 + TypeScript + Vite + Zustand + react-router, PWA
 server-go/  Go + go-sqlite3 (SQLite), chi router —— 单个编译产物
-            ├─ jobs        定时抓取订阅源/持久化 + 维护任务
+            ├─ jobs        定时抓取订阅源/持久化 + 维护任务 + 翻译 worker
             ├─ content     go-readability 全文提取
             ├─ favicon     按订阅源抓取并缓存
+            ├─ translate   标题翻译用的 OpenAI 兼容客户端
+            ├─ push        逐源更新推送的 Web Push（VAPID）发送端
             ├─ mcp         Model Context Protocol 服务器（13 个工具），仅本地回环
             └─ maintenance 数据库体积上限 / 清理旧文章
 ```
@@ -101,7 +131,7 @@ npm run dev
 打开 http://localhost:3000，添加一个订阅源 URL 或导入 OPML 文件。
 
 仅监听本地回环、无需鉴权的伴生端口（`LOCAL_API_PORT`，默认 4002）同时也提供
-`/mcp` 端点（见上方"AI / MCP 集成"一节）。
+`/mcp` 端点（见上方"AI 能力"一节）。
 
 ### 鉴权（可选）
 
@@ -115,8 +145,8 @@ env 文件里），即可要求每个请求都登录——用于把阅读器暴�
 使用 `./rss.db`。只有 `AUTH_USER`/`AUTH_PASS` 在你把应用暴露到本机以外时才变成实际
 必需的。
 
-属于**内容**而非部署的运行时设置（RSSHub 地址、逐源推送开关）在应用的设置界面和
-数据库里，不在这里。
+属于**内容**而非部署的运行时设置（RSSHub 地址、翻译服务的接口地址/模型/API Key、逐源
+推送开关）在应用的设置界面和数据库里，不在这里。
 
 | 变量 | 默认值 | 作用 |
 |---|---|---|
@@ -187,7 +217,9 @@ docker compose --profile rsshub up -d
 
 - **前端：** React 19, TypeScript, Vite, Zustand, react-router, vite-plugin-pwa
 - **后端：** Go 1.26, chi, mattn/go-sqlite3, go-readability, gofeed, lumberjack
-- **AI：** Model Context Protocol（Streamable HTTP），基于 `modelcontextprotocol/go-sdk`
+- **AI：** Model Context Protocol（Streamable HTTP），基于 `modelcontextprotocol/go-sdk`；
+  标题翻译走任意 OpenAI 兼容的 `/chat/completions` 接口
+- **推送：** Web Push（VAPID），`SherClockHolmes/webpush-go`
 - **工具链：** go test + staticcheck（服务端），oxlint + oxfmt + Vitest（客户端）
 
 ## 许可证
