@@ -268,16 +268,48 @@ export default function App() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- listeners read refs, never state
 
-  const handlePlay = (article: Article) => {
+  // Moves the element to `seconds`, clamped to the duration when the source has
+  // reported one. currentTime can only be set once the source knows its length,
+  // so before metadata the seek is parked on `pendingResumeRef` — the same hook
+  // the resume uses, so switching episodes mid-load cancels it the same way.
+  const seekWhenReady = (audio: HTMLAudioElement, seconds: number) => {
+    if (pendingResumeRef.current) {
+      audio.removeEventListener('loadedmetadata', pendingResumeRef.current);
+      pendingResumeRef.current = null;
+    }
+    const apply = () => {
+      pendingResumeRef.current = null;
+      const max = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Infinity;
+      try {
+        audio.currentTime = Math.max(0, Math.min(seconds, max));
+      } catch {
+        /* source refused the seek — play from the start */
+      }
+    };
+    if (audio.readyState === HTMLMediaElement.HAVE_NOTHING) {
+      pendingResumeRef.current = apply;
+      audio.addEventListener('loadedmetadata', apply, { once: true });
+    } else {
+      apply();
+    }
+  };
+
+  // Without `startAt` the button is a play/pause toggle for the current episode
+  // and a "play from where I stopped" for any other. With it — a chapter timestamp
+  // in the show notes — it is always "play from there": no toggle, no resume.
+  const handlePlay = (article: Article, startAt?: number) => {
     const audio = audioRef.current;
     if (!audio) return;
     if (currentEpisode?.id === article.id) {
-      if (audio.paused) {
-        setIsBuffering(true);
-        audio.play().catch(console.error);
-      } else {
+      if (startAt !== undefined) {
+        seekWhenReady(audio, startAt);
+        if (!audio.paused) return;
+      } else if (!audio.paused) {
         audio.pause();
+        return;
       }
+      setIsBuffering(true);
+      audio.play().catch(console.error);
     } else {
       // Leaving an episode part-way: keep its position before the src swap
       // wipes currentTime.
@@ -287,21 +319,8 @@ export default function App() {
         pendingResumeRef.current = null;
       }
       audio.src = article.audioUrl;
-      // currentTime can only be set once the source knows its length, so the
-      // resume waits for metadata.
-      const resumeAt = loadProgress(article.id);
-      if (resumeAt > 0) {
-        const resume = () => {
-          pendingResumeRef.current = null;
-          try {
-            audio.currentTime = resumeAt;
-          } catch {
-            /* source refused the seek — play from the start */
-          }
-        };
-        pendingResumeRef.current = resume;
-        audio.addEventListener('loadedmetadata', resume, { once: true });
-      }
+      const resumeAt = startAt ?? loadProgress(article.id);
+      if (resumeAt > 0) seekWhenReady(audio, resumeAt);
       setIsBuffering(true);
       audio.play().catch(console.error);
       setCurrentEpisode(article);

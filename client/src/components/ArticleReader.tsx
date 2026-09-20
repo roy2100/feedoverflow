@@ -18,6 +18,7 @@ import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { decodeEntities } from '../lib/decodeEntities';
 import { hasProgress, subscribeProgress } from '../lib/playbackProgress';
+import { splitTimestamps } from '../lib/timestamps';
 import type { Article } from '../types';
 
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
@@ -231,7 +232,7 @@ interface ArticleReaderProps {
   onBack?: () => void;
   article: Article | null;
   onToggleStar: (article: Article) => void;
-  onPlay: (article: Article) => void;
+  onPlay: (article: Article, startAt?: number) => void;
   currentEpisode: Article | null;
   isPlaying: boolean;
   isBuffering: boolean;
@@ -318,7 +319,22 @@ export default function ArticleReader({
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
     });
-  }, [article?.id, rssContent, fullContent, textOnly]);
+    // Chapter timestamps in show notes become seek buttons. Done on the DOM
+    // rather than on the HTML string so a `12:34` inside an href can't match.
+    // React resets innerHTML whenever the body changes, which drops these buttons
+    // and re-runs this effect, so the pass never sees its own output.
+    if (article?.audioUrl) linkifyTimestamps(root);
+  }, [article?.id, article?.audioUrl, rssContent, fullContent, textOnly]);
+
+  // One handler for both body branches: the HTML walker and the React fallback
+  // both emit `<button data-seek>`, so the click reads the offset off the element.
+  const handleBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!article) return;
+    const btn = (e.target as Element).closest<HTMLElement>('button[data-seek]');
+    if (!btn) return;
+    const seconds = Number(btn.dataset.seek);
+    if (Number.isFinite(seconds)) onPlay(article, seconds);
+  };
 
   const handleFetchFull = async () => {
     if (!article?.link) return;
@@ -951,22 +967,78 @@ export default function ArticleReader({
             ref={contentRef}
             className="rss-article"
             style={articleContentStyle}
+            onClick={handleBodyClick}
             dangerouslySetInnerHTML={{
               __html: textOnly ? stripMedia(sanitizeHtml(rawContent)) : sanitizeHtml(rawContent),
             }}
           />
         ) : (
-          <div className="rss-article" style={articleContentStyle}>
+          // Timestamps here are React elements, not the walker: React owns these
+          // text nodes and would keep updating a node the walker had detached.
+          <div className="rss-article" style={articleContentStyle} onClick={handleBodyClick}>
             {decodeEntities(rawContent)
               .split('\n')
               .filter(Boolean)
               .map((p, i) => (
-                <p key={i}>{p}</p>
+                <p key={i}>{article.audioUrl ? renderTimestamps(p) : p}</p>
               ))}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// Text under these never gets a seek button: a button can't nest in a link, and a
+// clock inside code is data, not a chapter.
+const NO_SEEK_ANCESTOR = 'a, button, pre, code, script, style';
+
+function seekButton(doc: Document, text: string, seconds: number): HTMLButtonElement {
+  const btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.dataset.seek = String(seconds);
+  btn.title = '跳转到此处播放';
+  btn.textContent = text;
+  return btn;
+}
+
+/** Replaces timestamp runs in `root`'s text nodes with seek buttons, in place. */
+export function linkifyTimestamps(root: HTMLElement): void {
+  const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  // Collect first: splicing while walking would revisit the inserted text nodes.
+  const targets: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const text = n as Text;
+    if (!text.parentElement?.closest(NO_SEEK_ANCESTOR)) targets.push(text);
+  }
+  for (const node of targets) {
+    const segments = splitTimestamps(node.data);
+    if (!segments.some((s) => s.seconds !== undefined)) continue;
+    const frag = doc.createDocumentFragment();
+    for (const seg of segments) {
+      frag.appendChild(
+        seg.seconds === undefined
+          ? doc.createTextNode(seg.text)
+          : seekButton(doc, seg.text, seg.seconds),
+      );
+    }
+    node.replaceWith(frag);
+  }
+}
+
+/** The React-side twin of linkifyTimestamps, for the plain-text body. */
+function renderTimestamps(text: string): React.ReactNode {
+  const segments = splitTimestamps(text);
+  if (!segments.some((s) => s.seconds !== undefined)) return text;
+  return segments.map((seg, i) =>
+    seg.seconds === undefined ? (
+      seg.text
+    ) : (
+      <button key={i} type="button" data-seek={seg.seconds} title="跳转到此处播放">
+        {seg.text}
+      </button>
+    ),
   );
 }
 
@@ -1170,6 +1242,26 @@ if (typeof document !== 'undefined') {
       }
       .rss-article pre { padding: 1em; overflow-x: auto; margin: 1em 0; }
       .rss-article code { padding: 0.1em 0.3em; }
+      /* Chapter timestamps in show notes. Borrows the inline-code chip so a clock
+         reads as data, then colours it as an action. */
+      .rss-article button[data-seek] {
+        font: inherit;
+        font-size: 0.88em;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent);
+        background: var(--bg-panel);
+        border: 1px solid var(--border-light);
+        border-radius: 4px;
+        padding: 0 0.35em;
+        margin: 0;
+        line-height: 1.5;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .rss-article button[data-seek]:hover {
+        color: var(--accent-light);
+        border-color: var(--accent-light);
+      }
       .rss-article ul, .rss-article ol { padding-left: 1.4em; margin: 0.8em 0; }
       .rss-article li { margin-bottom: 0.3em; }
       .rss-article figure { margin: 1.2em 0; }

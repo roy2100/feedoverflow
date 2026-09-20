@@ -588,3 +588,63 @@ describe('podcast play button', () => {
     await waitFor(() => expect(screen.getByText('播放')).toBeInTheDocument());
   });
 });
+
+// ── Chapter timestamps in show notes ──────────────────────────────────────────
+
+describe('chapter timestamps', () => {
+  const NOTES =
+    '<p>In this episode, we cover:</p>' +
+    '<p>(00:00) What Muse is and who it’s actually built for</p>' +
+    '<p>(04:41) Signing in and the onboarding flow</p>' +
+    '<p>See <a href="https://example.com/t/12:34">12:34 in the link</a></p>';
+  const EPISODE: Article = {
+    ...BASE_ARTICLE,
+    content: NOTES,
+    audioUrl: 'https://example.com/ep.mp3',
+  };
+
+  it('turns each timestamp in the HTML body into a seek button', () => {
+    renderReader(EPISODE);
+    const buttons = screen.getAllByTitle('跳转到此处播放');
+    expect(buttons.map((b) => b.textContent)).toEqual(['(00:00)', '(04:41)']);
+    expect(buttons.map((b) => b.dataset.seek)).toEqual(['0', '281']);
+    // The surrounding prose is untouched.
+    expect(screen.getByText(/Signing in and the onboarding flow/)).toBeInTheDocument();
+  });
+
+  it('leaves a clock inside a link alone — a button cannot nest there', () => {
+    renderReader(EPISODE);
+    expect(screen.getByText('12:34 in the link').closest('a')).not.toBeNull();
+    expect(screen.queryByText('12:34')).toBeNull();
+  });
+
+  it('plays the episode from the clicked offset', () => {
+    const onPlay = vi.fn();
+    renderReader(EPISODE, { onPlay });
+    fireEvent.click(screen.getByText('(04:41)'));
+    expect(onPlay).toHaveBeenCalledWith(EPISODE, 281);
+  });
+
+  it('works in the plain-text body too', () => {
+    const onPlay = vi.fn();
+    renderReader(
+      { ...EPISODE, content: '(1:52) Impact of the data center\n(11:52) Concerns' },
+      {
+        onPlay,
+      },
+    );
+    expect(screen.getAllByTitle('跳转到此处播放').map((b) => b.textContent)).toEqual([
+      '(1:52)',
+      '(11:52)',
+    ]);
+    fireEvent.click(screen.getByText('(11:52)'));
+    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ id: EPISODE.id }), 712);
+  });
+
+  it('never touches an article that has no audio', () => {
+    renderReader({ ...EPISODE, audioUrl: '' });
+    expect(screen.queryByTitle('跳转到此处播放')).toBeNull();
+    renderReader({ ...EPISODE, audioUrl: '', content: '(1:52) plain' });
+    expect(screen.queryByTitle('跳转到此处播放')).toBeNull();
+  });
+});

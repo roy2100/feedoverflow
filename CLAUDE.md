@@ -152,6 +152,15 @@ language, drop stale/redundant chrome.
   caps at the 200 most recent (`play_updated_at`) and the client hydrates a map from it once at
   startup — the resume seek must stay synchronous with the play gesture. Rationale:
   `docs/plan-podcast-progress-sqlite.md`.
+- **Chapter timestamps in show notes seek the player.** The reader turns `m:ss` / `h:mm:ss`
+  runs in an episode's body into `<button data-seek>` — only when the article has an
+  `audioUrl` — through one parser (`lib/timestamps.ts`) shared by the HTML walker and the
+  plain-text branch. The HTML pass edits the DOM in the post-render effect, never the HTML
+  string (a clock inside an `href` must not match), and skips `a`/`code`/`pre`. The click is
+  `onPlay(article, seconds)`: `App.handlePlay` treats `startAt` as "play from there" — it
+  overrides the stored resume on a fresh load and seeks in place on the loaded episode, parked
+  on the same `loadedmetadata` hook as the resume until the source has metadata. Rationale:
+  `docs/plan-podcast-chapter-seek.md`.
 - **Collections** (`合集`) are saved queries over `article_states`, not sources: a collection is the
   *union* of its rules, each rule `feed AND include AND NOT exclude`, and it fetches nothing — no
   cache entry, no poller slot, no freshness handling, like `/api/all-articles`. The endpoint runs

@@ -111,7 +111,9 @@ export interface AudioCtxValue {
   currentEpisode: Article | null;
   isPlaying: boolean;
   isBuffering: boolean;
-  onPlay: (article: Article) => void;
+  // `startAt` (seconds) plays the episode from that offset — a chapter timestamp
+  // in the show notes — instead of toggling or resuming.
+  onPlay: (article: Article, startAt?: number) => void;
   onTogglePlay: () => void;
   onClosePlayer: () => void;
 }

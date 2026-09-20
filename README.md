@@ -43,7 +43,7 @@ SQLite that serves the API and the static client.
   configurable in Settings (default `http://localhost:1200`).
 - **Full-text extraction** — when a feed only ships a truncated summary, fetch the
   original page and extract clean readable content with Mozilla Readability.
-- **Podcast support** — feeds with audio enclosures get an inline player.
+- **Podcast support** — feeds with audio enclosures get an inline player; chapter timestamps in the show notes (`(04:41) …`) are clickable and seek straight to that point.
 - **Collections (合集)** — saved cross-feed streams. A collection is the *union* of its
   rules, each rule `feed AND include-keyword AND NOT exclude-keyword`, matched against
   titles and summaries. It's a lens over articles already stored, not a source: it fetches

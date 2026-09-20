@@ -228,3 +228,72 @@ describe('podcast resume', () => {
     expect(clearedIds()).toContain('ep-1');
   });
 });
+
+// A chapter timestamp in the show notes is "play from there" — it overrides the
+// stored resume position on a fresh load and seeks in place on the loaded one.
+describe('chapter seek', () => {
+  const NOTES = '<p>(04:41) Signing in</p><p>(23:11) Quick recap</p>';
+
+  async function openNotes() {
+    // Let the initial load land first, or its state reset clobbers the selection.
+    await screen.findByText('30:00');
+    act(() => {
+      useStore.getState().selectArticle({ ...EPISODE, content: NOTES });
+    });
+    return screen.findByText('(04:41)');
+  }
+
+  it('starts an unloaded episode at the chapter, not at the remembered position', async () => {
+    storedProgress = { 'ep-1': 630 };
+    await renderApp();
+    fireEvent.click(await openNotes());
+
+    expect(audioEl.src).toBe(EPISODE.audioUrl);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    metadataLoaded(1800);
+    expect(audioEl.currentTime).toBe(281);
+  });
+
+  it('seeks the loaded episode in place, without toggling it off', async () => {
+    await renderApp();
+    await playFromList();
+    metadataLoaded(1800);
+    // jsdom never advances readyState; tell the app the source is usable.
+    Object.defineProperty(audioEl, 'readyState', {
+      value: HTMLMediaElement.HAVE_METADATA,
+      configurable: true,
+    });
+    Object.defineProperty(audioEl, 'paused', { value: false, configurable: true });
+    (HTMLMediaElement.prototype.pause as ReturnType<typeof vi.fn>).mockClear();
+
+    await openNotes();
+    fireEvent.click(screen.getByText('(23:11)'));
+
+    expect(audioEl.currentTime).toBe(1391);
+    expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+  });
+
+  it('resumes a paused episode at the chapter', async () => {
+    await renderApp();
+    await playFromList();
+    metadataLoaded(1800);
+    Object.defineProperty(audioEl, 'readyState', {
+      value: HTMLMediaElement.HAVE_METADATA,
+      configurable: true,
+    });
+    (HTMLMediaElement.prototype.play as ReturnType<typeof vi.fn>).mockClear();
+
+    await openNotes();
+    fireEvent.click(screen.getByText('(04:41)'));
+
+    expect(audioEl.currentTime).toBe(281);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  });
+
+  it('clamps a chapter past the end to the duration', async () => {
+    await renderApp();
+    fireEvent.click(await openNotes());
+    metadataLoaded(200);
+    expect(audioEl.currentTime).toBe(200);
+  });
+});
