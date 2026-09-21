@@ -1,4 +1,16 @@
-import { X, Check, Trash2, Pencil, Rss, Copy, CopyCheck, Bell, BellOff, Plus } from 'lucide-react';
+import {
+  X,
+  Check,
+  Trash2,
+  Pencil,
+  Rss,
+  Copy,
+  CopyCheck,
+  Bell,
+  BellOff,
+  Plus,
+  Download,
+} from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 import { faviconDomain } from '../faviconDomain';
@@ -65,6 +77,8 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
   const [devices, setDevices] = useState<number | null>(null);
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const refreshDevice = async () => {
     const blocker = pushBlocker();
@@ -115,6 +129,18 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
       setPushError({ feedId: feed.id, message: (e as Error).message || '开启推送失败' });
     } finally {
       setPushBusy(null);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    setExportError('');
+    try {
+      await downloadOPML();
+    } catch (e) {
+      setExportError((e as Error).message || '导出失败');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -196,7 +222,16 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
 
       {/* Same footer button as the 合集 tab: each tab can create its own kind, so
           the toolbar's + is a shortcut into this view rather than the only door. */}
-      <div style={{ padding: '10px 20px 14px', borderTop: '1px solid var(--border-light)' }}>
+      <div
+        style={{
+          padding: '10px 20px 14px',
+          borderTop: '1px solid var(--border-light)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}
+      >
         <button
           onClick={onAdd}
           style={{
@@ -215,9 +250,55 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
         >
           <Plus size={13} /> 添加订阅源
         </button>
+        {feeds.length > 0 && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            title="下载当前订阅列表的 OPML 文件"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              borderRadius: 7,
+              fontSize: 13,
+              fontWeight: 500,
+              background: 'none',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              cursor: exporting ? 'default' : 'pointer',
+              opacity: exporting ? 0.6 : 1,
+            }}
+          >
+            <Download size={13} /> 导出 OPML
+          </button>
+        )}
+        {exportError && (
+          <p style={{ flexBasis: '100%', margin: 0, fontSize: 11.5, color: 'var(--red)' }}>
+            {exportError}
+          </p>
+        )}
       </div>
     </>
   );
+}
+
+// Fetch → blob → <a download>, rather than a plain link to the endpoint: a
+// navigation, even to an attachment, leaves an iOS standalone PWA's webview, and
+// the reader already avoids exactly that for feed links. A fetch also lets a
+// failure (session expired, server down) show a message instead of a raw page.
+async function downloadOPML(): Promise<void> {
+  const r = await fetch('/api/feeds/export-opml');
+  if (!r.ok) throw new Error(`导出失败（HTTP ${r.status}）`);
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'feedoverflow.opml';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke after the click has had a chance to start the download.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 // Every string names 更新推送 explicitly — the same term the bells' tooltips use.

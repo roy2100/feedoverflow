@@ -131,6 +131,30 @@ func (s *Server) postImportOPML(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getExportOPML is GET /api/feeds/export-opml: the subscription list as an OPML
+// file, the inverse of postImportOPML. Served as an attachment so the browser
+// saves it rather than rendering the XML.
+func (s *Server) getExportOPML(w http.ResponseWriter, _ *http.Request) {
+	list, err := store.ListFeeds(s.DB.Reader())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	cands := make([]feeds.Candidate, 0, len(list))
+	for _, f := range list {
+		cands = append(cands, feeds.Candidate{Name: f.Name, URL: f.URL})
+	}
+	out, err := feeds.BuildOPML(cands)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/x-opml; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="feedoverflow.opml"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(out)
+}
+
 // patchFeed is PATCH /api/feeds/:id: rename a feed, repoint it at a new URL,
 // and/or flip its push opt-in (404 if missing). Every field is an optional
 // pointer so each is only applied when the client actually sent it — a

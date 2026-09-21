@@ -283,3 +283,43 @@ describe('FeedsPanel device registration', () => {
     expect(screen.queryByText('在本设备接收')).not.toBeInTheDocument();
   });
 });
+
+describe('FeedsPanel OPML export', () => {
+  it('downloads the export through a blob link without navigating', async () => {
+    const blob = new Blob(['<opml/>'], { type: 'text/x-opml' });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(blob) });
+    vi.stubGlobal('fetch', fetchMock);
+    const createURL = vi.fn().mockReturnValue('blob:feedoverflow/opml');
+    const revokeURL = vi.fn();
+    vi.stubGlobal(
+      'URL',
+      Object.assign(URL, { createObjectURL: createURL, revokeObjectURL: revokeURL }),
+    );
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderModal();
+
+    fireEvent.click(screen.getByText('导出 OPML'));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith('/api/feeds/export-opml');
+    const anchor = click.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe('feedoverflow.opml');
+    expect(anchor.href).toBe('blob:feedoverflow/opml');
+    vi.unstubAllGlobals();
+  });
+
+  it('reports a failed export instead of opening a raw error page', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+    renderModal();
+
+    fireEvent.click(screen.getByText('导出 OPML'));
+
+    expect(await screen.findByText('导出失败（HTTP 401）')).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('hides the export when there is nothing to export', () => {
+    render(<FeedsPanel feeds={[]} onDelete={vi.fn()} onUpdate={vi.fn()} onAdd={vi.fn()} />);
+    expect(screen.queryByText('导出 OPML')).not.toBeInTheDocument();
+  });
+});

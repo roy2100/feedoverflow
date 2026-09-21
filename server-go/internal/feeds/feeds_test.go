@@ -1,7 +1,9 @@
 package feeds
 
 import (
+	"encoding/xml"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +66,47 @@ func TestTrimName(t *testing.T) {
 	}
 	if got := TrimName("   "); got != "" {
 		t.Errorf("TrimName all-space: got %q", got)
+	}
+}
+
+// An export must survive its own importer: same feeds, same order, names and
+// URLs intact (including characters XML has to escape).
+func TestBuildOPMLRoundTrip(t *testing.T) {
+	in := []Candidate{
+		{Name: "A & B <news>", URL: "https://a.example/feed?x=1&y=2"},
+		{Name: "中文源", URL: "https://b.example/rss"},
+	}
+	data, err := BuildOPML(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(data), xml.Header) {
+		t.Fatalf("missing XML declaration: %q", data[:40])
+	}
+	if !strings.Contains(string(data), `type="rss"`) {
+		t.Fatalf("outline lacks type=rss:\n%s", data)
+	}
+	got, err := ParseOPML(data)
+	if err != nil {
+		t.Fatalf("re-parse: %v\n%s", err, data)
+	}
+	if len(got) != len(in) {
+		t.Fatalf("round trip: got %d feeds, want %d\n%s", len(got), len(in), data)
+	}
+	for i := range in {
+		if got[i] != in[i] {
+			t.Fatalf("feed %d: got %+v, want %+v", i, got[i], in[i])
+		}
+	}
+}
+
+func TestBuildOPMLEmpty(t *testing.T) {
+	data, err := BuildOPML(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ParseOPML(data)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty export should re-parse to nothing: %v %+v", err, got)
 	}
 }

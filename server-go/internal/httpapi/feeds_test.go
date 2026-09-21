@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"rss-reader/server-go/internal/cache"
 	"rss-reader/server-go/internal/feed"
+	"rss-reader/server-go/internal/feeds"
+	"rss-reader/server-go/internal/store"
 )
 
 // fakeParse returns a fixed parsed feed, so POST /api/feeds and the cache never
@@ -390,5 +393,45 @@ func TestGetFeedArticles(t *testing.T) {
 	// Unknown feed → 404.
 	if rec := do(h, "GET", "/api/feeds/nope/articles", "", nil); rec.Code != 404 {
 		t.Fatalf("unknown feed: want 404, got %d", rec.Code)
+	}
+}
+
+// Export is the inverse of import: what one instance exports, another imports
+// as the same list, with the download headers a browser needs to save it.
+func TestExportOPMLRoundTrip(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	for i, u := range []string{"https://a.example/feed", "https://b.example/rss?x=1&y=2"} {
+		if err := store.InsertFeedIgnore(s.DB.Writer(), fmt.Sprintf("id-%d", i), fmt.Sprintf("Feed %d", i), u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec := do(h, "GET", "/api/feeds/export-opml", "", nil)
+	if rec.Code != 200 {
+		t.Fatalf("export: %d %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/x-opml") {
+		t.Fatalf("content-type: %q", ct)
+	}
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, `attachment`) || !strings.Contains(cd, ".opml") {
+		t.Fatalf("content-disposition: %q", cd)
+	}
+	got, err := feeds.ParseOPML(rec.Body.Bytes())
+	if err != nil {
+		t.Fatalf("re-parse: %v\n%s", err, rec.Body.String())
+	}
+	// InitSchema seeds a few default feeds on a fresh DB, so compare against the
+	// table rather than a fixed list: every row, same order, names and URLs intact.
+	list, err := store.ListFeeds(s.DB.Reader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(list) || len(list) < 2 {
+		t.Fatalf("got %d feeds, table has %d", len(got), len(list))
+	}
+	for i, f := range list {
+		if got[i] != (feeds.Candidate{Name: f.Name, URL: f.URL}) {
+			t.Fatalf("feed %d: got %+v want %s %s", i, got[i], f.Name, f.URL)
+		}
 	}
 }

@@ -116,6 +116,7 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/feeds", s.getFeeds)
 	r.Post("/api/feeds", s.postFeed)
 	r.Post("/api/feeds/import-opml", s.postImportOPML)
+	r.Get("/api/feeds/export-opml", s.getExportOPML)
 	r.Patch("/api/feeds/{id}", s.patchFeed)
 	r.Delete("/api/feeds/{id}", s.deleteFeed)
 	r.Get("/api/feeds/{id}/articles", s.getFeedArticles)

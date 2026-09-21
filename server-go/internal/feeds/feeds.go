@@ -77,3 +77,37 @@ func ParseOPML(data []byte) ([]Candidate, error) {
 
 // TrimName trims a user-supplied feed name; empty after trim means "no override".
 func TrimName(s string) string { return strings.TrimSpace(s) }
+
+// opmlExport is the document BuildOPML writes. It is a separate type from opmlDoc
+// because the reader is deliberately lax (any outline at any depth, name from
+// three attributes) while the writer should emit one canonical shape: a flat
+// body of `type="rss"` outlines with text, title and xmlUrl all set, which is
+// what every importer reads.
+type opmlExport struct {
+	XMLName xml.Name      `xml:"opml"`
+	Version string        `xml:"version,attr"`
+	Title   string        `xml:"head>title"`
+	Body    []opmlOutExpt `xml:"body>outline"`
+}
+
+type opmlOutExpt struct {
+	Type   string `xml:"type,attr"`
+	Text   string `xml:"text,attr"`
+	Title  string `xml:"title,attr"`
+	XMLURL string `xml:"xmlUrl,attr"`
+}
+
+// BuildOPML renders the subscription list as an OPML 2.0 document — the inverse of
+// ParseOPML, so an export re-imports as the same set. Categories do not exist in
+// this app, so the body is flat.
+func BuildOPML(list []Candidate) ([]byte, error) {
+	doc := opmlExport{Version: "2.0", Title: "feedoverflow 订阅"}
+	for _, c := range list {
+		doc.Body = append(doc.Body, opmlOutExpt{Type: "rss", Text: c.Name, Title: c.Name, XMLURL: c.URL})
+	}
+	out, err := xml.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(xml.Header), append(out, '\n')...), nil
+}

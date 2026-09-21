@@ -278,6 +278,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/feeds` | list feeds |
 | POST | `/api/feeds` | add feed |
 | POST | `/api/feeds/import-opml` | bulk import from OPML |
+| GET | `/api/feeds/export-opml` | the subscription list as an OPML attachment (inverse of import) |
 | PATCH | `/api/feeds/:id` | rename feed, repoint its `url`, and/or toggle `push_enabled` (all optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
 | GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1` |
