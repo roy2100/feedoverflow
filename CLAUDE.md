@@ -156,7 +156,9 @@ language, drop stale/redundant chrome.
   runs in an episode's body into `<button data-seek>` — only when the article has an
   `audioUrl` — through one parser (`lib/timestamps.ts`) shared by the HTML walker and the
   plain-text branch. The HTML pass edits the DOM in the post-render effect, never the HTML
-  string (a clock inside an `href` must not match), and skips `a`/`code`/`pre`. The click is
+  string (a clock inside an `href` must not match), and skips `a`/`code`/`pre` — except a
+  link whose *whole* text is one clock (Substack's `(<a href="youtube…&t=155s">02:35</a>)`),
+  which is a chapter link to another player and is replaced by the button. The click is
   `onPlay(article, seconds)`: `App.handlePlay` treats `startAt` as "play from there" — it
   overrides the stored resume on a fresh load and seeks in place on the loaded episode, parked
   on the same `loadedmetadata` hook as the resume until the source has metadata. Rationale:

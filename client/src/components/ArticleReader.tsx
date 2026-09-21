@@ -23,7 +23,7 @@ import { aiParagraphs, isMostlyHan, requestArticleAI } from '../lib/articleAI';
 import type { AIKind } from '../lib/articleAI';
 import { decodeEntities } from '../lib/decodeEntities';
 import { hasProgress, subscribeProgress } from '../lib/playbackProgress';
-import { splitTimestamps } from '../lib/timestamps';
+import { parseTimestamp, splitTimestamps } from '../lib/timestamps';
 import type { Article } from '../types';
 
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
@@ -1120,9 +1120,39 @@ function seekButton(doc: Document, text: string, seconds: number): HTMLButtonEle
   return btn;
 }
 
+/**
+ * A link whose whole text is one clock — `(<a href="youtube…&t=155s">02:35</a>) Intro`,
+ * the shape Substack and most hosts emit for chapters — is a chapter link pointing
+ * at another player. Ours is the one playing, so the link becomes the seek button
+ * outright; a clock among other words (`<a>12:34 in the video</a>`) stays a link.
+ * Brackets hugging the link from the sibling text nodes are pulled into the chip.
+ */
+function unwrapChapterLinks(root: HTMLElement): void {
+  const doc = root.ownerDocument;
+  for (const a of Array.from(root.querySelectorAll('a'))) {
+    if (a.parentElement?.closest(NO_SEEK_ANCESTOR)) continue;
+    const seconds = parseTimestamp(a.textContent ?? '');
+    if (seconds === null) continue;
+    let label = (a.textContent ?? '').trim();
+    const prev = a.previousSibling;
+    const next = a.nextSibling;
+    if (prev instanceof Text && next instanceof Text) {
+      const open = prev.data.at(-1);
+      const close = next.data[0];
+      if ((open === '(' && close === ')') || (open === '[' && close === ']')) {
+        prev.data = prev.data.slice(0, -1);
+        next.data = next.data.slice(1);
+        label = open + label + close;
+      }
+    }
+    a.replaceWith(seekButton(doc, label, seconds));
+  }
+}
+
 /** Replaces timestamp runs in `root`'s text nodes with seek buttons, in place. */
 export function linkifyTimestamps(root: HTMLElement): void {
   const doc = root.ownerDocument;
+  unwrapChapterLinks(root);
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   // Collect first: splicing while walking would revisit the inserted text nodes.
   const targets: Text[] = [];

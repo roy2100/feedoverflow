@@ -618,6 +618,30 @@ describe('chapter timestamps', () => {
     expect(screen.queryByText('12:34')).toBeNull();
   });
 
+  it('turns a link that is nothing but a clock into the seek button', () => {
+    // Substack's chapter list: each mark is a YouTube link with a `t=` offset, the
+    // brackets sit outside the anchor as sibling text.
+    const onPlay = vi.fn();
+    renderReader(
+      {
+        ...EPISODE,
+        content:
+          '<p>(<a href="https://www.youtube.com/watch?v=x">00:00</a>) Intro</p>' +
+          '<p>(<a href="https://www.youtube.com/watch?v=x&amp;t=155s">02:35</a>) Warp’s factory</p>' +
+          '<p>[<a href="https://example.com/t"> 1:02:30 </a>] Late chapter</p>',
+      },
+      { onPlay },
+    );
+    const buttons = screen.getAllByTitle('跳转到此处播放');
+    expect(buttons.map((b) => b.textContent)).toEqual(['(00:00)', '(02:35)', '[1:02:30]']);
+    expect(buttons.map((b) => b.dataset.seek)).toEqual(['0', '155', '3750']);
+    expect(document.querySelector('.rss-article a')).toBeNull();
+    // The brackets moved into the chip; the prose keeps only its own words.
+    expect(screen.getByText(/^\s*Warp’s factory$/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('(02:35)'));
+    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ id: EPISODE.id }), 155);
+  });
+
   it('plays the episode from the clicked offset', () => {
     const onPlay = vi.fn();
     renderReader(EPISODE, { onPlay });

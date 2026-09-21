@@ -108,3 +108,14 @@ Follow-up after the first screenshot: the chip held only the clock, leaving `(` 
 body-size text on either side. `splitTimestamps` now absorbs a *matching* bracket pair
 (`(…)` or `[…]`) into the segment, so the whole `(04:41)` marker is the button. A mismatched
 or unclosed bracket stays outside.
+
+Follow-up (2026-09-21, Lenny's Newsletter episode): none of the chapter marks were
+clickable. Substack emits each one as `(<a href="youtube…&t=155s">02:35</a>) Intro` — the
+clock is the *entire* text of a link to another player, and the walker's `a` exclusion
+skipped it wholesale. The exclusion exists so a button never nests inside a link, not to
+protect clocks that happen to be linked. `unwrapChapterLinks` now runs before the text
+walk: a link whose whole trimmed text parses as one timestamp is replaced *by* the seek
+button (ours is the player that is actually playing), and a bracket pair hugging the link
+from the sibling text nodes is folded into the chip so it still reads `(02:35)`. A link
+with a clock among other words (`<a>12:34 in the video</a>`) is still left alone — that is
+a sentence, not a chapter mark. One more case in `ArticleReader.test.tsx` pins the shape.
