@@ -1,6 +1,7 @@
 import { X, CheckCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
+import { useStore } from '../store';
 import type { LLMConfig } from '../types';
 import ModalOverlay from './ModalOverlay';
 
@@ -136,11 +137,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         body: JSON.stringify(patch),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || '保存失败');
+      const nowKeySet = keyEditable ? llmKey.trim() !== '' : keySet;
       if (keyEditable) {
-        setKeySet(llmKey.trim() !== '');
+        setKeySet(nowKeySet);
         setLlmKey('');
         setEditingKey(false);
       }
+      // The reader's AI actions appear as soon as an endpoint is usable, without a reload.
+      useStore.getState().setLlmReady(nowKeySet && llmBase.trim() !== '' && llmModel.trim() !== '');
       setLlmDirty(false);
       setLlmSaved(true);
       setTimeout(() => setLlmSaved(false), 2500);

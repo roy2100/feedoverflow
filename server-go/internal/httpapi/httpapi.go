@@ -59,6 +59,10 @@ type Server struct {
 	// Translator backs POST /api/llm/config/test. nil answers 503 there; it has no
 	// bearing on stored config or on the background worker.
 	Translator translate.Checker
+	// BodyAI backs POST /api/articles/:id/ai (on-demand summary / body
+	// translation). nil answers 503. In production it is the same *translate.Client
+	// as Translator; it is a separate field so a test can fake one without the other.
+	BodyAI translate.BodyWorker
 	// AuthUser/AuthPass gate the public listener when both are set (auth disabled
 	// otherwise), matching registerAuth.
 	AuthUser string
@@ -133,6 +137,7 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Post("/api/articles/star", s.postStar)
 	r.Get("/api/articles/{id}", s.getArticle)
 	r.Get("/api/articles/{id}/content", s.getArticleContent)
+	r.Post("/api/articles/{id}/ai", s.postArticleAI)
 	r.Get("/api/search", s.getSearch)
 	r.Get("/api/fetch-content", s.getFetchContent)
 	r.Get("/api/favicon", s.getFaviconRoute)

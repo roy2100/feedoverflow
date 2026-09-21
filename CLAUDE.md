@@ -237,6 +237,18 @@ language, drop stale/redundant chrome.
     **ArticleReader shows both**; search matches `title` and `title_zh` alike.
   - Future article-level AI output (body translation, summaries) must **not** follow this shape:
     on-demand from the reader, output in a side table — never a body-sized column here.
+- **Article AI (AI 摘要 / 翻译正文)** is that on-demand shape: `POST /api/articles/:id/ai` with
+  `{kind, text}`, streamed back as SSE, stored in `article_ai` keyed `(article_id, kind)`.
+  The **client sends the text it is showing** — RSS body or the Readability 全文, which is never
+  persisted — and the row keeps a `source_hash`, so the same text replays without a model call
+  and a different text regenerates. Nothing is stored for a partial run. The body is split
+  into ≤1200-rune pieces at paragraph/sentence boundaries, **one request per piece**
+  (`internal/translate/body.go`), so it fits Ollama's default 4k context without touching the
+  Modelfile. Gated by `llm_config` being *reachable* (`Ready()`), not by the title switch
+  (`enabled`) — a click is its own intent. The reader hides 翻译正文 for a mostly-Han body and
+  both actions until the store sees a configured endpoint. Output is plain paragraphs, not
+  HTML: an 8B model does not round-trip markup. Maintenance purges `article_ai` orphans.
+  Rationale: `docs/plan-article-ai-opml-export.md`.
   - **The endpoint runs locally** (Ollama, `http://localhost:11434/v1`), and the model it serves
     must be a **general instruct model that does not think**. Both halves are scar tissue:
     - A *dedicated translation* model (Hunyuan-MT-7B and friends) cannot run this prompt. Its chat
@@ -271,6 +283,8 @@ language, drop stale/redundant chrome.
   `settings`, which `GET /api/settings` serializes wholesale
 - `llm_config(id, base_url, api_key, model, enabled)` — the single translation endpoint + the
   global on/off switch; out of `settings` for the same reason as `push_keys`
+- `article_ai(article_id, kind, source_hash, model, content, created_at)` — on-demand summary /
+  body translation per article, `PRIMARY KEY (article_id, kind)`; body-sized, hence its own table
 
 **API:**
 | Method | Path | Description |
@@ -295,6 +309,7 @@ language, drop stale/redundant chrome.
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id` | one article (content included) — used only by the push deep link |
 | GET | `/api/articles/:id/content` | cached full content |
+| POST | `/api/articles/:id/ai` | `{kind: summary\|translation, text}` → SSE stream of `piece` frames then `done`; cached by text hash |
 | GET | `/api/fetch-content?url=` | Readability extraction |
 | GET | `/api/favicon?domain=` | cached feed favicon (BLOB) |
 | GET\|POST | `/api/current-article` | in-memory "currently open" article (for MCP) |

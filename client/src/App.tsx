@@ -87,6 +87,7 @@ export default function App() {
     toggleSearchScope,
     listMode,
     setListMode,
+    llmReady,
   } = useStore();
 
   // Label for the scopable base view (Starred / a feed). Null ⇒ not scopable ⇒ no toggle.
@@ -545,6 +546,7 @@ export default function App() {
             scrollRef={readerRef}
             readingMode={readingMode}
             onToggleReadingMode={() => setReadingMode((v) => !v)}
+            aiReady={llmReady}
           />
           {currentEpisode && (
             <Suspense fallback={null}>

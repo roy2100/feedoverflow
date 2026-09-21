@@ -147,6 +147,15 @@ func InitSchema(db *sql.DB) error {
     model    TEXT NOT NULL,
     enabled  INTEGER NOT NULL DEFAULT 0
   );
+  CREATE TABLE IF NOT EXISTS article_ai (
+    article_id  TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    model       TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (article_id, kind)
+  );
 `); err != nil {
 		return fmt.Errorf("base schema: %w", err)
 	}

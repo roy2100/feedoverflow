@@ -648,3 +648,128 @@ describe('chapter timestamps', () => {
     expect(screen.queryByTitle('跳转到此处播放')).toBeNull();
   });
 });
+
+// ── AI 摘要 / 翻译正文 ─────────────────────────────────────────────────────────
+// Both stream from POST /api/articles/:id/ai as SSE; the reader sends the plain
+// text of whatever it is showing and renders pieces as they land.
+describe('article AI', () => {
+  const withBody: Article = {
+    ...BASE_ARTICLE,
+    content: '<p>Hello world, an English paragraph.</p><p>Second one.</p>',
+  };
+  const sse = (frames: string) =>
+    new Response(frames, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+
+  it('hides both actions until an endpoint is configured', () => {
+    renderReader(withBody);
+    openMenu();
+    expect(screen.queryByText('AI 摘要')).not.toBeInTheDocument();
+    expect(screen.queryByText('翻译正文')).not.toBeInTheDocument();
+  });
+
+  it('streams a summary into a box above the body and sends the shown text', async () => {
+    mockFetch.mockResolvedValue(
+      sse('data: {"piece":"讲了 X。\\n- 要点一"}\n\ndata: {"done":true,"model":"m"}\n\n'),
+    );
+    renderReader(withBody, { aiReady: true });
+    openMenu();
+    clickItem('AI 摘要');
+
+    expect(await screen.findByText('讲了 X。')).toBeInTheDocument();
+    expect(screen.getByText('要点一')).toBeInTheDocument();
+    expect(screen.getByText('AI 摘要 · m')).toBeInTheDocument();
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/articles/article-123/ai');
+    expect(JSON.parse(init.body as string)).toEqual({
+      kind: 'summary',
+      text: 'Hello world, an English paragraph.\n\nSecond one.',
+    });
+    // The body is still there underneath — a summary is about the article, not a
+    // replacement for it.
+    expect(screen.getByText('Hello world, an English paragraph.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('关闭摘要'));
+    expect(screen.queryByText('讲了 X。')).not.toBeInTheDocument();
+  });
+
+  it('swaps the body for the translation, back to the original, and back again without a new request', async () => {
+    mockFetch.mockResolvedValue(
+      sse(
+        'data: {"piece":"你好世界"}\n\ndata: {"piece":"第二段"}\n\ndata: {"done":true,"model":"m"}\n\n',
+      ),
+    );
+    renderReader(withBody, { aiReady: true });
+    openMenu();
+    clickItem('翻译正文');
+
+    expect(await screen.findByText('第二段')).toBeInTheDocument();
+    expect(screen.getByText('你好世界')).toBeInTheDocument();
+    expect(screen.queryByText('Hello world, an English paragraph.')).not.toBeInTheDocument();
+    expect(
+      JSON.parse((mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string).kind,
+    ).toBe('translation');
+
+    fireEvent.click(screen.getByText('查看原文'));
+    expect(screen.getByText('Hello world, an English paragraph.')).toBeInTheDocument();
+    expect(screen.queryByText('你好世界')).not.toBeInTheDocument();
+
+    openMenu();
+    clickItem('翻译正文');
+    expect(screen.getByText('你好世界')).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the paragraphs that arrived next to a mid-stream error, with 重试', async () => {
+    mockFetch.mockResolvedValue(
+      sse('data: {"piece":"第一段"}\n\ndata: {"error":"服务返回错误"}\n\n'),
+    );
+    renderReader(withBody, { aiReady: true });
+    openMenu();
+    clickItem('翻译正文');
+
+    expect(await screen.findByText('服务返回错误')).toBeInTheDocument();
+    expect(screen.getByText('第一段')).toBeInTheDocument();
+    expect(screen.getByText('重试')).toBeInTheDocument();
+  });
+
+  it('surfaces the server hint when the endpoint is not configured server-side', async () => {
+    mockFetch.mockResolvedValue(
+      new Response('{"error":"请先在设置中配置翻译服务"}', {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    renderReader(withBody, { aiReady: true });
+    openMenu();
+    clickItem('AI 摘要');
+    expect(await screen.findByText('请先在设置中配置翻译服务')).toBeInTheDocument();
+  });
+
+  it('hides 翻译正文 for a Chinese article but keeps AI 摘要', () => {
+    renderReader(
+      { ...BASE_ARTICLE, content: '<p>这是一篇中文文章，讲的是苹果发布了 M5 芯片。</p>' },
+      { aiReady: true },
+    );
+    openMenu();
+    expect(screen.getByText('AI 摘要')).toBeInTheDocument();
+    expect(screen.queryByText('翻译正文')).not.toBeInTheDocument();
+  });
+
+  it('drops the translation when 全文 replaces the body it was a translation of', async () => {
+    mockFetch.mockResolvedValueOnce(
+      sse('data: {"piece":"你好世界"}\n\ndata: {"done":true,"model":"m"}\n\n'),
+    );
+    renderReader(withBody, { aiReady: true });
+    openMenu();
+    clickItem('翻译正文');
+    expect(await screen.findByText('你好世界')).toBeInTheDocument();
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ content: '<p>The whole extracted article.</p>' }),
+    });
+    fireEvent.click(screen.getByTitle('从原始网页提取全文'));
+    expect(await screen.findByText('The whole extracted article.')).toBeInTheDocument();
+    expect(screen.queryByText('你好世界')).not.toBeInTheDocument();
+  });
+});

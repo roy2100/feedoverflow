@@ -13,9 +13,14 @@ import {
   Copy,
   MoreHorizontal,
   Loader2,
+  Sparkles,
+  Languages,
+  X,
 } from 'lucide-react';
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
+import { aiParagraphs, isMostlyHan, requestArticleAI } from '../lib/articleAI';
+import type { AIKind } from '../lib/articleAI';
 import { decodeEntities } from '../lib/decodeEntities';
 import { hasProgress, subscribeProgress } from '../lib/playbackProgress';
 import { splitTimestamps } from '../lib/timestamps';
@@ -23,6 +28,16 @@ import type { Article } from '../types';
 
 // null = nothing fetched, 'loading' = in flight, object = result (full HTML or an error)
 type FullContent = null | 'loading' | { html: string } | { error: string };
+
+// One on-demand AI output (摘要 or 译文). `text` accumulates while streaming, so a
+// failure mid-translation keeps the paragraphs that did arrive on screen next to
+// the error rather than throwing them away.
+type AIState = null | {
+  status: 'loading' | 'done' | 'error';
+  text: string;
+  error?: string;
+  model?: string;
+};
 
 function formatFullDate(dateStr: string | number): string {
   const d = new Date(dateStr);
@@ -239,6 +254,8 @@ interface ArticleReaderProps {
   scrollRef?: React.RefObject<HTMLDivElement>;
   readingMode?: boolean;
   onToggleReadingMode?: () => void;
+  /** An LLM endpoint is configured — shows the AI 摘要 / 翻译正文 actions. */
+  aiReady?: boolean;
 }
 
 export default function ArticleReader({
@@ -253,6 +270,7 @@ export default function ArticleReader({
   scrollRef,
   readingMode,
   onToggleReadingMode,
+  aiReady,
 }: ArticleReaderProps) {
   const [fullContent, setFullContent] = useState<FullContent>(null);
   // null = loading, string = done (may be empty)
@@ -266,6 +284,11 @@ export default function ArticleReader({
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'fail'>('idle');
   const copyTimer = useRef<ReturnType<typeof setTimeout>>();
   const contentRef = useRef<HTMLDivElement>(null);
+  const [summary, setSummary] = useState<AIState>(null);
+  const [translation, setTranslation] = useState<AIState>(null);
+  const [showTranslation, setShowTranslation] = useState(false);
+  // One in-flight AI request at a time; switching articles aborts it.
+  const aiAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     localStorage.setItem('text-only', textOnly ? '1' : '0');
@@ -274,7 +297,64 @@ export default function ArticleReader({
   useEffect(() => {
     setCopyState('idle');
     clearTimeout(copyTimer.current);
+    aiAbort.current?.abort();
+    aiAbort.current = null;
+    setSummary(null);
+    setTranslation(null);
+    setShowTranslation(false);
   }, [article?.id]);
+
+  // Loading 全文 (or restoring the RSS body) changes what a translation is *of*, so
+  // the old one is dropped rather than shown against a different original. The
+  // server keeps it, so asking again is a replay, not a re-run. The summary stays:
+  // a summary of the article is still a summary of the article.
+  useEffect(() => {
+    setTranslation(null);
+    setShowTranslation(false);
+  }, [fullContent]);
+
+  useEffect(() => () => aiAbort.current?.abort(), []);
+
+  // The plain text the AI actions send — whatever the reader is showing, flattened
+  // the same way 复制全文 does. Memoized: htmlToPlainText parses the whole body.
+  const aiSource = useMemo(() => {
+    const extracted =
+      fullContent && fullContent !== 'loading' && 'html' in fullContent ? fullContent.html : '';
+    const raw = extracted || rssContent || article?.summary || '';
+    return /<[a-z][\s\S]*>/i.test(raw) ? htmlToPlainText(raw) : decodeEntities(raw);
+  }, [fullContent, rssContent, article?.summary]);
+  const bodyIsHan = useMemo(() => isMostlyHan(aiSource), [aiSource]);
+
+  const runAI = async (kind: AIKind) => {
+    if (!article) return;
+    const setter = kind === 'summary' ? setSummary : setTranslation;
+    if (!aiSource.trim()) {
+      setter({ status: 'error', text: '', error: '没有可处理的正文' });
+      return;
+    }
+    aiAbort.current?.abort();
+    const ac = new AbortController();
+    aiAbort.current = ac;
+    setter({ status: 'loading', text: '' });
+    if (kind === 'translation') setShowTranslation(true);
+    try {
+      const res = await requestArticleAI(
+        article.id,
+        kind,
+        aiSource,
+        (piece) => {
+          if (ac.signal.aborted) return;
+          setter((s) => ({ status: 'loading', text: s?.text ? `${s.text}\n\n${piece}` : piece }));
+        },
+        ac.signal,
+      );
+      if (ac.signal.aborted) return;
+      setter((s) => ({ status: 'done', text: s?.text ?? '', model: res.model }));
+    } catch (err) {
+      if (ac.signal.aborted) return;
+      setter((s) => ({ status: 'error', text: s?.text ?? '', error: (err as Error).message }));
+    }
+  };
 
   useEffect(() => () => clearTimeout(copyTimer.current), []);
 
@@ -438,6 +518,30 @@ export default function ArticleReader({
       onSelect: () => setTextOnly((v) => !v),
     },
   ];
+  if (aiReady) {
+    menuItems.push({
+      key: 'summary',
+      icon: <Sparkles size={menuIcon} strokeWidth={1.5} />,
+      label: 'AI 摘要',
+      active: !!summary,
+      disabled: isLoadingContent,
+      // A second click dismisses; the server keeps the text, so a third is instant.
+      onSelect: () => (summary ? setSummary(null) : void runAI('summary')),
+    });
+    if (!bodyIsHan) {
+      menuItems.push({
+        key: 'translation',
+        icon: <Languages size={menuIcon} strokeWidth={1.5} />,
+        label: '翻译正文',
+        active: showTranslation,
+        disabled: isLoadingContent,
+        onSelect: () => {
+          if (translation && translation.status !== 'error') setShowTranslation((v) => !v);
+          else void runAI('translation');
+        },
+      });
+    }
+  }
   if (onToggleReadingMode) {
     menuItems.push({
       key: 'reading-mode',
@@ -920,8 +1024,22 @@ export default function ArticleReader({
           </div>
         )}
 
+        {summary && (
+          <AISummaryBlock
+            state={summary}
+            onClose={() => setSummary(null)}
+            onRetry={() => void runAI('summary')}
+          />
+        )}
+
         {/* Content */}
-        {fullError ? (
+        {showTranslation && translation ? (
+          <TranslationView
+            state={translation}
+            onShowOriginal={() => setShowTranslation(false)}
+            onRetry={() => void runAI('translation')}
+          />
+        ) : fullError ? (
           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
             加载失败：{fullError}。
             <button
@@ -1155,6 +1273,183 @@ function sanitizeHtml(html: string): string {
       // line. Against our own paragraph rhythm they render as an unexplained hole in the
       // column, so drop them and let .rss-article's margins do the spacing.
       .replace(/<p[^>]*>(?:\s|&nbsp;|&#160;|<br\s*\/?>)*<\/p>/gi, '')
+  );
+}
+
+function AISpinner({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 12.5,
+        color: 'var(--text-tertiary)',
+      }}
+    >
+      <span
+        style={{
+          width: 11,
+          height: 11,
+          border: '1.5px solid var(--border)',
+          borderTopColor: 'var(--accent)',
+          borderRadius: '50%',
+          display: 'inline-block',
+          animation: 'spin 0.8s linear infinite',
+        }}
+      />
+      {label}
+    </span>
+  );
+}
+
+const aiSmallButton: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--accent)',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: 0,
+};
+
+// The 摘要 sits above the body in its own box: it is *about* the article, not part
+// of it, and the box is what keeps a reader from mistaking a model's précis for
+// the author's opening paragraph. Lines the model wrote as「- 」bullets render as a
+// list; everything else as paragraphs.
+function AISummaryBlock({
+  state,
+  onClose,
+  onRetry,
+}: {
+  state: NonNullable<AIState>;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  const lines = state.text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return (
+    <section
+      aria-label="AI 摘要"
+      style={{
+        marginBottom: 24,
+        padding: '12px 16px 14px',
+        background: 'var(--bg-panel)',
+        borderRadius: 8,
+        border: '1px solid var(--border-light)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Sparkles
+          size={13}
+          strokeWidth={2}
+          style={{ color: 'var(--accent-light)', flexShrink: 0 }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+          AI 摘要{state.model ? ` · ${state.model}` : ''}
+        </span>
+        <button
+          onClick={onClose}
+          aria-label="关闭摘要"
+          style={{
+            marginLeft: 'auto',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text-tertiary)',
+            display: 'flex',
+            padding: 2,
+          }}
+        >
+          <X size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+      {state.status === 'loading' && !state.text ? (
+        <AISpinner label="生成中…" />
+      ) : (
+        <div style={{ fontSize: 14.5, lineHeight: 1.7, color: 'var(--text-primary)' }}>
+          {lines.map((line, i) =>
+            /^[-•·]\s*/.test(line) ? (
+              <div key={i} style={{ display: 'flex', gap: 8, margin: '2px 0' }}>
+                <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>·</span>
+                <span>{line.replace(/^[-•·]\s*/, '')}</span>
+              </div>
+            ) : (
+              <p key={i} style={{ margin: '0 0 6px' }}>
+                {line}
+              </p>
+            ),
+          )}
+        </div>
+      )}
+      {state.status === 'error' && (
+        <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+          {state.error}
+          <button onClick={onRetry} style={{ ...aiSmallButton, marginLeft: 8 }}>
+            重试
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// The translation *replaces* the body rather than interleaving with it — a
+// paragraph-by-paragraph bilingual view doubles the scroll and reads as neither
+// language. The original is one click away and the menu item stays checked while
+// the translation is up.
+function TranslationView({
+  state,
+  onShowOriginal,
+  onRetry,
+}: {
+  state: NonNullable<AIState>;
+  onShowOriginal: () => void;
+  onRetry: () => void;
+}) {
+  const paragraphs = aiParagraphs(state.text);
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 12,
+          color: 'var(--text-tertiary)',
+          marginBottom: 16,
+        }}
+      >
+        <Languages
+          size={13}
+          strokeWidth={2}
+          style={{ color: 'var(--accent-light)', flexShrink: 0 }}
+        />
+        <span style={{ fontWeight: 500 }}>译文{state.model ? ` · ${state.model}` : ''}</span>
+        <button onClick={onShowOriginal} style={{ ...aiSmallButton, marginLeft: 'auto' }}>
+          查看原文
+        </button>
+      </div>
+      <div className="rss-article" style={articleContentStyle} lang="zh-CN">
+        {paragraphs.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+      </div>
+      {state.status === 'loading' && (
+        <div style={{ padding: '8px 0 20px' }}>
+          <AISpinner label={paragraphs.length ? '翻译中…' : '翻译中，长文需要几分钟…'} />
+        </div>
+      )}
+      {state.status === 'error' && (
+        <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0 20px' }}>
+          {state.error}
+          <button onClick={onRetry} style={{ ...aiSmallButton, marginLeft: 8 }}>
+            重试
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

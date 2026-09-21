@@ -68,7 +68,7 @@ func main() {
 	// credentials — every call reads llm_config, which is editable at runtime.
 	translator := translate.New(appLogger)
 	srv := &httpapi.Server{
-		DB: handle, Cache: c, Favicon: fav, Push: pusher, Translator: translator,
+		DB: handle, Cache: c, Favicon: fav, Push: pusher, Translator: translator, BodyAI: translator,
 		AuthUser: cfg.AuthUser, AuthPass: cfg.AuthPass, DistDir: cfg.ClientDist,
 		LocalAPIPort: cfg.LocalAPIPort,
 	}

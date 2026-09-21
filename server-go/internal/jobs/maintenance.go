@@ -12,6 +12,7 @@ import (
 
 	"rss-reader/server-go/internal/dates"
 	"rss-reader/server-go/internal/db"
+	"rss-reader/server-go/internal/store"
 )
 
 const (
@@ -197,5 +198,12 @@ func RunMaintenance(handle *db.DB, capBytes int64, log *slog.Logger) {
 	}
 	if _, err := EnforceSizeCap(handle, capBytes, log); err != nil {
 		log.Error("maintenance pass failed", "err", err)
+		return
+	}
+	// After both deletes, so one sweep covers orphans from either.
+	if n, err := store.PurgeOrphanAI(handle.Writer()); err != nil {
+		log.Error("maintenance pass failed", "err", err)
+	} else if n > 0 {
+		log.Info("orphan ai outputs removed", "deleted", n)
 	}
 }

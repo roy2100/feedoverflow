@@ -145,6 +145,12 @@ func buildExampleTurns() []chatMessage {
 // Client is the OpenAI-compatible chat-completions caller.
 type Client struct {
 	HTTP *http.Client
+	// BodyHTTP is the client the on-demand summary/translation methods use (see
+	// body.go). A translated body piece is several hundred output tokens, which on
+	// a local 8B model is well past HTTP's 30 s; those requests are user-initiated
+	// and show progress, so they can afford to wait where the title worker cannot.
+	// nil falls back to HTTP.
+	BodyHTTP *http.Client
 	// Log, when set, records the token usage each endpoint reports. Translation is
 	// the only thing here that costs money per item, and the split between prompt
 	// and completion tokens is the only way to tell an expensive prompt from a
@@ -155,7 +161,11 @@ type Client struct {
 // New returns a Client with the request timeout the worker relies on: translation
 // runs off the request path, but a hung endpoint must not stall a whole tick.
 func New(log *slog.Logger) *Client {
-	return &Client{HTTP: &http.Client{Timeout: 30 * time.Second}, Log: log}
+	return &Client{
+		HTTP:     &http.Client{Timeout: 30 * time.Second},
+		BodyHTTP: &http.Client{Timeout: bodyRequestTimeout},
+		Log:      log,
+	}
 }
 
 // maxCompletionTokens caps the answer. A translated headline is a few dozen
@@ -243,8 +253,10 @@ func (c *Client) Translate(ctx context.Context, cfg Config, req Request) (string
 	return clean(parsed.Choices[0].Message.Content, in), nil
 }
 
-// post makes one chat-completions call. It returns the HTTP status alongside the
-// error so the caller can tell a rejected request field from a real failure.
+// post makes one title-translation call: the fixed prefix (system prompt +
+// demonstration turns) followed by the real request. It returns the HTTP status
+// alongside the error so the caller can tell a rejected request field from a
+// real failure.
 func (c *Client) post(
 	ctx context.Context, cfg Config, in string, disableThinking bool,
 ) (chatResponse, int, error) {
@@ -254,7 +266,19 @@ func (c *Client) post(
 	// The real request goes last: every provider expects the conversation to end on
 	// a user turn, and trailing position is where the task belongs.
 	msgs = append(msgs, chatMessage{Role: "user", Content: in})
+	return c.chat(ctx, cfg, c.HTTP, msgs, disableThinking, maxCompletionTokens)
+}
 
+// chat is the one place a request is built and sent. maxTokens is only applied
+// together with disableThinking — see maxCompletionTokens for why the two must
+// travel together.
+func (c *Client) chat(
+	ctx context.Context, cfg Config, hc *http.Client, msgs []chatMessage,
+	disableThinking bool, maxTokens int,
+) (chatResponse, int, error) {
+	if hc == nil {
+		hc = c.HTTP
+	}
 	r := chatRequest{
 		Model:    cfg.Model,
 		Messages: msgs,
@@ -262,8 +286,7 @@ func (c *Client) post(
 	}
 	if disableThinking {
 		r.Thinking = &thinkingParam{Type: "disabled"}
-		// Only safe together with thinking off — see maxCompletionTokens.
-		r.MaxTokens = maxCompletionTokens
+		r.MaxTokens = maxTokens
 	}
 	body, err := json.Marshal(r)
 	if err != nil {
@@ -277,7 +300,7 @@ func (c *Client) post(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return chatResponse{}, 0, fmt.Errorf("%w: %v", ErrConnect, err)
 	}

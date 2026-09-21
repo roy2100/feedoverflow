@@ -47,6 +47,11 @@ interface StoreState {
   scopedSearch: boolean;
   // Ordering for the merged 全部/今日 lists. Only those two views send it to the server.
   listMode: ListMode;
+  // Whether an LLM endpoint is configured (base_url + model + a stored key), which is
+  // all the reader's on-demand AI 摘要 / 翻译正文 need. The global `enabled` switch is
+  // the title worker's intent and does not gate an explicit click.
+  llmReady: boolean;
+  setLlmReady: (ready: boolean) => void;
 
   init: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
@@ -78,6 +83,8 @@ export const useStore = create<StoreState>((set, get) => ({
   loadingArticles: false,
   starredCount: 0,
   lastListView: { type: 'today' },
+  llmReady: false,
+  setLlmReady: (ready) => set({ llmReady: ready }),
   scopedSearch: false,
   listMode: localStorage.getItem('list-mode') === 'digest' ? 'digest' : 'latest',
 
@@ -96,6 +103,14 @@ export const useStore = create<StoreState>((set, get) => ({
     } catch (e) {
       console.error(e);
     }
+    // Separate from the batch above: a failure here only hides two menu items and
+    // must not take feeds and collections down with it.
+    apiFetch(`${API}/llm/config`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => {
+        if (c) set({ llmReady: !!(c.key_set && c.base_url && c.model) });
+      })
+      .catch(() => {});
   },
 
   loadArticles: async (view) => {

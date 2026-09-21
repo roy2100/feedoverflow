@@ -8,7 +8,7 @@ interface ReaderPageProps {
 }
 
 export default function ReaderPage({ onNavigate }: ReaderPageProps) {
-  const { selectedArticle, toggleStar } = useStore();
+  const { selectedArticle, toggleStar, llmReady } = useStore();
   const { currentEpisode, isPlaying, isBuffering, onPlay } = useAudio();
 
   if (!selectedArticle) return null;
@@ -23,6 +23,7 @@ export default function ReaderPage({ onNavigate }: ReaderPageProps) {
       currentEpisode={currentEpisode}
       isPlaying={isPlaying}
       isBuffering={isBuffering}
+      aiReady={llmReady}
     />
   );
 }
