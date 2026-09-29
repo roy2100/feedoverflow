@@ -19,7 +19,7 @@ export default defineConfig({
         name: 'FeedOverflow',
         short_name: 'FeedOverflow',
         description: '个人 RSS 阅读器',
-        theme_color: '#2B5C5C',
+        theme_color: '#F5F2EE',
         background_color: '#F5F2EE',
         display: 'standalone',
         scope: '/',
