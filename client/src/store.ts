@@ -8,6 +8,9 @@ import type {
   FeedPatch,
   ListMode,
   SearchScope,
+  SearchTab,
+  TrendData,
+  TrendDays,
   View,
 } from './types';
 
@@ -52,12 +55,17 @@ interface StoreState {
   // the title worker's intent and does not gate an explicit click.
   llmReady: boolean;
   setLlmReady: (ready: boolean) => void;
+  // The chart of the active 趋势 view; null while it loads or outside that view.
+  trend: TrendData | null;
 
   init: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
   selectView: (view: View) => void;
   search: (query: string) => void;
   toggleSearchScope: () => void;
+  setSearchTab: (tab: SearchTab) => void;
+  setTrendDays: (days: TrendDays) => void;
+  setTrendDay: (day: string | null) => void;
   setListMode: (mode: ListMode) => void;
   selectArticle: (article: Article) => void;
   toggleStar: (article: Article) => void;
@@ -85,6 +93,7 @@ export const useStore = create<StoreState>((set, get) => ({
   lastListView: { type: 'today' },
   llmReady: false,
   setLlmReady: (ready) => set({ llmReady: ready }),
+  trend: null,
   scopedSearch: false,
   listMode: localStorage.getItem('list-mode') === 'digest' ? 'digest' : 'latest',
 
@@ -118,6 +127,12 @@ export const useStore = create<StoreState>((set, get) => ({
     const controller = new AbortController();
     loadAbortController = controller;
     set({ loadingArticles: true, articles: [], selectedArticle: null });
+    // A bar click reloads only the list: keep the chart when query and range are
+    // unchanged, drop it for anything else so a stale chart never sits over new rows.
+    const t = get().trend;
+    if (t && !(view.type === 'trend' && t.query === view.query && t.days === view.days)) {
+      set({ trend: null });
+    }
     try {
       const urlMap: Record<string, string> = {
         all: `${API}/all-articles`,
@@ -126,7 +141,10 @@ export const useStore = create<StoreState>((set, get) => ({
         podcast: `${API}/podcasts`,
       };
       let url: string;
-      if (view.type === 'search') {
+      if (view.type === 'trend') {
+        url = `${API}/trend?q=${encodeURIComponent(view.query ?? '')}&days=${view.days ?? 30}`;
+        if (view.day) url += `&day=${view.day}`;
+      } else if (view.type === 'search') {
         url = `${API}/search?q=${encodeURIComponent(view.query ?? '')}`;
         if (view.scope?.kind === 'starred') url += '&scope=starred';
         else if (view.scope?.kind === 'feed' && view.scope.feedId) {
@@ -143,6 +161,16 @@ export const useStore = create<StoreState>((set, get) => ({
       }
       const data = await apiFetch(url, { signal: controller.signal }).then((r) => r.json());
       set({ articles: data.articles || [] });
+      if (view.type === 'trend' && Array.isArray(data.buckets)) {
+        set({
+          trend: {
+            query: view.query ?? '',
+            days: view.days ?? 30,
+            matched: data.matched ?? 0,
+            buckets: data.buckets,
+          },
+        });
+      }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') console.error(e);
     } finally {
@@ -152,7 +180,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
   selectView: (view) => {
     // Remember the last real list view so search can scope to it later.
-    if (view.type !== 'search') set({ lastListView: view });
+    if (view.type !== 'search' && view.type !== 'trend') set({ lastListView: view });
     set({ selectedView: view });
     get().loadArticles(view);
   },
@@ -161,6 +189,12 @@ export const useStore = create<StoreState>((set, get) => ({
     const q = query.trim();
     if (!q) {
       get().selectView(get().lastListView);
+      return;
+    }
+    // A new query typed while on the 趋势 tab stays on it.
+    const cur = get().selectedView;
+    if (cur.type === 'trend') {
+      get().selectView({ type: 'trend', query: q, days: cur.days });
       return;
     }
     const scope = get().scopedSearch ? scopeFromView(get().lastListView) : undefined;
@@ -176,6 +210,29 @@ export const useStore = create<StoreState>((set, get) => ({
     if (view.type === 'search' && (view.query?.trim().length ?? 0) > 0) {
       get().search(view.query ?? '');
     }
+  },
+
+  setSearchTab: (tab) => {
+    const view = get().selectedView;
+    const q = view.query ?? '';
+    if (tab === 'trend' && view.type === 'search') {
+      get().selectView({ type: 'trend', query: q, days: 30 });
+    } else if (tab === 'results' && view.type === 'trend') {
+      set({ selectedView: { type: 'search', query: q } }); // so search() doesn't bounce back
+      get().search(q);
+    }
+  },
+
+  setTrendDays: (days) => {
+    const view = get().selectedView;
+    if (view.type !== 'trend' || view.days === days) return;
+    get().selectView({ type: 'trend', query: view.query, days });
+  },
+
+  setTrendDay: (day) => {
+    const view = get().selectedView;
+    if (view.type !== 'trend') return;
+    get().selectView({ ...view, day: day ?? undefined });
   },
 
   setListMode: (mode) => {

@@ -1,8 +1,9 @@
 import { ChevronLeft, Mic, PanelLeft, Loader2 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { decodeEntities } from '../lib/decodeEntities';
-import type { Article, ListMode } from '../types';
+import type { Article, ListMode, SearchTab } from '../types';
+import Segmented from './Segmented';
 
 // pubDate is canonical ISO-8601 from the server (it owns date parsing), so native
 // `new Date()` is reliable here.
@@ -42,6 +43,12 @@ interface ArticleListProps {
   showModeToggle?: boolean;
   listMode?: ListMode;
   onSetListMode?: (mode: ListMode) => void;
+  // 结果 | 趋势 toggle — shown only while a search is active.
+  searchTab?: SearchTab;
+  onSetSearchTab?: (tab: SearchTab) => void;
+  // Pinned between the header and the scrolling rows (the trend chart).
+  topSlot?: ReactNode;
+  emptyText?: string;
 }
 
 export default function ArticleList({
@@ -63,6 +70,10 @@ export default function ArticleList({
   showModeToggle,
   listMode,
   onSetListMode,
+  searchTab,
+  onSetSearchTab,
+  topSlot,
+  emptyText,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   // Mobile: pin the list to its first row on every fresh (re)load — on BOTH the
@@ -190,7 +201,9 @@ export default function ArticleList({
         {showModeToggle && onSetListMode && (
           <ModeToggle mode={listMode ?? 'latest'} onSet={onSetListMode} />
         )}
+        {searchTab && onSetSearchTab && <SearchTabToggle tab={searchTab} onSet={onSetSearchTab} />}
       </div>
+      {topSlot}
 
       {/*
         No `-webkit-overflow-scrolling: touch`: it promotes this list into a separate
@@ -215,7 +228,7 @@ export default function ArticleList({
               gap: 12,
             }}
           >
-            <span>暂无文章</span>
+            <span>{emptyText ?? '暂无文章'}</span>
             <button
               onClick={onRefresh}
               style={{
@@ -258,48 +271,29 @@ export default function ArticleList({
 
 // Segmented control: 最新 (strict global newest) vs 摘要 (per-feed quota, every feed represented).
 function ModeToggle({ mode, onSet }: { mode: ListMode; onSet: (mode: ListMode) => void }) {
-  const options: { value: ListMode; label: string; title: string }[] = [
-    { value: 'latest', label: '最新', title: '严格按时间显示最新文章' },
-    { value: 'digest', label: '摘要', title: '每个订阅源公平展示其最新文章' },
-  ];
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexShrink: 0,
-        marginLeft: 8,
-        gap: 2,
-        padding: 2,
-        borderRadius: 7,
-        background: 'var(--bg-selected)',
-      }}
-    >
-      {options.map((o) => {
-        const active = mode === o.value;
-        return (
-          <button
-            key={o.value}
-            onClick={() => onSet(o.value)}
-            title={o.title}
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              lineHeight: 1.4,
-              padding: '2px 9px',
-              borderRadius: 5,
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'color 0.15s, background 0.15s',
-              background: active ? 'var(--bg)' : 'transparent',
-              color: active ? 'var(--accent)' : 'var(--text-tertiary)',
-              boxShadow: active ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
+    <Segmented
+      value={mode}
+      onSet={onSet}
+      options={[
+        { value: 'latest', label: '最新', title: '严格按时间显示最新文章' },
+        { value: 'digest', label: '摘要', title: '每个订阅源公平展示其最新文章' },
+      ]}
+    />
+  );
+}
+
+// 结果 (search's own matching) vs 趋势 (the same query as a per-day count).
+function SearchTabToggle({ tab, onSet }: { tab: SearchTab; onSet: (tab: SearchTab) => void }) {
+  return (
+    <Segmented
+      value={tab}
+      onSet={onSet}
+      options={[
+        { value: 'results', label: '结果', title: '搜索结果' },
+        { value: 'trend', label: '趋势', title: '按天统计提到该关键词的文章数' },
+      ]}
+    />
   );
 }
 

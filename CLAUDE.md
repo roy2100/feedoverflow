@@ -56,7 +56,7 @@ server-go/          Go backend (cgo binary, port 3002 — chi router, mattn/go-s
   main.go           entrypoint: config → DB → logger → both listeners → background jobs
   internal/config   env config (PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, PUSH_SUBJECT, ...)
   internal/httpapi  Server struct + NewPublicRouter / NewLocalRouter; per-domain handlers
-  internal/mcp      MCP server (Streamable HTTP) — 13 tools, mounted on NewLocalRouter only
+  internal/mcp      MCP server (Streamable HTTP) — 14 tools, mounted on NewLocalRouter only
   internal/db       SQLite open (WAL), schema + migrations
   internal/auth     session login/logout + per-request gate + login rate-limit
   internal/store    article_states writes — persist upserts, feed writes, adopt-orphans
@@ -111,8 +111,8 @@ the type gate — Vite does not type-check.
 
 **Data flow:** `store.ts` owns app state (`feeds`, `collections`, `articles`, `selectedView`,
 `selectedArticle`, `starredCount`); components subscribe via `useStore`. `selectedView`:
-`{ type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search', feed?,
-collection?, query?, scope? }`. Star uses optimistic updates — mutate local state immediately,
+`{ type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search' | 'trend',
+feed?, collection?, query?, scope?, days?, day? }`. Star uses optimistic updates — mutate local state immediately,
 fire-and-forget POST to sync.
 
 **Vite proxy:** `/api/*` → `http://localhost:3002`.
@@ -179,6 +179,16 @@ language, drop stale/redundant chrome.
   and `ArticleByID` (the push deep link), pinned by `TestContentCarryingReads`. This saves
   materializing body text into Go strings, **not** page reads — see the measured perf note in
   `docs/plan-collections.md` before attempting the column-order win it describes.
+- **Keyword trend** (`GET /api/trend`, the 趋势 tab of a search) counts articles per **local
+  calendar day** over 7/30/90 days, window `[midnight(today−days+1), now]`. It uses the
+  **collection keyword semantics, not search's**: title + summary only, whole-word for Latin
+  terms — `content` is excluded because its extra hits are mostly markup (`alt`, captions, `href`
+  slugs, where a hyphen is a word boundary) and one-line mentions in long digests. `title_zh` is
+  excluded too: it only exists from 2026-08-05, so matching it would draw that date as a step in
+  every CJK curve — `英伟达|Nvidia` (`|` = OR-synonyms, one series) covers the cross-language case.
+  No LIMIT on the count, 500 on the list; `?day=` narrows the list server-side (never filtered
+  client-side, since the list is capped). The chart is hand-written SVG — no chart dependency.
+  Rationale + measurements: `docs/plan-keyword-trend.md`.
 - Outbound content/favicon fetches pass through an SSRF guard (`internal/ssrf`).
 - Push has two independent axes, deliberately not merged: `feeds.push_enabled` says *this source is
   worth a notification* (global, one row shared by every device), `push_subscriptions` says *this
@@ -305,6 +315,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/collections/:id/articles` | the collection's merged stream; `?summary=1` |
 | GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest`, `?summary=1` |
 | GET | `/api/today` | today's articles, same `?mode=` toggle; `?summary=1` |
+| GET | `/api/trend` | per-day match counts + totals for `?q=` (`a\|b` = synonyms) over `?days=7\|30\|90`; matching articles (≤500, `?limit=`), `?day=` narrows them |
 | GET | `/api/starred` | starred articles |
 | GET | `/api/podcasts` | episodes with a non-empty `audio_url` |
 | GET | `/api/starred/count` | badge count |
@@ -328,12 +339,13 @@ language, drop stale/redundant chrome.
 
 ### MCP server (`internal/mcp`)
 
-Mounted at `POST /mcp` on `NewLocalRouter` only (loopback, no auth by design). 13 tools, each a
+Mounted at `POST /mcp` on `NewLocalRouter` only (loopback, no auth by design). 14 tools, each a
 thin self-call into `http://127.0.0.1:LOCAL_API_PORT/api/...` (`internal/mcp/client.go`) rather
 than duplicating `internal/httpapi`'s handler logic: `list_feeds`, `add_feed`, `rename_feed`,
 `delete_feed`, `import_opml`, `get_all_articles`, `get_today_articles`, `get_starred_articles`,
 `get_feed_articles`, `get_starred_count`, `toggle_star`, `get_current_article`,
-`fetch_article_content`.
+`fetch_article_content`, `get_keyword_trend` (`/api/trend?limit=30` — buckets for the shape, 30
+headlines to explain it).
 
 The three list tools call their endpoint with `?summary=1`; the two cross-feed ones also pin
 `?mode=digest` — digest doesn't shrink the response (both modes cap at 500), it changes who fills

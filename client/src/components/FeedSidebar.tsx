@@ -79,7 +79,7 @@ export default function FeedSidebar({
 
   // Keep the box in sync when search is exited from elsewhere (e.g. a feed click).
   useEffect(() => {
-    if (selectedView.type !== 'search') setQuery('');
+    if (selectedView.type !== 'search' && selectedView.type !== 'trend') setQuery('');
   }, [selectedView.type]);
 
   // Clear the debounce timer on unmount to avoid calling `onSearch` after the component is gone.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -18,9 +19,9 @@ func textResult(v any) (*mcp.CallToolResult, any, error) {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}, nil, nil
 }
 
-// NewServer builds the FeedOverflow MCP server: the same 13 tools as the Node
-// original (server/mcp.ts, legacy_server_node branch), each a thin call into
-// the loopback API at 127.0.0.1:port.
+// NewServer builds the FeedOverflow MCP server: the 13 tools of the Node
+// original (server/mcp.ts, legacy_server_node branch) plus get_keyword_trend,
+// each a thin call into the loopback API at 127.0.0.1:port.
 func NewServer(port int) *mcp.Server {
 	c := newClient(port)
 	server := mcp.NewServer(&mcp.Implementation{Name: "feedoverflow", Version: "1.0.0"}, nil)
@@ -155,6 +156,29 @@ func NewServer(port int) *mcp.Server {
 			"use fetch_article_content for the full text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in feedArticlesInput) (*mcp.CallToolResult, any, error) {
 		res, err := c.get(ctx, "/api/feeds/"+url.PathEscape(in.FeedID)+"/articles?summary=1")
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(res)
+	})
+
+	// Buckets give the shape; the 30 newest matching headlines explain the latest
+	// bars without handing an agent the full 500-row list.
+	type keywordTrendInput struct {
+		Query string `json:"query" jsonschema:"Keyword; separate synonyms with | (e.g. 英伟达|Nvidia)"`
+		Days  int    `json:"days,omitempty" jsonschema:"Window in days: 7, 30 (default) or 90"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "get_keyword_trend",
+		Description: "Count articles mentioning a keyword per local day over the last 7/30/90 days, with each " +
+			"day's total article count and the 30 newest matching articles. Matches title and summary " +
+			"(whole words for Latin keywords), not the article body.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in keywordTrendInput) (*mcp.CallToolResult, any, error) {
+		days := in.Days
+		if days == 0 {
+			days = 30
+		}
+		res, err := c.get(ctx, "/api/trend?q="+url.QueryEscape(in.Query)+"&days="+strconv.Itoa(days)+"&limit=30")
 		if err != nil {
 			return nil, nil, err
 		}

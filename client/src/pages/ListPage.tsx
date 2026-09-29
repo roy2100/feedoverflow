@@ -1,8 +1,9 @@
 import { useAudio } from '../AudioContext';
 import ArticleList from '../components/ArticleList';
+import TrendChart from '../components/TrendChart';
 import { useStore } from '../store';
 import type { Article, MobilePage } from '../types';
-import { viewTitle } from '../viewTitle';
+import { emptyTextOf, searchTabOf, viewTitle } from '../viewTitle';
 
 interface ListPageProps {
   onNavigate: (page: MobilePage) => void;
@@ -18,6 +19,7 @@ export default function ListPage({ onNavigate }: ListPageProps) {
     loadArticles,
     listMode,
     setListMode,
+    setSearchTab,
   } = useStore();
   const { currentEpisode, isPlaying, isBuffering, onPlay } = useAudio();
 
@@ -44,6 +46,10 @@ export default function ListPage({ onNavigate }: ListPageProps) {
       showModeToggle={selectedView.type === 'all' || selectedView.type === 'today'}
       listMode={listMode}
       onSetListMode={setListMode}
+      searchTab={searchTabOf(selectedView)}
+      onSetSearchTab={setSearchTab}
+      topSlot={selectedView.type === 'trend' ? <TrendChart /> : undefined}
+      emptyText={emptyTextOf(selectedView)}
     />
   );
 }

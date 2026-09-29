@@ -89,13 +89,41 @@ export interface SearchScope {
 }
 
 // Which list is shown in the middle panel. `feed` is present only for `type: 'feed'`,
-// `collection` only for `type: 'collection'`, `query` / `scope` only for `type: 'search'`.
+// `collection` only for `type: 'collection'`, `query` for `search` and `trend`, `scope`
+// only for `search`, `days` / `day` only for `trend`.
+//
+// `trend` is the 趋势 tab of a search: the same query drawn as a per-day count, with
+// the list showing exactly the articles the bars counted (optionally one `day` of
+// them). It matches differently from search on purpose — see docs/plan-keyword-trend.md.
 export interface View {
-  type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search';
+  type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search' | 'trend';
   feed?: Feed;
   collection?: Collection;
   query?: string;
   scope?: SearchScope;
+  days?: TrendDays;
+  day?: string;
+}
+
+export type TrendDays = 7 | 30 | 90;
+
+// The two tabs of a search, shown as a toggle in the list header.
+export type SearchTab = 'results' | 'trend';
+
+// One local calendar day of a keyword trend (GET /api/trend).
+export interface TrendBucket {
+  date: string; // YYYY-MM-DD
+  count: number; // articles matching the query
+  total: number; // all articles that day
+}
+
+// The chart half of a trend response, keyed by what produced it so a bar click
+// (same query + days, new `day`) keeps the chart while the list reloads.
+export interface TrendData {
+  query: string;
+  days: TrendDays;
+  matched: number;
+  buckets: TrendBucket[];
 }
 
 // Mobile single-pane navigation.

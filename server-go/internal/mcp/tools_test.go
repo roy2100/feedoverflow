@@ -164,6 +164,15 @@ func TestGetFeedArticles(t *testing.T) {
 	}
 }
 
+func TestGetKeywordTrend(t *testing.T) {
+	session, got := testServerAndAPI(t, jsonOK(`{}`))
+	callTool(t, session, "get_keyword_trend", map[string]any{"query": "英伟达|Nvidia"})
+	want := "/api/trend?q=%E8%8B%B1%E4%BC%9F%E8%BE%BE%7CNvidia&days=30&limit=30"
+	if len(*got) != 1 || (*got)[0].path != want {
+		t.Fatalf("want GET %s, got %#v", want, *got)
+	}
+}
+
 func TestGetStarredCount(t *testing.T) {
 	session, got := testServerAndAPI(t, jsonOK(`{"count":3}`))
 	out := callTool(t, session, "get_starred_count", nil)

@@ -36,16 +36,22 @@ func scanArticleRows(rows *sql.Rows) ([]articles.Row, error) {
 	var out []articles.Row
 	for rows.Next() {
 		var r articles.Row
-		if err := rows.Scan(
-			&r.ArticleID, &r.FeedID, &r.FeedName, &r.Title, &r.TitleZh, &r.Link, &r.PubDate,
-			&r.Summary, &r.Content, &r.Author, &r.AudioURL, &r.AudioDuration,
-			&r.IsStarred, &r.ContentUpdatedAt,
-		); err != nil {
+		if err := scanArticleRow(rows, &r); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// scanArticleRow scans the articleCols/articleColsNoContent columns into r,
+// followed by any extra columns a caller selected after them.
+func scanArticleRow(rows *sql.Rows, r *articles.Row, extra ...any) error {
+	return rows.Scan(append([]any{
+		&r.ArticleID, &r.FeedID, &r.FeedName, &r.Title, &r.TitleZh, &r.Link, &r.PubDate,
+		&r.Summary, &r.Content, &r.Author, &r.AudioURL, &r.AudioDuration,
+		&r.IsStarred, &r.ContentUpdatedAt,
+	}, extra...)...)
 }
 
 // ListFeeds — GET /api/feeds: raw feed rows ordered by rowid (category omitted).

@@ -13,6 +13,7 @@ const INITIAL_STATE = {
   starredCount: 0,
   lastListView: { type: 'today' } as View,
   scopedSearch: false,
+  trend: null,
 };
 
 function mockFetch(json: unknown = { articles: [] }) {
@@ -525,5 +526,81 @@ describe('collections', () => {
     });
     await useStore.getState().deleteCollection('c2');
     expect(useStore.getState().selectedView.collection?.id).toBe('c1');
+  });
+});
+
+// ─── keyword trend ───────────────────────────────────────────────────────────
+
+describe('trend', () => {
+  const buckets = [{ date: '2026-09-30', count: 2, total: 10 }];
+  const trendResponse = { articles: [{ id: 't1' }], matched: 2, buckets };
+
+  it('builds /api/trend with days and an optional day', async () => {
+    await useStore.getState().loadArticles({ type: 'trend', query: 'Muse|缪斯', days: 7 });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/trend?q=Muse%7C%E7%BC%AA%E6%96%AF&days=7',
+      expect.any(Object),
+    );
+    await useStore
+      .getState()
+      .loadArticles({ type: 'trend', query: 'Muse', days: 30, day: '2026-09-29' });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/trend?q=Muse&days=30&day=2026-09-29',
+      expect.any(Object),
+    );
+  });
+
+  it('stores the chart alongside the articles', async () => {
+    vi.stubGlobal('fetch', mockFetch(trendResponse));
+    await useStore.getState().loadArticles({ type: 'trend', query: 'Muse', days: 30 });
+    expect(useStore.getState().trend).toEqual({ query: 'Muse', days: 30, matched: 2, buckets });
+    expect(useStore.getState().articles).toHaveLength(1);
+  });
+
+  // A bar click reloads the list only; the chart must not blink out while it does.
+  it('keeps the chart for a day change, drops it for a new range or another view', async () => {
+    const chart = { query: 'Muse', days: 30 as const, matched: 2, buckets };
+    useStore.setState({ trend: chart });
+    const pending = useStore
+      .getState()
+      .loadArticles({ type: 'trend', query: 'Muse', days: 30, day: '2026-09-30' });
+    expect(useStore.getState().trend).toBe(chart);
+    await pending;
+
+    useStore.setState({ trend: chart });
+    void useStore.getState().loadArticles({ type: 'trend', query: 'Muse', days: 90 });
+    expect(useStore.getState().trend).toBeNull();
+
+    useStore.setState({ trend: chart });
+    void useStore.getState().loadArticles({ type: 'all' });
+    expect(useStore.getState().trend).toBeNull();
+  });
+
+  it('switches between the 结果 and 趋势 tabs keeping the query', () => {
+    useStore.getState().search('Muse');
+    useStore.getState().setSearchTab('trend');
+    expect(useStore.getState().selectedView).toEqual({ type: 'trend', query: 'Muse', days: 30 });
+    useStore.getState().setSearchTab('results');
+    expect(useStore.getState().selectedView).toMatchObject({ type: 'search', query: 'Muse' });
+  });
+
+  it('a new query typed on the 趋势 tab stays on it, with its range', () => {
+    useStore.setState({ selectedView: { type: 'trend', query: 'Muse', days: 90 } });
+    useStore.getState().search('Grok');
+    expect(useStore.getState().selectedView).toEqual({ type: 'trend', query: 'Grok', days: 90 });
+  });
+
+  it('range and day setters rebuild the view; a range change clears the day', () => {
+    useStore.setState({ selectedView: { type: 'trend', query: 'Muse', days: 30 } });
+    useStore.getState().setTrendDay('2026-09-29');
+    expect(useStore.getState().selectedView.day).toBe('2026-09-29');
+    useStore.getState().setTrendDays(7);
+    expect(useStore.getState().selectedView).toEqual({ type: 'trend', query: 'Muse', days: 7 });
+  });
+
+  it('is never remembered as the base view search scopes to', () => {
+    useStore.setState({ lastListView: { type: 'starred' } });
+    useStore.getState().selectView({ type: 'trend', query: 'Muse', days: 30 });
+    expect(useStore.getState().lastListView).toEqual({ type: 'starred' });
   });
 });

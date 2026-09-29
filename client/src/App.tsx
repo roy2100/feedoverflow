@@ -6,6 +6,7 @@ import ArticleReader from './components/ArticleReader';
 import FeedSidebar from './components/FeedSidebar';
 import LoginForm from './components/LoginForm';
 import type { ManageTab } from './components/ManageModal';
+import TrendChart from './components/TrendChart';
 import { useIsMobile } from './hooks/useIsMobile';
 import {
   clearProgress,
@@ -18,7 +19,7 @@ import ListPage from './pages/ListPage';
 import ReaderPage from './pages/ReaderPage';
 import { useStore } from './store';
 import type { AudioCtxValue, Article, MobilePage } from './types';
-import { viewTitle } from './viewTitle';
+import { emptyTextOf, searchTabOf, viewTitle } from './viewTitle';
 
 // Panel nesting depth (订阅源 → 列表 → 文章) — what the slide animation reads.
 // Deliberately *not* mirrored into browser history: iOS's edge-swipe is a native,
@@ -87,6 +88,7 @@ export default function App() {
     toggleSearchScope,
     listMode,
     setListMode,
+    setSearchTab,
     llmReady,
   } = useStore();
 
@@ -525,6 +527,10 @@ export default function App() {
             showModeToggle={selectedView.type === 'all' || selectedView.type === 'today'}
             listMode={listMode}
             onSetListMode={setListMode}
+            searchTab={searchTabOf(selectedView)}
+            onSetSearchTab={setSearchTab}
+            topSlot={selectedView.type === 'trend' ? <TrendChart /> : undefined}
+            emptyText={emptyTextOf(selectedView)}
           />
         )}
         <div
