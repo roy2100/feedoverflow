@@ -79,6 +79,20 @@ body,
   height: var(--app-height, 100dvh);
 }
 
+/* iOS 26+ draws a Liquid Glass edge blur over the top of an installed web app,
+ * about 40pt deep, as system chrome above the page — no CSS, meta tag or status
+ * bar style turns it off (the status bar style was tried: no effect on iOS 27).
+ * The only fix is to keep content out of it: App.tsx pads its root down by this
+ * much, and the band shows plain page background, where blur is invisible.
+ * `-webkit-touch-callout` is iOS-only, so macOS web apps and Android keep 0. */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --edge-blur-clearance: 40px;
+    }
+  }
+}
+
 /* Prevent pull-to-refresh and momentum scroll issues on iOS */
 body {
   overscroll-behavior: none;

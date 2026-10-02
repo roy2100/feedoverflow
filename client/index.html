@@ -11,11 +11,9 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#F5F2EE" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <!-- `default`, never `black-translucent`: from iOS 26 a translucent status bar
-         gets a Liquid Glass edge blur that reaches ~40pt below it, over the panel
-         headers (plainly visible since iOS 27). No CSS or meta turns that blur off;
-         an opaque status bar removes the inset it is drawn into. iOS reads this tag
-         when the app is added to the Home Screen — re-add the app after changing it. -->
+    <!-- Switched from `black-translucent` to drop the iOS 26+ top edge blur; on an
+         iOS 27 device it made no difference (the fix is the clearance in
+         index.css). Read at Home Screen install only. -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="FeedOverflow" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
