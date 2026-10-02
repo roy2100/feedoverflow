@@ -71,7 +71,7 @@ client/             Vite + React + TypeScript (port 3000)
   src/App.tsx       top-level layout/auth/audio owner
   src/store.ts      zustand store — feeds/articles/views + all fetch logic
   src/types.ts      shared client types, mirrors server-go/internal/model
-  src/components/   FeedSidebar, ArticleList, ArticleReader, ModalOverlay, ManageModal (+ its
+  src/components/   FeedSidebar, ArticleList, ArticleDeck, ArticleReader, ModalOverlay, ManageModal (+ its
                     FeedsPanel / CollectionsPanel / AddFeedPanel bodies), SettingsModal,
                     PodcastPlayer, LoginForm
   src/pages/        mobile single-pane wrappers (FeedsPage, ListPage, ReaderPage)
@@ -81,6 +81,16 @@ The mobile panel (订阅源 → 列表 → 文章) is plain React state in `App.
 mirrored into browser history — don't reintroduce `pushState` here. Back is the in-app ← arrow
 only; the edge-swipe does nothing. The iOS-only rendering bugs that came out of the coupling are
 catalogued in `docs/plan-drop-mobile-history.md`.
+
+**刷 (card deck)** is a second *presentation* of the mobile list panel, not a view: the same
+`articles`, one full-screen card each, swiped vertically (`ArticleDeck`, toggled from the list
+header, `presentation` persisted per device; mobile only, not offered on 趋势). The subset is
+whatever the list already is — a 合集 is the tool for narrowing it. The gesture is CSS scroll
+snap (`scroll-snap-stop: always`), never JS touch tracking. **Swiping must not call
+`selectArticle`** — the always-mounted reader would fetch the body of every card flicked past;
+only a tap selects. Cards need summaries, so the deck asks for `?summary=short` (server-clipped
+to 400 UTF-16 units + `…`) on the five views that strip them; desktop never sends it. No
+read/unread: the deck starts at the newest card every load. Rationale: `docs/plan-swipe-deck.md`.
 
 Every modal renders through `ModalOverlay` — one portal, one backdrop, one Escape handler, one copy
 of the keyframes. Backdrop dismiss requires the backdrop to own **both** the `pointerdown` and the
@@ -307,17 +317,17 @@ language, drop stale/redundant chrome.
 | GET | `/api/feeds/export-opml` | the subscription list as an OPML attachment (inverse of import) |
 | PATCH | `/api/feeds/:id` | rename feed, repoint its `url`, and/or toggle `push_enabled` (all optional) |
 | DELETE | `/api/feeds/:id` | remove feed + purge its non-starred articles |
-| GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1` |
+| GET | `/api/feeds/:id/articles` | articles for one feed, up to 500; `?summary=1\|short` |
 | GET | `/api/collections` | list collections with their rules |
 | POST | `/api/collections` | create a collection (name + rules) |
 | PATCH | `/api/collections/:id` | rename and/or replace rules (both fields optional) |
 | DELETE | `/api/collections/:id` | remove a collection (articles untouched) |
-| GET | `/api/collections/:id/articles` | the collection's merged stream; `?summary=1` |
-| GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest`, `?summary=1` |
-| GET | `/api/today` | today's articles, same `?mode=` toggle; `?summary=1` |
+| GET | `/api/collections/:id/articles` | the collection's merged stream; `?summary=1\|short` |
+| GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest`, `?summary=1\|short` |
+| GET | `/api/today` | today's articles, same `?mode=` toggle; `?summary=1\|short` |
 | GET | `/api/trend` | per-day match counts + totals for `?q=` (`a\|b` = synonyms) over `?days=7\|30\|90`; matching articles (≤500, `?limit=`), `?day=` narrows them |
 | GET | `/api/starred` | starred articles |
-| GET | `/api/podcasts` | episodes with a non-empty `audio_url` |
+| GET | `/api/podcasts` | episodes with a non-empty `audio_url`; `?summary=short` |
 | GET | `/api/starred/count` | badge count |
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id` | one article (content included) — used only by the push deep link |

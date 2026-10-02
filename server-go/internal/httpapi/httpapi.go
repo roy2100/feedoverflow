@@ -215,13 +215,14 @@ func (s *Server) getFeeds(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
-	arts, err := s.listArticles(r.URL.Query().Get("mode"), 0, wantSummary(r))
+	sm := wantSummary(r)
+	arts, err := s.listArticles(r.URL.Query().Get("mode"), 0, sm.keep())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"articles":   articles.NormalizePubDates(arts),
+		"articles":   articles.NormalizePubDates(sm.clip(arts)),
 		"cacheReady": s.cacheReady(),
 	})
 }
@@ -229,13 +230,14 @@ func (s *Server) getAllArticles(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getToday(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	arts, err := s.listArticles(r.URL.Query().Get("mode"), midnight.UnixMilli(), wantSummary(r))
+	sm := wantSummary(r)
+	arts, err := s.listArticles(r.URL.Query().Get("mode"), midnight.UnixMilli(), sm.keep())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"articles":   articles.NormalizePubDates(arts),
+		"articles":   articles.NormalizePubDates(sm.clip(arts)),
 		"cacheReady": s.cacheReady(),
 	})
 }
@@ -295,13 +297,14 @@ func (s *Server) getStarred(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) getPodcasts(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) getPodcasts(w http.ResponseWriter, r *http.Request) {
 	rows, err := store.Podcasts(s.DB.Reader())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	arts := toArticles(rows, false, false)
+	sm := wantSummary(r)
+	arts := sm.clip(toArticles(rows, sm.keep(), false))
 	articles.ByPubDateDesc(arts)
 	if len(arts) > 100 {
 		arts = arts[:100]
@@ -453,17 +456,50 @@ func toArticles(rows []articles.Row, withSummary, withContent bool) []model.Arti
 	return out
 }
 
-// wantSummary reports whether a list request asked for the RSS summary column
-// (`?summary=1`). The browser never sets it — the list panes render title/feed
-// only, and shipping 500 summaries per request would be pure payload. The MCP
-// list tools do set it: an agent reading through the loopback API has no reader
-// pane to open, so a title-only list tells it nothing about the article.
-func wantSummary(r *http.Request) bool {
+// summaryMode is what a list request asked for of the RSS summary column.
+type summaryMode int
+
+const (
+	summaryNone  summaryMode = iota // default: the browser's list rows render title/feed only
+	summaryShort                    // `?summary=short`: the mobile card deck
+	summaryWhole                    // `?summary=1`: the MCP list tools
+)
+
+// cardSummaryLen is how much summary a `?summary=short` row keeps, in UTF-16 code
+// units like search's 300. A phone card shows about this much at most; a whole
+// summary can be a 28 kB digest, and the deck loads up to 500 rows at once.
+const cardSummaryLen = 400
+
+// wantSummary reads `?summary=`. The browser's list panes never set it — shipping
+// 500 summaries per request would be pure payload — except the mobile card deck,
+// which shows one and asks for `short`. The MCP list tools ask for the whole
+// thing: an agent reading through the loopback API has no reader pane to open,
+// so a title-only list tells it nothing about the article.
+func wantSummary(r *http.Request) summaryMode {
 	switch r.URL.Query().Get("summary") {
 	case "1", "true":
-		return true
+		return summaryWhole
+	case "short":
+		return summaryShort
 	}
-	return false
+	return summaryNone
+}
+
+// keep reports whether rows should be built with their summary at all.
+func (m summaryMode) keep() bool { return m != summaryNone }
+
+// clip shortens each summary for `short`, marking a cut with an ellipsis so a
+// card never ends mid-sentence as if that were the whole text.
+func (m summaryMode) clip(arts []model.Article) []model.Article {
+	if m != summaryShort {
+		return arts
+	}
+	for i := range arts {
+		if s := utf16Slice(arts[i].Summary, cardSummaryLen); s != arts[i].Summary {
+			arts[i].Summary = s + "…"
+		}
+	}
+	return arts
 }
 
 func serverError(w http.ResponseWriter, err error) {

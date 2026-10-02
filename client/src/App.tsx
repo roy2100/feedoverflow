@@ -461,7 +461,7 @@ export default function App() {
                 onNavigate={navigateMobile}
               />,
             )}
-            {panel(1, <ListPage onNavigate={navigateMobile} />)}
+            {panel(1, <ListPage onNavigate={navigateMobile} active={visiblePage === 'list'} />)}
             {panel(2, <ReaderPage onNavigate={navigateMobile} />)}
           </div>
           {currentEpisode && (

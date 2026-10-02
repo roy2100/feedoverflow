@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +97,12 @@ func TestFeedArticlesSummaryParam(t *testing.T) {
 	if content != "" {
 		t.Errorf("summary=1: want content still stripped, got %q", content)
 	}
+
+	summary, _ = listFields(t,
+		do(h, "GET", "/api/feeds/"+added.ID+"/articles?summary=short", "", nil).Body.String())
+	if summary != "the summary" {
+		t.Errorf("summary=short: want the summary, got %q", summary)
+	}
 }
 
 // The mirror of the stripping above: the two reads that *do* carry content must
@@ -129,5 +136,51 @@ func TestContentCarryingReads(t *testing.T) {
 	}
 	if one.Article.Content != "the content" {
 		t.Errorf("/api/articles/:id: want content, got %q", one.Article.Content)
+	}
+}
+
+// `?summary=short` is the mobile card deck's: a summary that fits passes through
+// untouched, a long one is cut to cardSummaryLen and marked with an ellipsis, and
+// content stays stripped either way. The feed endpoint needs a cache to ensure
+// freshness, so its `short` case lives in TestFeedArticlesSummaryParam.
+func TestListArticlesShortSummary(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	now := time.Now()
+	long := strings.Repeat("长", cardSummaryLen+50)
+	if _, err := s.DB.Writer().Exec(
+		`INSERT INTO article_states
+		   (article_id, feed_id, feed_name, title, link, pub_date, pub_ts, summary, content,
+		    audio_url, is_starred)
+		 VALUES ('p1', '1', 'F', 'T', 'https://x/p1', ?, ?, ?, 'the content', 'https://x/a.mp3', 0)`,
+		now.Format(time.RFC1123), now.UnixMilli(), long); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	for _, path := range []string{
+		"/api/all-articles?summary=short",
+		"/api/today?mode=digest&summary=short",
+		"/api/podcasts?summary=short",
+	} {
+		summary, content := listFields(t, do(h, "GET", path, "", nil).Body.String())
+		if want := strings.Repeat("长", cardSummaryLen) + "…"; summary != want {
+			t.Errorf("%s: want %d runes + ellipsis, got %d runes", path, cardSummaryLen,
+				len([]rune(summary)))
+		}
+		if content != "" {
+			t.Errorf("%s: want content stripped, got %q", path, content)
+		}
+	}
+
+	// Podcasts stays title-only without the param, like every other list.
+	if summary, _ := listFields(t, do(h, "GET", "/api/podcasts", "", nil).Body.String()); summary != "" {
+		t.Errorf("/api/podcasts: want summary stripped by default, got %d runes", len([]rune(summary)))
+	}
+
+	if _, err := s.DB.Writer().Exec(`UPDATE article_states SET summary = 'short one'`); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if summary, _ := listFields(t, do(h, "GET", "/api/all-articles?summary=short", "", nil).Body.String()); summary != "short one" {
+		t.Errorf("a summary that fits must pass through untouched, got %q", summary)
 	}
 }

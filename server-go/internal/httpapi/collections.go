@@ -168,14 +168,15 @@ func (s *Server) getCollectionArticles(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusNotFound, map[string]any{"error": "Not found"})
 		return
 	}
-	arts, err := s.collectionArticles(c, wantSummary(r))
+	sm := wantSummary(r)
+	arts, err := s.collectionArticles(c, sm.keep())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"name":     c.Name,
-		"articles": articles.NormalizePubDates(arts),
+		"articles": articles.NormalizePubDates(sm.clip(arts)),
 	})
 }
 

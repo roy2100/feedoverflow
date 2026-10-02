@@ -14,6 +14,7 @@ const INITIAL_STATE = {
   lastListView: { type: 'today' } as View,
   scopedSearch: false,
   trend: null,
+  presentation: 'rows' as const,
 };
 
 function mockFetch(json: unknown = { articles: [] }) {
@@ -187,6 +188,64 @@ describe('loadArticles URL mapping', () => {
     vi.stubGlobal('fetch', mockFetch({ articles: [{ id: 'x1' }] }));
     await useStore.getState().loadArticles({ type: 'all' });
     expect(useStore.getState().articles).toHaveLength(1);
+  });
+});
+
+// ─── card deck (刷) ───────────────────────────────────────────────────────────
+
+describe('card deck presentation', () => {
+  function setWidth(width: number) {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: width,
+    });
+  }
+  afterEach(() => setWidth(1024));
+
+  it.each<[View, string]>([
+    [{ type: 'today' }, '/api/today?mode=latest&summary=short'],
+    [{ type: 'podcast' }, '/api/podcasts?summary=short'],
+    [{ type: 'feed', feed: { id: '5' } as Feed }, '/api/feeds/5/articles?summary=short'],
+    [
+      { type: 'collection', collection: { id: 'c1' } as Collection },
+      '/api/collections/c1/articles?summary=short',
+    ],
+  ])('on a phone, view %o asks for snippets: %s', async (view, expectedUrl) => {
+    setWidth(390);
+    useStore.setState({ presentation: 'deck' });
+    await useStore.getState().loadArticles(view);
+    expect(fetch).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
+  });
+
+  // Starred carries the whole summary already, search a 300-char slice.
+  it('does not add the param where the response already has a summary', async () => {
+    setWidth(390);
+    useStore.setState({ presentation: 'deck' });
+    await useStore.getState().loadArticles({ type: 'starred' });
+    expect(fetch).toHaveBeenCalledWith('/api/starred', expect.any(Object));
+  });
+
+  // A desktop with `deck` left in localStorage must not pay for 500 summaries.
+  it('never asks for snippets on a desktop width', async () => {
+    useStore.setState({ presentation: 'deck' });
+    await useStore.getState().loadArticles({ type: 'all' });
+    expect(fetch).toHaveBeenCalledWith('/api/all-articles?mode=latest', expect.any(Object));
+  });
+
+  it('switching to the deck reloads the view (rows were loaded without summaries)', () => {
+    setWidth(390);
+    useStore.getState().setPresentation('deck');
+    expect(useStore.getState().presentation).toBe('deck');
+    expect(localStorage.getItem('list-presentation')).toBe('deck');
+    expect(fetch).toHaveBeenCalledWith('/api/today?mode=latest&summary=short', expect.any(Object));
+  });
+
+  it('switching back to rows keeps what is loaded', () => {
+    useStore.setState({ presentation: 'deck' });
+    useStore.getState().setPresentation('rows');
+    expect(useStore.getState().presentation).toBe('rows');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

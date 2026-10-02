@@ -129,6 +129,11 @@ export interface TrendData {
 // Mobile single-pane navigation.
 export type MobilePage = 'feeds' | 'list' | 'article';
 
+// How the mobile list panel draws the current list: compact rows, or 刷 — one
+// full-screen card per article, swiped vertically. Same articles either way; the
+// deck is a presentation, not a view. Rationale: docs/plan-swipe-deck.md.
+export type ListPresentation = 'rows' | 'deck';
+
 // Ordering for the merged multi-feed lists (全部 / 今日):
 // `latest` = strict global newest-first; `digest` = per-feed quota so every feed is represented.
 export type ListMode = 'latest' | 'digest';

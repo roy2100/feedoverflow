@@ -1,4 +1,4 @@
-import { ChevronLeft, Mic, PanelLeft, Loader2 } from 'lucide-react';
+import { ChevronLeft, GalleryVertical, Mic, PanelLeft, Loader2 } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { decodeEntities } from '../lib/decodeEntities';
@@ -6,8 +6,8 @@ import type { Article, ListMode, SearchTab } from '../types';
 import Segmented from './Segmented';
 
 // pubDate is canonical ISO-8601 from the server (it owns date parsing), so native
-// `new Date()` is reliable here.
-function formatDate(dateStr: string): string {
+// `new Date()` is reliable here. Shared with the card deck.
+export function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
   const now = new Date();
@@ -49,6 +49,8 @@ interface ArticleListProps {
   // Pinned between the header and the scrolling rows (the trend chart).
   topSlot?: ReactNode;
   emptyText?: string;
+  // Mobile only: switch this panel to the 刷 card deck. Absent ⇒ no button.
+  onShowDeck?: () => void;
 }
 
 export default function ArticleList({
@@ -74,6 +76,7 @@ export default function ArticleList({
   onSetSearchTab,
   topSlot,
   emptyText,
+  onShowDeck,
 }: ArticleListProps) {
   const listRef = useRef<HTMLDivElement>(null);
   // Mobile: pin the list to its first row on every fresh (re)load — on BOTH the
@@ -202,6 +205,24 @@ export default function ArticleList({
           <ModeToggle mode={listMode ?? 'latest'} onSet={onSetListMode} />
         )}
         {searchTab && onSetSearchTab && <SearchTabToggle tab={searchTab} onSet={onSetSearchTab} />}
+        {isMobile && onShowDeck && (
+          <button
+            onClick={onShowDeck}
+            aria-label="卡片模式"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              color: 'var(--text-tertiary)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '6px 0 6px 10px',
+              flexShrink: 0,
+            }}
+          >
+            <GalleryVertical size={18} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
       {topSlot}
 
