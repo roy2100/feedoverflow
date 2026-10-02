@@ -57,6 +57,8 @@ export default function ArticleDeck({
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
   indexRef.current = index;
+  // The card the arrow keys last sent the deck to, until it gets there.
+  const targetRef = useRef<number | null>(null);
 
   // Every card is exactly one scroller-height tall, so the current card is just
   // scrollTop / height — no IntersectionObserver needed.
@@ -65,11 +67,14 @@ export default function ArticleDeck({
     if (!el || el.clientHeight === 0) return;
     const i = Math.round(el.scrollTop / el.clientHeight);
     if (i !== indexRef.current) setIndex(i);
+    // Arrived where the arrow keys sent it: later presses start from here again.
+    if (i === targetRef.current) targetRef.current = null;
   };
 
   // A fresh (re)load starts at the top card, same as the rows.
   useLayoutEffect(() => {
     if (scrollerRef.current) scrollerRef.current.scrollTop = 0;
+    targetRef.current = null;
     setIndex(0);
   }, [loading]);
 
@@ -93,6 +98,33 @@ export default function ArticleDeck({
   }, []);
 
   const total = articles.length;
+
+  // ↑/↓ page one card — for a Mac window narrowed to the mobile layout, where
+  // there is no touch to swipe with. Only while the deck is the panel on screen,
+  // so the arrows never move it from behind the reader. Steps chain off the last
+  // requested card rather than the scroll position, so a second press during the
+  // smooth scroll advances again instead of re-targeting the card it is leaving.
+  useEffect(() => {
+    if (!active || loading || total === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return;
+      if (t.isContentEditable) return;
+      const el = scrollerRef.current;
+      if (!el) return;
+      e.preventDefault();
+      const from = targetRef.current ?? indexRef.current;
+      // `total` is the end card, the last place a step can land.
+      const to = Math.max(0, Math.min(total, from + (e.key === 'ArrowDown' ? 1 : -1)));
+      if (to === from) return;
+      targetRef.current = to;
+      el.scrollTo({ top: to * el.clientHeight, behavior: 'smooth' });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, loading, total]);
 
   return (
     <div

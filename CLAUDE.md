@@ -86,7 +86,8 @@ catalogued in `docs/plan-drop-mobile-history.md`.
 `articles`, one full-screen card each, swiped vertically (`ArticleDeck`, toggled from the list
 header, `presentation` persisted per device; mobile only, not offered on 趋势). The subset is
 whatever the list already is — a 合集 is the tool for narrowing it. The gesture is CSS scroll
-snap (`scroll-snap-stop: always`), never JS touch tracking. **Swiping must not call
+snap (`scroll-snap-stop: always`), never JS touch tracking; ↑/↓ page one card (a Mac window
+narrowed to the mobile layout), only while the deck is the panel on screen. **Swiping must not call
 `selectArticle`** — the always-mounted reader would fetch the body of every card flicked past;
 only a tap selects. Cards need summaries, so the deck asks for `?summary=short` (server-clipped
 to 400 UTF-16 units + `…`) on the five views that strip them; desktop never sends it. No

@@ -110,6 +110,64 @@ describe('ArticleDeck', () => {
     expect(props.onRefresh).toHaveBeenCalled();
   });
 
+  describe('arrow keys', () => {
+    function scroller() {
+      const el = screen.getByTestId('deck-scroller');
+      Object.defineProperty(el, 'clientHeight', { configurable: true, value: 600 });
+      const scrollTo = vi.fn();
+      el.scrollTo = scrollTo as unknown as typeof el.scrollTo;
+      return scrollTo;
+    }
+    const three = () => [article(), article({ id: 'a2' }), article({ id: 'a3' })];
+
+    it('↓ / ↑ page one card', () => {
+      renderDeck(three());
+      const scrollTo = scroller();
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 600, behavior: 'smooth' });
+      fireEvent.keyDown(document, { key: 'ArrowUp' });
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' });
+    });
+
+    // A second press during the smooth scroll must advance again, not re-aim at
+    // the card the deck has not yet left.
+    it('presses chain while the scroll is still moving', () => {
+      renderDeck(three());
+      const scrollTo = scroller();
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 1200, behavior: 'smooth' });
+    });
+
+    it('stops at the end card and at the first card', () => {
+      renderDeck([article()]);
+      const scrollTo = scroller();
+      fireEvent.keyDown(document, { key: 'ArrowUp' });
+      expect(scrollTo).not.toHaveBeenCalled();
+      fireEvent.keyDown(document, { key: 'ArrowDown' }); // → end card (index 1)
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+      expect(scrollTo).toHaveBeenCalledTimes(1);
+    });
+
+    // Behind the reader, the arrows belong to nobody — the deck must not move.
+    it('does nothing while the deck is not the panel on screen', () => {
+      renderDeck(three(), { active: false });
+      const scrollTo = scroller();
+      fireEvent.keyDown(document, { key: 'ArrowDown' });
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+
+    it('leaves a focused text field alone', () => {
+      renderDeck(three());
+      const scrollTo = scroller();
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(scrollTo).not.toHaveBeenCalled();
+      input.remove();
+    });
+  });
+
   it('the list button switches back to rows', () => {
     const props = renderDeck([article()]);
     fireEvent.click(screen.getByLabelText('列表模式'));
