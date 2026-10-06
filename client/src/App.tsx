@@ -448,8 +448,6 @@ export default function App() {
             display: 'flex',
             flexDirection: 'column',
             height: 'var(--app-height, 100dvh)',
-            // Clears the iOS edge blur (index.css); 0 outside an installed iOS app.
-            paddingTop: 'var(--edge-blur-clearance, 0px)',
             overflow: 'hidden',
             background: 'var(--bg)',
           }}
@@ -490,7 +488,6 @@ export default function App() {
         style={{
           display: 'flex',
           height: 'var(--app-height, 100vh)',
-          paddingTop: 'var(--edge-blur-clearance, 0px)',
           overflow: 'hidden',
           background: 'var(--bg)',
         }}
