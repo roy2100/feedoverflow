@@ -82,9 +82,10 @@ mirrored into browser history — don't reintroduce `pushState` here. Back is th
 only; the edge-swipe does nothing. The iOS-only rendering bugs that came out of the coupling are
 catalogued in `docs/plan-drop-mobile-history.md`.
 
-The PWA status bar style is `default`, **not** `black-translucent`: since iOS 26 a translucent
-status bar gets a system Liquid Glass blur reaching ~40pt below it, over every panel header, and
-nothing in CSS can switch it off (`client/index.html`). iOS reads the tag at Home Screen install.
+Since iOS 26 an installed web app gets a system Liquid Glass blur over its top ~40pt, drawn above
+the page. It is **accepted as-is** — don't try to fix it again. Both attempts failed on an iOS 27
+device: no CSS or meta switches it off, an opaque (`default`) status bar style made no difference,
+and padding the root below it left a blank band that looked worse than the blur.
 
 **刷 (card deck)** is a second *presentation* of the mobile list panel, not a view: the same
 `articles`, one full-screen card each, swiped vertically (`ArticleDeck`, toggled from the list
