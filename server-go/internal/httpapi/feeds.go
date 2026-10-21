@@ -321,7 +321,6 @@ func (s *Server) getFeedArticles(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	sm := wantSummary(r)
 	rows, err := store.NewestByFeed(s.DB.Reader(), f.ID, articles.ListLimit)
 	if err != nil {
 		serverError(w, err)
@@ -329,6 +328,6 @@ func (s *Server) getFeedArticles(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"feedName": f.Name,
-		"articles": articles.NormalizePubDates(sm.clip(toArticles(rows, sm.keep(), false))),
+		"articles": articles.NormalizePubDates(toArticles(rows, wantSummary(r), false)),
 	})
 }

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-import { isMobileWidth } from './hooks/useIsMobile';
 import type {
   Article,
   Collection,
@@ -8,7 +7,6 @@ import type {
   Feed,
   FeedPatch,
   ListMode,
-  ListPresentation,
   SearchScope,
   SearchTab,
   TrendData,
@@ -28,18 +26,6 @@ function scopeFromView(view: View): SearchScope | undefined {
   }
   return undefined;
 }
-
-// Views whose list response strips the summary unless asked. The card deck shows
-// one, so on these it asks for `?summary=short` (≤400 chars, server-clipped).
-// Starred already carries the whole summary and search a 300-char slice; the
-// deck is not offered on 趋势.
-const SNIPPETLESS: ReadonlySet<View['type']> = new Set([
-  'all',
-  'today',
-  'feed',
-  'collection',
-  'podcast',
-]);
 
 async function apiFetch(url: string, opts?: RequestInit): Promise<Response> {
   const r = await fetch(url, opts);
@@ -64,9 +50,6 @@ interface StoreState {
   scopedSearch: boolean;
   // Ordering for the merged 全部/今日 lists. Only those two views send it to the server.
   listMode: ListMode;
-  // Rows or the 刷 card deck, for the mobile list panel. Desktop ignores it.
-  presentation: ListPresentation;
-  setPresentation: (p: ListPresentation) => void;
   // Whether an LLM endpoint is configured (base_url + model + a stored key), which is
   // all the reader's on-demand AI 摘要 / 翻译正文 need. The global `enabled` switch is
   // the title worker's intent and does not gate an explicit click.
@@ -113,17 +96,6 @@ export const useStore = create<StoreState>((set, get) => ({
   trend: null,
   scopedSearch: false,
   listMode: localStorage.getItem('list-mode') === 'digest' ? 'digest' : 'latest',
-  presentation: localStorage.getItem('list-presentation') === 'deck' ? 'deck' : 'rows',
-
-  setPresentation: (p) => {
-    if (get().presentation === p) return;
-    localStorage.setItem('list-presentation', p);
-    set({ presentation: p });
-    // Rows were loaded without summaries; cards need them. Going back to rows
-    // keeps what is loaded — an extra field the rows never read.
-    const view = get().selectedView;
-    if (p === 'deck' && SNIPPETLESS.has(view.type)) get().loadArticles(view);
-  },
 
   init: async () => {
     try {
@@ -186,9 +158,6 @@ export const useStore = create<StoreState>((set, get) => ({
         if (view.type === 'all' || view.type === 'today') {
           url += `?mode=${get().listMode}`;
         }
-      }
-      if (get().presentation === 'deck' && isMobileWidth() && SNIPPETLESS.has(view.type)) {
-        url += `${url.includes('?') ? '&' : '?'}summary=short`;
       }
       const data = await apiFetch(url, { signal: controller.signal }).then((r) => r.json());
       set({ articles: data.articles || [] });
