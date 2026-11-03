@@ -253,34 +253,85 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // escaping lives here rather than being written twice.
 func LikeEscape(s string) string { return likeEscaper.Replace(s) }
 
-// Search — GET /api/search: LIKE across title/summary/content, optionally scoped
-// to starred or one feed, newest by pub_ts first, cap 200 (the caller re-sorts by
-// parsed date and slices to 100). Ordering must key on the numeric pub_ts, not the
-// raw text pub_date: pub_date is normalized to ISO only on the response, so a text
-// sort here would pick the wrong 200 rows and drop genuinely-newest matches before
-// the caller ever re-sorts. Port of routes/search.ts. `like` is the already-escaped
-// pattern (ESCAPE '\'); scope is "starred" | "feed" | "".
-func Search(r *sql.DB, like, scope, feedID string) ([]articles.Row, error) {
+// SearchOpts narrows a search. Scope is "starred" | "feed" | "" (FeedID applies to
+// "feed" only). Before (pub_ts, ms; 0 = none) keeps articles published strictly
+// before it. AfterID != "" resumes after the row (AfterTs, AfterID) of a previous
+// page — a keyset cursor, because pub_ts alone is not unique (date-only feeds
+// share timestamps) and "older than the last row" would drop the rest of a tie.
+type SearchOpts struct {
+	Scope, FeedID string
+	Before        int64
+	AfterTs       int64
+	AfterID       string
+	Limit         int
+}
+
+// SearchHit is one matching row plus the pub_ts the next page's cursor needs.
+type SearchHit struct {
+	Row   articles.Row
+	PubTs int64
+}
+
+// searchWhere is the WHERE clause shared by Search and SearchCount, without the
+// cursor (a count spans every page).
+func searchWhere(like string, o SearchOpts) (string, []any) {
 	// title_zh is searched alongside title: when a feed has translation on, the
 	// Chinese headline is what the list actually shows, so a query typed from what
 	// is on screen has to match it.
-	q := `SELECT ` + articleColsNoContent + ` FROM article_states
-		WHERE (title LIKE ? ESCAPE '\' OR title_zh LIKE ? ESCAPE '\'
+	q := ` WHERE (title LIKE ? ESCAPE '\' OR title_zh LIKE ? ESCAPE '\'
 		       OR summary LIKE ? ESCAPE '\' OR content LIKE ? ESCAPE '\')`
 	args := []any{like, like, like, like}
 	switch {
-	case scope == "starred":
+	case o.Scope == "starred":
 		q += ` AND is_starred = 1`
-	case scope == "feed" && feedID != "":
+	case o.Scope == "feed" && o.FeedID != "":
 		q += ` AND feed_id = ?`
-		args = append(args, feedID)
+		args = append(args, o.FeedID)
 	}
-	q += ` ORDER BY pub_ts DESC LIMIT 200`
-	rows, err := r.Query(q, args...)
+	if o.Before != 0 {
+		q += ` AND pub_ts < ?`
+		args = append(args, o.Before)
+	}
+	return q, args
+}
+
+// Search — GET /api/search: LIKE across title/title_zh/summary/content, newest
+// first by (pub_ts, article_id) — one total order, so a cursor neither skips nor
+// repeats a row. Ordering keys on the numeric pub_ts, never the raw text pub_date
+// (not normalized in the DB). `like` is the already-escaped pattern (ESCAPE '\').
+// A row with a NULL pub_ts sorts last and is never reached through a cursor; every
+// write path sets it.
+func Search(r *sql.DB, like string, o SearchOpts) ([]SearchHit, error) {
+	where, args := searchWhere(like, o)
+	if o.AfterID != "" {
+		where += ` AND (pub_ts < ? OR (pub_ts = ? AND article_id < ?))`
+		args = append(args, o.AfterTs, o.AfterTs, o.AfterID)
+	}
+	rows, err := r.Query(`SELECT `+articleColsNoContent+`, COALESCE(pub_ts, 0) FROM article_states`+
+		where+` ORDER BY pub_ts DESC, article_id DESC LIMIT ?`, append(args, o.Limit)...)
 	if err != nil {
 		return nil, err
 	}
-	return scanArticleRows(rows)
+	defer rows.Close()
+	var out []SearchHit
+	for rows.Next() {
+		var h SearchHit
+		if err := scanArticleRow(rows, &h.Row, &h.PubTs); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// SearchCount counts every match for like + scope + Before, ignoring the cursor and
+// the limit. It reads every row's text (a page of a common term stops early), so
+// callers ask for it explicitly.
+func SearchCount(r *sql.DB, like string, o SearchOpts) (int, error) {
+	where, args := searchWhere(like, o)
+	var n int
+	err := r.QueryRow(`SELECT count(*) FROM article_states`+where, args...).Scan(&n)
+	return n, err
 }
 
 // Settings — GET /api/settings: all key/value pairs as a flat map.

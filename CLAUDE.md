@@ -320,6 +320,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/collections/:id/articles` | the collection's merged stream; `?summary=1` |
 | GET | `/api/all-articles` | merged + sorted, up to 500; `?mode=latest\|digest`, `?summary=1` |
 | GET | `/api/today` | today's articles, same `?mode=` toggle; `?summary=1` |
+| GET | `/api/search` | `?q=` substring over title/title_zh/summary/content (`?scope=starred\|feed&feedId=`); 100 per page, newest first, `next` cursor (`?cursor=`), `?before=<date>`, `?count=1` adds `total` |
 | GET | `/api/trend` | per-day match counts + totals for `?q=` (`a\|b` = synonyms) over `?days=7\|30\|90`; matching articles (≤500, `?limit=`), `?day=` narrows them |
 | GET | `/api/starred` | starred articles |
 | GET | `/api/podcasts` | episodes with a non-empty `audio_url` |
@@ -350,8 +351,9 @@ than duplicating `internal/httpapi`'s handler logic: `list_feeds`, `add_feed`, `
 `delete_feed`, `import_opml`, `get_all_articles`, `get_today_articles`, `get_starred_articles`,
 `get_feed_articles`, `get_starred_count`, `toggle_star`, `get_current_article`,
 `fetch_article_content`, `get_keyword_trend` (`/api/trend?limit=30` — buckets for the shape, 30
-headlines to explain it), `search_articles` (`/api/search` — the search box's `LIKE`, one literal
-substring, newest 100; `feed_id` or `starred` narrow it, never both).
+headlines to explain it), `search_articles` (`/api/search?count=1` — the search box's `LIKE`, one literal
+substring, 100 per page with `total` and a `next` cursor, `before` to jump to a date; `feed_id` or
+`starred` narrow it, never both).
 
 The three list tools call their endpoint with `?summary=1`; the two cross-feed ones also pin
 `?mode=digest` — digest doesn't shrink the response (both modes cap at 500), it changes who fills

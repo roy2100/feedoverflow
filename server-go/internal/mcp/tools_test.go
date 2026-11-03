@@ -170,9 +170,11 @@ func TestSearchArticles(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{"all", map[string]any{"query": "英伟达 a&b"}, "/api/search?q=%E8%8B%B1%E4%BC%9F%E8%BE%BE+a%26b"},
-		{"feed", map[string]any{"query": "go", "feed_id": "a/b"}, "/api/search?q=go&scope=feed&feedId=a%2Fb"},
-		{"starred", map[string]any{"query": "go", "starred": true}, "/api/search?q=go&scope=starred"},
+		{"all", map[string]any{"query": "英伟达 a&b"}, "/api/search?q=%E8%8B%B1%E4%BC%9F%E8%BE%BE+a%26b&count=1"},
+		{"feed", map[string]any{"query": "go", "feed_id": "a/b"}, "/api/search?q=go&count=1&scope=feed&feedId=a%2Fb"},
+		{"starred", map[string]any{"query": "go", "starred": true}, "/api/search?q=go&count=1&scope=starred"},
+		{"paged", map[string]any{"query": "go", "before": "2026-09-01", "cursor": "1780000000000_abc"},
+			"/api/search?q=go&count=1&before=2026-09-01&cursor=1780000000000_abc"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

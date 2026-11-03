@@ -2,8 +2,14 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
+
+	"rss-reader/server-go/internal/dates"
 )
 
 func seedSearchRow(t *testing.T, s *Server, id, feedID, title, content string, starred int) {
@@ -115,5 +121,105 @@ func TestSearchSummaryTruncatedNoUpdatedAt(t *testing.T) {
 	}
 	if a["content"] != "" {
 		t.Errorf("search content should be empty, got %v", a["content"])
+	}
+}
+
+// searchPage decodes one /api/search response with its paging fields.
+type searchPage struct {
+	Articles []struct {
+		ID      string `json:"id"`
+		PubDate string `json:"pubDate"`
+	} `json:"articles"`
+	Next  *string `json:"next"`
+	Total *int    `json:"total"`
+}
+
+func getSearchPage(t *testing.T, h http.Handler, path string) searchPage {
+	t.Helper()
+	rec := do(h, "GET", path, "", nil)
+	if rec.Code != 200 {
+		t.Fatalf("%s: status %d: %s", path, rec.Code, rec.Body.String())
+	}
+	var p searchPage
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+	return p
+}
+
+// seedPaged inserts n matching rows, two per pub_ts so every page boundary can
+// fall inside a tie, newest first by id order a000 > a001 > ….
+func seedPaged(t *testing.T, s *Server, n int) {
+	t.Helper()
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
+	for i := 0; i < n; i++ {
+		ts := base - int64(i/2)*3_600_000
+		_, err := s.DB.Writer().Exec(
+			`INSERT INTO article_states (article_id, feed_id, feed_name, title, link, pub_date, pub_ts)
+			 VALUES (?, 'fA', 'F', 'match', ?, ?, ?)`,
+			fmt.Sprintf("a%03d", 999-i), fmt.Sprintf("https://x/%d", i), dates.ISOString(ts), ts)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestSearchPagesWithCursor(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	seedPaged(t, s, 205)
+
+	seen := map[string]bool{}
+	path := "/api/search?q=match"
+	var pages []int
+	for {
+		p := getSearchPage(t, h, path)
+		if p.Total != nil {
+			t.Fatal("total without count=1")
+		}
+		pages = append(pages, len(p.Articles))
+		for _, a := range p.Articles {
+			if seen[a.ID] {
+				t.Fatalf("article %s repeated", a.ID)
+			}
+			seen[a.ID] = true
+		}
+		if p.Next == nil {
+			break
+		}
+		path = "/api/search?q=match&cursor=" + url.QueryEscape(*p.Next)
+	}
+	if fmt.Sprint(pages) != "[100 100 5]" || len(seen) != 205 {
+		t.Fatalf("pages %v, %d distinct; want [100 100 5], 205", pages, len(seen))
+	}
+}
+
+func TestSearchBeforeAndCount(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	seedPaged(t, s, 10) // 2026-06-01T00:00Z back to 2026-05-31T20:00Z, two per hour
+
+	p := getSearchPage(t, h, "/api/search?q=match&count=1")
+	if p.Total == nil || *p.Total != 10 || p.Next != nil {
+		t.Fatalf("count=1: total %v next %v; want 10, null", p.Total, p.Next)
+	}
+	// before is exclusive: the two rows at 22:00Z and the four newer ones drop out.
+	p = getSearchPage(t, h, "/api/search?q=match&count=1&before=2026-05-31T22:00:00Z")
+	if len(p.Articles) != 4 || *p.Total != 4 || p.Articles[0].PubDate != "2026-05-31T21:00:00.000Z" {
+		t.Fatalf("before: %d articles, total %v, first %+v", len(p.Articles), *p.Total, p.Articles)
+	}
+}
+
+func TestSearchRejectsBadParams(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	for _, path := range []string{
+		"/api/search?q=x&before=yesterday",
+		"/api/search?q=x&cursor=nope",
+		"/api/search?q=x&cursor=12_",
+	} {
+		if rec := do(h, "GET", path, "", nil); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", path, rec.Code)
+		}
 	}
 }

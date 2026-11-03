@@ -99,7 +99,7 @@ from `article_states` collides and dedups correctly.
 | `GET /api/feeds/:id/articles` | `getCachedFeed` top 50 | all `article_states` for the feed | live wins; history backfills items aged out of the feed |
 | `GET /api/all-articles` | `getCachedFeed` top 5 / feed | — | cache only, merged across feeds |
 | `GET /api/today` | `getCachedFeed`, filtered to today | — | cache only |
-| `GET /api/search` | — | SQL `LIKE` over `article_states` (title/summary/content, limit 200) | DB only, re-sorted by parsed date, top 100 |
+| `GET /api/search` | — | SQL `LIKE` over `article_states` (title/title_zh/summary/content) | DB only, 100 per page by `(pub_ts, article_id)` desc; `before`, `cursor` → `next`, `count=1` → `total` (`docs/plan-search-paging.md`) |
 | `GET /api/starred` | — | `article_states WHERE is_starred=1` | DB only |
 | `GET /api/starred/count` | — | `article_states` aggregate | DB only |
 

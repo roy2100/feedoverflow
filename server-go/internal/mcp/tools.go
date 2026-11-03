@@ -187,29 +187,42 @@ func NewServer(port int) *mcp.Server {
 	})
 
 	// The same search the web UI's search box runs: one literal substring, so the
-	// description steers the model to one term per call and synonyms in turn.
+	// description steers the model to one term per call and synonyms in turn. It
+	// always asks for total: an agent needs "N matches, here are the newest 100"
+	// to know whether to page on, and it has no list to scroll.
 	type searchArticlesInput struct {
 		Query   string `json:"query" jsonschema:"Text to look for, matched as one literal substring (one term works best)"`
 		FeedID  string `json:"feed_id,omitempty" jsonschema:"Only search this feed (ID from list_feeds)"`
 		Starred bool   `json:"starred,omitempty" jsonschema:"Only search starred articles"`
+		Before  string `json:"before,omitempty" jsonschema:"Only articles published before this date, e.g. 2026-09-01 (local midnight) or an ISO time"`
+		Cursor  string `json:"cursor,omitempty" jsonschema:"The next value of a previous call with the same query and filters, for the following page"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "search_articles",
 		Description: "Search every stored article, not just recent ones, for a keyword in the title, the " +
 			"translated title, the RSS summary or the stored body. The query is one literal substring " +
 			"(case-insensitive for Latin letters): search one term at a time and try synonyms or the " +
-			"other language (英伟达, Nvidia) in separate calls. Returns up to 100 matches, newest first, " +
-			"each with a summary of up to 300 characters; use fetch_article_content for the full text.",
+			"other language (英伟达, Nvidia) in separate calls. Returns up to 100 matches per call, newest " +
+			"first, each with a summary of up to 300 characters, plus total (all matches for these " +
+			"filters) and next. For older matches, call again with the same arguments and cursor set to " +
+			"next (null on the last page), or set before to jump to a date. Use fetch_article_content " +
+			"for the full text.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchArticlesInput) (*mcp.CallToolResult, any, error) {
 		if in.FeedID != "" && in.Starred {
 			return nil, nil, errors.New("pass feed_id or starred, not both")
 		}
-		path := "/api/search?q=" + url.QueryEscape(in.Query)
+		path := "/api/search?q=" + url.QueryEscape(in.Query) + "&count=1"
 		switch {
 		case in.FeedID != "":
 			path += "&scope=feed&feedId=" + url.QueryEscape(in.FeedID)
 		case in.Starred:
 			path += "&scope=starred"
+		}
+		if in.Before != "" {
+			path += "&before=" + url.QueryEscape(in.Before)
+		}
+		if in.Cursor != "" {
+			path += "&cursor=" + url.QueryEscape(in.Cursor)
 		}
 		res, err := c.get(ctx, path)
 		if err != nil {

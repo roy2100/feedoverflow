@@ -327,6 +327,23 @@ func TestResolveURL(t *testing.T) {
 	}
 }
 
+// searchIDs runs store.Search and projects the article ids.
+func searchIDs(t *testing.T, r *sql.DB, like string, o store.SearchOpts) []string {
+	t.Helper()
+	if o.Limit == 0 {
+		o.Limit = 100
+	}
+	hits, err := store.Search(r, like, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make([]string, len(hits))
+	for i, h := range hits {
+		out[i] = h.Row.ArticleID
+	}
+	return out
+}
+
 func TestSearch(t *testing.T) {
 	h := newTestDB(t)
 	w := h.Writer()
@@ -335,34 +352,45 @@ func TestSearch(t *testing.T) {
 	insertArticle(t, w, af{id: "c", feedID: "f2", link: "l3", title: "y", content: "deep golang dive", pubDate: "2021-01-01", pubTs: 100})
 	insertArticle(t, w, af{id: "u_hit", feedID: "f2", link: "l4", title: "a_b literal", pubDate: "2020-01-01", pubTs: 20})
 	insertArticle(t, w, af{id: "u_miss", feedID: "f2", link: "l5", title: "axb other", pubDate: "2020-01-02", pubTs: 30})
+	r := h.Reader()
 
 	// Unscoped: matches title/summary/content, newest pub_ts first.
-	res, err := store.Search(h.Reader(), "%golang%", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	eqStrings(t, articleIDs(res), []string{"t", "s", "c"})
-
+	eqStrings(t, searchIDs(t, r, "%golang%", store.SearchOpts{}), []string{"t", "s", "c"})
 	// starred scope.
-	res, err = store.Search(h.Reader(), "%golang%", "starred", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	eqStrings(t, articleIDs(res), []string{"t"})
-
+	eqStrings(t, searchIDs(t, r, "%golang%", store.SearchOpts{Scope: "starred"}), []string{"t"})
 	// feed scope.
-	res, err = store.Search(h.Reader(), "%golang%", "feed", "f2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	eqStrings(t, articleIDs(res), []string{"c"})
-
+	eqStrings(t, searchIDs(t, r, "%golang%", store.SearchOpts{Scope: "feed", FeedID: "f2"}), []string{"c"})
 	// ESCAPE '\': "a\_b" matches the literal underscore only.
-	res, err = store.Search(h.Reader(), `%a\_b%`, "", "")
-	if err != nil {
-		t.Fatal(err)
+	eqStrings(t, searchIDs(t, r, `%a\_b%`, store.SearchOpts{}), []string{"u_hit"})
+	// Before is exclusive.
+	eqStrings(t, searchIDs(t, r, "%golang%", store.SearchOpts{Before: 300}), []string{"s", "c"})
+}
+
+// A cursor resumes inside a pub_ts tie: date-only feeds share timestamps, so
+// paging by "older than the last row's time" would lose the rest of the tie.
+func TestSearchCursorAcrossTie(t *testing.T) {
+	h := newTestDB(t)
+	w := h.Writer()
+	insertArticle(t, w, af{id: "a", feedID: "f1", link: "la", title: "go", pubTs: 500})
+	insertArticle(t, w, af{id: "d", feedID: "f1", link: "ld", title: "go", pubTs: 400})
+	insertArticle(t, w, af{id: "c", feedID: "f1", link: "lc", title: "go", pubTs: 400})
+	insertArticle(t, w, af{id: "b", feedID: "f1", link: "lb", title: "go", pubTs: 400})
+	insertArticle(t, w, af{id: "z", feedID: "f1", link: "lz", title: "go", pubTs: 100})
+	r := h.Reader()
+
+	eqStrings(t, searchIDs(t, r, "%go%", store.SearchOpts{Limit: 2}), []string{"a", "d"})
+	eqStrings(t, searchIDs(t, r, "%go%", store.SearchOpts{Limit: 2, AfterTs: 400, AfterID: "d"}), []string{"c", "b"})
+	eqStrings(t, searchIDs(t, r, "%go%", store.SearchOpts{Limit: 2, AfterTs: 400, AfterID: "b"}), []string{"z"})
+
+	// The count ignores the cursor but honours Before.
+	n, err := store.SearchCount(r, "%go%", store.SearchOpts{AfterTs: 400, AfterID: "b"})
+	if err != nil || n != 5 {
+		t.Fatalf("count: got %d, %v; want 5", n, err)
 	}
-	eqStrings(t, articleIDs(res), []string{"u_hit"})
+	n, err = store.SearchCount(r, "%go%", store.SearchOpts{Before: 400})
+	if err != nil || n != 1 {
+		t.Fatalf("count before 400: got %d, %v; want 1", n, err)
+	}
 }
 
 func TestSettings(t *testing.T) {
