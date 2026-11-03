@@ -164,6 +164,44 @@ func TestGetFeedArticles(t *testing.T) {
 	}
 }
 
+func TestSearchArticles(t *testing.T) {
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"all", map[string]any{"query": "英伟达 a&b"}, "/api/search?q=%E8%8B%B1%E4%BC%9F%E8%BE%BE+a%26b"},
+		{"feed", map[string]any{"query": "go", "feed_id": "a/b"}, "/api/search?q=go&scope=feed&feedId=a%2Fb"},
+		{"starred", map[string]any{"query": "go", "starred": true}, "/api/search?q=go&scope=starred"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			session, got := testServerAndAPI(t, jsonOK(`{"articles":[],"query":"go"}`))
+			callTool(t, session, "search_articles", tc.args)
+			if len(*got) != 1 || (*got)[0].method != "GET" || (*got)[0].path != tc.want {
+				t.Fatalf("want GET %s, got %#v", tc.want, *got)
+			}
+		})
+	}
+}
+
+func TestSearchArticlesRejectsBothFilters(t *testing.T) {
+	session, got := testServerAndAPI(t, jsonOK(`{}`))
+	res, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{
+		Name:      "search_articles",
+		Arguments: map[string]any{"query": "go", "feed_id": "1", "starred": true},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Fatalf("want IsError=true for feed_id + starred, got %#v", res)
+	}
+	if len(*got) != 0 {
+		t.Fatalf("want no API call, got %#v", *got)
+	}
+}
+
 func TestGetKeywordTrend(t *testing.T) {
 	session, got := testServerAndAPI(t, jsonOK(`{}`))
 	callTool(t, session, "get_keyword_trend", map[string]any{"query": "英伟达|Nvidia"})

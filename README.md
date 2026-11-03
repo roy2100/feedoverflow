@@ -88,7 +88,7 @@ turn it on.
 ### MCP server
 
 The Go server exposes a [Model Context Protocol](https://modelcontextprotocol.io) endpoint
-(Streamable HTTP transport) with **13 tools**, mounted at `/mcp` on the loopback-only,
+(Streamable HTTP transport) with **15 tools**, mounted at `/mcp` on the loopback-only,
 no-auth listener (`LOCAL_API_PORT`), so an MCP-capable client can drive the reader
 conversationally:
 
@@ -97,6 +97,7 @@ conversationally:
 | Feeds | `list_feeds`, `add_feed`, `rename_feed`, `delete_feed`, `import_opml` |
 | Reading | `get_all_articles`, `get_today_articles`, `get_feed_articles`, `get_starred_articles`, `get_starred_count` |
 | State | `toggle_star`, `get_current_article` |
+| Search | `search_articles`, `get_keyword_trend` |
 | Content | `fetch_article_content` |
 
 Each tool is a thin wrapper over the same HTTP API the web UI uses, so the AI surface and
@@ -114,7 +115,7 @@ server-go/  Go + go-sqlite3 (SQLite), chi router — a single compiled binary
             ├─ favicon     fetched + cached per feed
             ├─ translate   OpenAI-compatible client for title translation
             ├─ push        Web Push (VAPID) sender for per-feed notifications
-            ├─ mcp         Model Context Protocol server (13 tools), loopback-only
+            ├─ mcp         Model Context Protocol server (15 tools), loopback-only
             └─ maintenance DB size cap / old-article pruning
 ```
 

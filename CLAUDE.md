@@ -56,7 +56,7 @@ server-go/          Go backend (cgo binary, port 3002 — chi router, mattn/go-s
   main.go           entrypoint: config → DB → logger → both listeners → background jobs
   internal/config   env config (PORT, LOCAL_API_PORT, RSS_DB, AUTH_*, DB_MAX_SIZE_MB, PUSH_SUBJECT, ...)
   internal/httpapi  Server struct + NewPublicRouter / NewLocalRouter; per-domain handlers
-  internal/mcp      MCP server (Streamable HTTP) — 14 tools, mounted on NewLocalRouter only
+  internal/mcp      MCP server (Streamable HTTP) — 15 tools, mounted on NewLocalRouter only
   internal/db       SQLite open (WAL), schema + migrations
   internal/auth     session login/logout + per-request gate + login rate-limit
   internal/store    article_states writes — persist upserts, feed writes, adopt-orphans
@@ -344,13 +344,14 @@ language, drop stale/redundant chrome.
 
 ### MCP server (`internal/mcp`)
 
-Mounted at `POST /mcp` on `NewLocalRouter` only (loopback, no auth by design). 14 tools, each a
+Mounted at `POST /mcp` on `NewLocalRouter` only (loopback, no auth by design). 15 tools, each a
 thin self-call into `http://127.0.0.1:LOCAL_API_PORT/api/...` (`internal/mcp/client.go`) rather
 than duplicating `internal/httpapi`'s handler logic: `list_feeds`, `add_feed`, `rename_feed`,
 `delete_feed`, `import_opml`, `get_all_articles`, `get_today_articles`, `get_starred_articles`,
 `get_feed_articles`, `get_starred_count`, `toggle_star`, `get_current_article`,
 `fetch_article_content`, `get_keyword_trend` (`/api/trend?limit=30` — buckets for the shape, 30
-headlines to explain it).
+headlines to explain it), `search_articles` (`/api/search` — the search box's `LIKE`, one literal
+substring, newest 100; `feed_id` or `starred` narrow it, never both).
 
 The three list tools call their endpoint with `?summary=1`; the two cross-feed ones also pin
 `?mode=digest` — digest doesn't shrink the response (both modes cap at 500), it changes who fills

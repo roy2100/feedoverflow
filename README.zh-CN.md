@@ -80,7 +80,7 @@
 ### MCP 服务器
 
 Go 服务暴露了一个 [Model Context Protocol](https://modelcontextprotocol.io) 端点
-（Streamable HTTP 传输），提供 **13 个工具**，挂载在仅监听本地回环、无需鉴权的
+（Streamable HTTP 传输），提供 **15 个工具**，挂载在仅监听本地回环、无需鉴权的
 `/mcp`（`LOCAL_API_PORT`）上，让支持 MCP 的客户端可以用对话方式操作这个阅读器：
 
 | 分类 | 工具 |
@@ -88,6 +88,7 @@ Go 服务暴露了一个 [Model Context Protocol](https://modelcontextprotocol.i
 | 订阅源 | `list_feeds`, `add_feed`, `rename_feed`, `delete_feed`, `import_opml` |
 | 阅读 | `get_all_articles`, `get_today_articles`, `get_feed_articles`, `get_starred_articles`, `get_starred_count` |
 | 状态 | `toggle_star`, `get_current_article` |
+| 搜索 | `search_articles`, `get_keyword_trend` |
 | 内容 | `fetch_article_content` |
 
 每个工具都只是对同一套 Web UI 所用 HTTP API 的薄封装，所以 AI 能力和 UI 行为永远
@@ -105,7 +106,7 @@ server-go/  Go + go-sqlite3 (SQLite), chi router —— 单个编译产物
             ├─ favicon     按订阅源抓取并缓存
             ├─ translate   标题翻译用的 OpenAI 兼容客户端
             ├─ push        逐源更新推送的 Web Push（VAPID）发送端
-            ├─ mcp         Model Context Protocol 服务器（13 个工具），仅本地回环
+            ├─ mcp         Model Context Protocol 服务器（15 个工具），仅本地回环
             └─ maintenance 数据库体积上限 / 清理旧文章
 ```
 

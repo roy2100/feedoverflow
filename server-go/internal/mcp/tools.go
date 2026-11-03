@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strconv"
 
@@ -20,8 +21,8 @@ func textResult(v any) (*mcp.CallToolResult, any, error) {
 }
 
 // NewServer builds the FeedOverflow MCP server: the 13 tools of the Node
-// original (server/mcp.ts, legacy_server_node branch) plus get_keyword_trend,
-// each a thin call into the loopback API at 127.0.0.1:port.
+// original (server/mcp.ts, legacy_server_node branch) plus get_keyword_trend and
+// search_articles, each a thin call into the loopback API at 127.0.0.1:port.
 func NewServer(port int) *mcp.Server {
 	c := newClient(port)
 	server := mcp.NewServer(&mcp.Implementation{Name: "feedoverflow", Version: "1.0.0"}, nil)
@@ -179,6 +180,38 @@ func NewServer(port int) *mcp.Server {
 			days = 30
 		}
 		res, err := c.get(ctx, "/api/trend?q="+url.QueryEscape(in.Query)+"&days="+strconv.Itoa(days)+"&limit=30")
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(res)
+	})
+
+	// The same search the web UI's search box runs: one literal substring, so the
+	// description steers the model to one term per call and synonyms in turn.
+	type searchArticlesInput struct {
+		Query   string `json:"query" jsonschema:"Text to look for, matched as one literal substring (one term works best)"`
+		FeedID  string `json:"feed_id,omitempty" jsonschema:"Only search this feed (ID from list_feeds)"`
+		Starred bool   `json:"starred,omitempty" jsonschema:"Only search starred articles"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "search_articles",
+		Description: "Search every stored article, not just recent ones, for a keyword in the title, the " +
+			"translated title, the RSS summary or the stored body. The query is one literal substring " +
+			"(case-insensitive for Latin letters): search one term at a time and try synonyms or the " +
+			"other language (英伟达, Nvidia) in separate calls. Returns up to 100 matches, newest first, " +
+			"each with a summary of up to 300 characters; use fetch_article_content for the full text.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchArticlesInput) (*mcp.CallToolResult, any, error) {
+		if in.FeedID != "" && in.Starred {
+			return nil, nil, errors.New("pass feed_id or starred, not both")
+		}
+		path := "/api/search?q=" + url.QueryEscape(in.Query)
+		switch {
+		case in.FeedID != "":
+			path += "&scope=feed&feedId=" + url.QueryEscape(in.FeedID)
+		case in.Starred:
+			path += "&scope=starred"
+		}
+		res, err := c.get(ctx, path)
 		if err != nil {
 			return nil, nil, err
 		}
