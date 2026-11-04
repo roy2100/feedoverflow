@@ -264,8 +264,7 @@ export default function PodcastPlayer({
       <button
         onClick={onTogglePlay}
         style={{ ...btnStyle, padding: 6, color: 'var(--accent)' }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        className="hover-bg"
       >
         {isBuffering ? (
           <Loader2 size={17} strokeWidth={2} style={{ animation: 'spin 0.8s linear infinite' }} />
@@ -316,8 +315,7 @@ export default function PodcastPlayer({
           color: 'var(--text-secondary)',
           padding: '3px 6px',
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        className="hover-bg"
       >
         -15
       </button>
@@ -365,8 +363,7 @@ export default function PodcastPlayer({
           color: 'var(--text-secondary)',
           padding: '3px 6px',
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        className="hover-bg"
       >
         +15
       </button>
@@ -382,8 +379,7 @@ export default function PodcastPlayer({
           padding: '3px 7px',
           minWidth: 30,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        className="hover-bg"
       >
         {speed}×
       </button>
@@ -392,14 +388,7 @@ export default function PodcastPlayer({
         onClick={onClose}
         title="关闭播放器"
         style={{ ...btnStyle, padding: 5, color: 'var(--text-tertiary)' }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--bg-hover)';
-          e.currentTarget.style.color = 'var(--text-primary)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'none';
-          e.currentTarget.style.color = 'var(--text-tertiary)';
-        }}
+        className="hover-primary-bg"
       >
         <X size={14} strokeWidth={2} />
       </button>

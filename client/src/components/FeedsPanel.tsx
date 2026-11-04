@@ -11,7 +11,7 @@ import {
   Plus,
   Download,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type CSSProperties } from 'react';
 
 import { faviconDomain } from '../faviconDomain';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -711,15 +711,9 @@ function ActionBtn({
         border: 'none',
         cursor: 'pointer',
         transition: 'color 0.12s, background 0.12s',
+        ...({ '--hover-color': hoverColor } as CSSProperties),
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.color = hoverColor;
-        e.currentTarget.style.background = 'var(--bg-selected)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.color = color;
-        e.currentTarget.style.background = armed ? 'var(--bg-selected)' : 'none';
-      }}
+      className="hover-action"
     >
       {children}
     </button>

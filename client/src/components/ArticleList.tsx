@@ -179,8 +179,7 @@ export default function ArticleList({
               alignItems: 'center',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+            className="hover-accent"
           >
             <PanelLeft size={14} />
           </button>

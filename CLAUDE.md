@@ -40,6 +40,10 @@ Components use inline styles with tokens from `client/src/index.css`: `--text-*`
 `em` sizes inside `.rss-article`, and `TrendChart`'s data marks. `docs/plan-style-scale.md`; what is
 still open is in `docs/todo-style.md`.
 
+Hover color is a `.hover-*` class in `index.css`, never `onMouseEnter` writing to `element.style`.
+Handlers are for logic: the rows in `FeedsPanel` and `CollectionsPanel` reveal actions and disarm a
+pending delete from React state.
+
 ## Deployment
 
 Single-user macOS app, publicly reachable at `https://rss.royl.uk:8443` via a rathole tunnel to an

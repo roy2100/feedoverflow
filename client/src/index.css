@@ -32,6 +32,7 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --star: #f5c518;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
   /* Letters render with Noto Serif SC (exactly as before). The curly quotes,
      which Noto Serif SC draws full-width (a gap in English), come instead from
@@ -138,6 +139,39 @@ button {
 
 input {
   font-family: var(--font-ui);
+}
+
+/* Hover, where hover is real: on a touch screen it would stick after the tap. !important because
+ * each control sets its resting color inline, and inline beats any rule here. */
+@media (hover: hover) {
+  .hover-bg:hover {
+    background: var(--bg-hover) !important;
+  }
+  .hover-bg-strong:hover {
+    background: var(--bg-selected) !important;
+  }
+  .hover-accent:hover {
+    color: var(--accent) !important;
+  }
+  .hover-accent-bg:hover {
+    color: var(--accent) !important;
+    background: var(--bg-hover) !important;
+  }
+  .hover-primary-bg:hover {
+    color: var(--text-primary) !important;
+    background: var(--bg-hover) !important;
+  }
+  .hover-star:hover {
+    color: var(--star) !important;
+  }
+  .hover-opaque:hover {
+    opacity: 1 !important;
+  }
+  /* The color comes from the button: --hover-color. */
+  .hover-action:hover {
+    color: var(--hover-color) !important;
+    background: var(--bg-selected) !important;
+  }
 }
 
 /*

@@ -241,8 +241,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               border: 'none',
               transition: 'background 0.12s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-selected)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+            className="hover-bg-strong"
           >
             <X size={14} />
           </button>

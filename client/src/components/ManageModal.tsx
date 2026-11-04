@@ -140,8 +140,7 @@ export default function ManageModal({
                   cursor: 'pointer',
                   transition: 'background 0.12s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                className="hover-bg"
               >
                 <ArrowLeft size={15} />
               </button>
@@ -217,8 +216,7 @@ export default function ManageModal({
               flexShrink: 0,
               transition: 'background 0.12s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-selected)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+            className="hover-bg-strong"
           >
             <X size={14} />
           </button>

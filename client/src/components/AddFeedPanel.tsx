@@ -481,8 +481,7 @@ function GhostBtn({ onClick, children }: GhostBtnProps) {
         transition: 'background 0.12s',
         fontFamily: 'inherit',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-selected)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+      className="hover-bg-strong"
     >
       {children}
     </button>

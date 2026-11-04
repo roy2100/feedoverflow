@@ -414,14 +414,7 @@ function IconBtn({ onClick, title, isMobile, children }: IconBtnProps) {
         display: 'flex',
         alignItems: 'center',
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.color = 'var(--accent)';
-        e.currentTarget.style.background = 'var(--bg-hover)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.color = 'var(--text-tertiary)';
-        e.currentTarget.style.background = 'none';
-      }}
+      className="hover-accent-bg"
     >
       {children}
     </button>

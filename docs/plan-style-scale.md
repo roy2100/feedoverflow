@@ -50,3 +50,9 @@ Radius: 3, 4 → xs. 5, 6, 7 → sm. 8 → md. 10, 12 → lg. 50% stays.
 - Text that grew by up to a pixel may wrap or clip somewhere tight, such as the sidebar's count
   badges. No test sees that: the owner checks by hand.
 - jsdom tests that fire `mouseEnter` only cover the state-based rows, which do not change.
+
+## Outcome
+
+Done as planned, in two commits: 185 values moved to tokens, 19 hover handlers to 8 classes. Tests,
+typecheck, format, lint and build pass. The look is for the owner to verify by hand (desktop +
+iPhone), above all the wrapping risk. `docs/todo-style.md` holds the rest.

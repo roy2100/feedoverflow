@@ -171,12 +171,7 @@ function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number
           borderRadius: 'var(--radius-sm)',
           transition: 'color 0.15s',
         }}
-        onMouseEnter={(e) => {
-          if (!open) e.currentTarget.style.color = 'var(--accent)';
-        }}
-        onMouseLeave={(e) => {
-          if (!open) e.currentTarget.style.color = 'var(--text-tertiary)';
-        }}
+        className="hover-accent"
       >
         <MoreHorizontal size={iconSize} strokeWidth={1.5} />
       </button>
@@ -220,10 +215,7 @@ function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number
                 cursor: item.disabled ? 'default' : 'pointer',
                 transition: 'background 0.12s',
               }}
-              onMouseEnter={(e) => {
-                if (!item.disabled) e.currentTarget.style.background = 'var(--bg-hover)';
-              }}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+              className={item.disabled ? undefined : 'hover-bg'}
             >
               {item.icon}
               {item.label}
@@ -803,12 +795,7 @@ export default function ArticleReader({
                   borderRadius: 'var(--radius-sm)',
                   transition: 'color 0.15s',
                 }}
-                onMouseEnter={(e) => {
-                  if (!article.isStarred) e.currentTarget.style.color = '#F5C518';
-                }}
-                onMouseLeave={(e) => {
-                  if (!article.isStarred) e.currentTarget.style.color = 'var(--text-tertiary)';
-                }}
+                className="hover-star"
               >
                 <Star size={15} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
               </button>
@@ -818,8 +805,7 @@ export default function ArticleReader({
                   onClick={handleFetchFull}
                   title="从原始网页提取全文"
                   style={{ ...textActionStyle, ...clusterGap, color: 'var(--text-tertiary)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                  className="hover-accent"
                 >
                   <AlignLeft size={11} />
                   全文
@@ -858,8 +844,7 @@ export default function ArticleReader({
                     color: 'var(--accent)',
                     opacity: 0.8,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+                  className="hover-opaque"
                 >
                   <Check size={11} />
                   全文
@@ -871,8 +856,7 @@ export default function ArticleReader({
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ ...textActionStyle, color: 'var(--accent)', opacity: 0.8 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.8')}
+                  className="hover-opaque"
                 >
                   {/* Icon first, matching 全文 — both text actions read icon → label. */}
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -999,8 +983,7 @@ export default function ArticleReader({
                 transition: 'background 0.12s',
                 flexShrink: 0,
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+              className="hover-bg"
             >
               {currentEpisode?.id === article.id && isBuffering ? (
                 <>
