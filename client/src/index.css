@@ -20,6 +20,18 @@
   --accent: #2b5c5c;
   --accent-light: #3a7a7a;
   --red: #c0392b;
+  /* The only sizes the UI uses; docs/plan-style-scale.md. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 15px;
+  --text-prose: 16px;
+  --text-display: 22px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
   /* Letters render with Noto Serif SC (exactly as before). The curly quotes,
      which Noto Serif SC draws full-width (a gap in English), come instead from
@@ -194,7 +206,7 @@ input {
 }
 
 .skeleton-bar {
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(
     90deg,
     var(--border-light) 25%,

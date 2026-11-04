@@ -49,7 +49,7 @@ export function CollectionList({
         {collections.length === 0 ? (
           <p
             style={{
-              fontSize: 13,
+              fontSize: 'var(--text-md)',
               color: 'var(--text-tertiary)',
               textAlign: 'center',
               padding: '28px 24px',
@@ -82,8 +82,8 @@ export function CollectionList({
             alignItems: 'center',
             gap: 6,
             padding: '7px 12px',
-            borderRadius: 7,
-            fontSize: 13,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 'var(--text-md)',
             fontWeight: 500,
             background: 'var(--accent)',
             color: '#fff',
@@ -130,8 +130,10 @@ function CollectionRow({ collection, feeds, isMobile, onEdit, onDelete }: Collec
     >
       <Layers size={13} style={{ color: '#3B9E6E', flexShrink: 0, marginTop: 3 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{collection.name}</div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 'var(--text-md)', color: 'var(--text-primary)' }}>
+          {collection.name}
+        </div>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
           {collection.rules.map((r, i) => (
             <div key={i}>{ruleSummary(r, feeds)}</div>
           ))}
@@ -212,11 +214,11 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
   };
 
   const fieldStyle: React.CSSProperties = {
-    fontSize: 13,
+    fontSize: 'var(--text-md)',
     padding: '5px 8px',
     background: 'var(--bg)',
     border: '1px solid var(--border)',
-    borderRadius: 5,
+    borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)',
     outline: 'none',
     fontFamily: 'var(--font-ui)',
@@ -236,7 +238,7 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
 
         <p
           style={{
-            fontSize: 11.5,
+            fontSize: 'var(--text-sm)',
             color: 'var(--text-tertiary)',
             margin: '0 0 8px',
             lineHeight: 1.6,
@@ -288,7 +290,7 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
               style={{
                 width: 26,
                 height: 26,
-                borderRadius: 5,
+                borderRadius: 'var(--radius-sm)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -312,7 +314,7 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
             gap: 4,
             marginTop: 4,
             padding: '4px 0',
-            fontSize: 12.5,
+            fontSize: 'var(--text-md)',
             color: 'var(--accent)',
             background: 'none',
             border: 'none',
@@ -322,7 +324,11 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
           <Plus size={12} /> 添加规则
         </button>
 
-        {error && <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--red)' }}>{error}</p>}
+        {error && (
+          <p style={{ margin: '10px 0 0', fontSize: 'var(--text-sm)', color: 'var(--red)' }}>
+            {error}
+          </p>
+        )}
       </div>
 
       <div
@@ -338,8 +344,8 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
           onClick={onCancel}
           style={{
             padding: '7px 14px',
-            borderRadius: 7,
-            fontSize: 13,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 'var(--text-md)',
             background: 'var(--bg-selected)',
             color: 'var(--text-secondary)',
             border: 'none',
@@ -353,8 +359,8 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
           disabled={saving}
           style={{
             padding: '7px 14px',
-            borderRadius: 7,
-            fontSize: 13,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 'var(--text-md)',
             fontWeight: 500,
             background: 'var(--accent)',
             color: '#fff',
@@ -387,7 +393,7 @@ function RowBtn({ onClick, title, color, isMobile, armed, children }: RowBtnProp
       style={{
         width: isMobile ? 34 : 24,
         height: isMobile ? 34 : 24,
-        borderRadius: 4,
+        borderRadius: 'var(--radius-xs)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

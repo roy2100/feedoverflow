@@ -10,7 +10,7 @@ interface SettingsModalProps {
 }
 
 const sectionStyle: React.CSSProperties = {
-  fontSize: 10.5,
+  fontSize: 'var(--text-xs)',
   fontWeight: 600,
   letterSpacing: '0.1em',
   textTransform: 'uppercase',
@@ -20,7 +20,7 @@ const sectionStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: 11.5,
+  fontSize: 'var(--text-sm)',
   fontWeight: 500,
   color: 'var(--text-secondary)',
   marginBottom: 5,
@@ -29,10 +29,10 @@ const labelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '8px 10px',
-  fontSize: 13,
+  fontSize: 'var(--text-md)',
   background: 'var(--bg)',
   border: '1px solid var(--border)',
-  borderRadius: 7,
+  borderRadius: 'var(--radius-sm)',
   color: 'var(--text-primary)',
   outline: 'none',
   transition: 'border-color 0.15s',
@@ -41,8 +41,8 @@ const inputStyle: React.CSSProperties = {
 
 const primaryBtnStyle: React.CSSProperties = {
   padding: '8px 16px',
-  borderRadius: 7,
-  fontSize: 13,
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--text-md)',
   fontWeight: 500,
   background: 'var(--accent)',
   color: '#fff',
@@ -56,8 +56,8 @@ const primaryBtnStyle: React.CSSProperties = {
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: '8px 14px',
-  borderRadius: 7,
-  fontSize: 13,
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--text-md)',
   fontWeight: 500,
   background: 'var(--bg-selected)',
   color: 'var(--text-secondary)',
@@ -204,7 +204,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         style={{
           background: 'var(--bg-reader)',
           border: '1px solid var(--border)',
-          borderRadius: 12,
+          borderRadius: 'var(--radius-lg)',
           width: 420,
           boxShadow: '0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)',
           animation: 'modalSlideUp 0.18s cubic-bezier(0.34,1.2,0.64,1)',
@@ -221,13 +221,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>设置</span>
+          <span
+            style={{ fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)' }}
+          >
+            设置
+          </span>
           <button
             onClick={onClose}
             style={{
               width: 28,
               height: 28,
-              borderRadius: 6,
+              borderRadius: 'var(--radius-sm)',
               background: 'var(--bg-hover)',
               display: 'flex',
               alignItems: 'center',
@@ -263,10 +267,10 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 style={{
                   flex: 1,
                   padding: '8px 10px',
-                  fontSize: 13,
+                  fontSize: 'var(--text-md)',
                   background: 'var(--bg)',
                   border: '1px solid var(--border)',
-                  borderRadius: 7,
+                  borderRadius: 'var(--radius-sm)',
                   color: 'var(--text-primary)',
                   outline: 'none',
                   transition: 'border-color 0.15s',
@@ -280,8 +284,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 disabled={saving || !rsshubBase.trim()}
                 style={{
                   padding: '8px 16px',
-                  borderRadius: 7,
-                  fontSize: 13,
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 'var(--text-md)',
                   fontWeight: 500,
                   background: saved
                     ? 'var(--accent)'
@@ -312,7 +316,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             </div>
             <p
               style={{
-                fontSize: 11.5,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--text-tertiary)',
                 marginTop: 6,
                 lineHeight: 1.6,
@@ -323,7 +327,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             </p>
           </div>
 
-          {error && <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{error}</p>}
+          {error && (
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--red)', marginTop: 8 }}>{error}</p>
+          )}
 
           {/* Section: translation service */}
           <p style={{ ...sectionStyle, marginTop: 24 }}>翻译服务</p>
@@ -367,7 +373,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 <span
                   style={{
                     flex: 1,
-                    fontSize: 13,
+                    fontSize: 'var(--text-md)',
                     fontFamily: 'monospace',
                     color: 'var(--text-tertiary)',
                     letterSpacing: '0.15em',
@@ -408,7 +414,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               alignItems: 'center',
               gap: 8,
               marginBottom: 14,
-              fontSize: 13,
+              fontSize: 'var(--text-md)',
               color: keySet ? 'var(--text-primary)' : 'var(--text-tertiary)',
               cursor: keySet ? 'pointer' : 'default',
             }}
@@ -463,7 +469,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             {testResult && (
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 'var(--text-sm)',
                   color: testResult.ok ? 'var(--accent)' : 'var(--red)',
                 }}
               >
@@ -472,10 +478,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             )}
           </div>
           {llmError && (
-            <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{llmError}</p>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--red)', marginTop: 8 }}>
+              {llmError}
+            </p>
           )}
           <p
-            style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.6 }}
+            style={{
+              fontSize: 'var(--text-sm)',
+              color: 'var(--text-tertiary)',
+              marginTop: 8,
+              lineHeight: 1.6,
+            }}
           >
             任何兼容 OpenAI <code style={{ fontFamily: 'monospace' }}>/chat/completions</code>{' '}
             的服务均可（DeepSeek、Moonshot、OpenRouter、本机 Ollama 等）。

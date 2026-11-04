@@ -155,7 +155,7 @@ export default function ArticleList({
               border: 'none',
               cursor: 'pointer',
               padding: '6px 8px 6px 0',
-              fontSize: 15,
+              fontSize: 'var(--text-xl)',
               flexShrink: 0,
             }}
           >
@@ -170,7 +170,7 @@ export default function ArticleList({
               color: 'var(--text-tertiary)',
               padding: 4,
               marginRight: 8,
-              borderRadius: 6,
+              borderRadius: 'var(--radius-sm)',
               transition: 'color 0.15s',
               background: 'none',
               border: 'none',
@@ -187,7 +187,7 @@ export default function ArticleList({
         )}
         <h2
           style={{
-            fontSize: isMobile ? 16 : 14,
+            fontSize: isMobile ? 'var(--text-prose)' : 'var(--text-lg)',
             fontWeight: 600,
             color: 'var(--text-primary)',
             overflow: 'hidden',
@@ -223,7 +223,7 @@ export default function ArticleList({
               justifyContent: 'center',
               height: '100%',
               color: 'var(--text-tertiary)',
-              fontSize: 13,
+              fontSize: 'var(--text-md)',
               flexDirection: 'column',
               gap: 12,
             }}
@@ -232,11 +232,11 @@ export default function ArticleList({
             <button
               onClick={onRefresh}
               style={{
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--accent)',
                 padding: '4px 10px',
                 border: '1px solid var(--accent)',
-                borderRadius: 5,
+                borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
                 background: 'none',
               }}
@@ -340,7 +340,7 @@ function ArticleItem({
   'data-id': dataId,
 }: ArticleItemProps) {
   const titleStyle: React.CSSProperties = {
-    fontSize: isMobile ? 14 : 13,
+    fontSize: isMobile ? 'var(--text-lg)' : 'var(--text-md)',
     fontWeight: 400,
     color: 'var(--text-primary)',
     lineHeight: 1.45,
@@ -350,7 +350,7 @@ function ArticleItem({
     overflow: 'hidden',
   };
   const timeStyle: React.CSSProperties = {
-    fontSize: 11,
+    fontSize: 'var(--text-xs)',
     color: 'var(--text-tertiary)',
     flexShrink: 0,
   };
@@ -403,7 +403,7 @@ function ArticleItem({
                 {article.feedName && (
                   <span
                     style={{
-                      fontSize: 10.5,
+                      fontSize: 'var(--text-xs)',
                       fontWeight: 600,
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase',
@@ -436,7 +436,7 @@ function ArticleItem({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 3,
-                fontSize: 11,
+                fontSize: 'var(--text-xs)',
                 fontWeight: 500,
                 color: episodePlaying || episodeBuffering ? 'var(--accent)' : 'var(--accent-light)',
                 background: 'none',

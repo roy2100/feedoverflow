@@ -47,7 +47,7 @@ function FeedIcon({ url }: { url: string }) {
       alt=""
       width={14}
       height={14}
-      style={{ borderRadius: 3, objectFit: 'contain', flexShrink: 0 }}
+      style={{ borderRadius: 'var(--radius-xs)', objectFit: 'contain', flexShrink: 0 }}
       onError={() => setFailed(true)}
     />
   );
@@ -158,7 +158,14 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
           flexWrap: 'wrap',
         }}
       >
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            fontSize: 'var(--text-sm)',
+            color: 'var(--text-secondary)',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
           {deviceLabel(
             device,
             devices,
@@ -171,8 +178,8 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
             disabled={deviceBusy}
             style={{
               padding: '4px 10px',
-              borderRadius: 6,
-              fontSize: 12,
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 'var(--text-sm)',
               fontWeight: 500,
               background: device === 'on' ? 'var(--bg-selected)' : 'var(--accent)',
               color: device === 'on' ? 'var(--text-secondary)' : '#fff',
@@ -186,7 +193,14 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
           </button>
         )}
         {deviceError && (
-          <p style={{ flexBasis: '100%', margin: 0, fontSize: 11.5, color: 'var(--red)' }}>
+          <p
+            style={{
+              flexBasis: '100%',
+              margin: 0,
+              fontSize: 'var(--text-sm)',
+              color: 'var(--red)',
+            }}
+          >
             {deviceError}
           </p>
         )}
@@ -197,7 +211,7 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
         {feeds.length === 0 ? (
           <p
             style={{
-              fontSize: 13,
+              fontSize: 'var(--text-md)',
               color: 'var(--text-tertiary)',
               textAlign: 'center',
               padding: '32px 0',
@@ -239,8 +253,8 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
             alignItems: 'center',
             gap: 6,
             padding: '7px 12px',
-            borderRadius: 7,
-            fontSize: 13,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 'var(--text-md)',
             fontWeight: 500,
             background: 'var(--accent)',
             color: '#fff',
@@ -260,8 +274,8 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
               alignItems: 'center',
               gap: 6,
               padding: '7px 12px',
-              borderRadius: 7,
-              fontSize: 13,
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 'var(--text-md)',
               fontWeight: 500,
               background: 'none',
               color: 'var(--text-secondary)',
@@ -274,7 +288,14 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
           </button>
         )}
         {exportError && (
-          <p style={{ flexBasis: '100%', margin: 0, fontSize: 11.5, color: 'var(--red)' }}>
+          <p
+            style={{
+              flexBasis: '100%',
+              margin: 0,
+              fontSize: 'var(--text-sm)',
+              color: 'var(--red)',
+            }}
+          >
             {exportError}
           </p>
         )}
@@ -445,11 +466,11 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
   };
 
   const inputStyle: React.CSSProperties = {
-    fontSize: 13,
+    fontSize: 'var(--text-md)',
     padding: '4px 8px',
     background: 'var(--bg)',
     border: '1px solid var(--accent)',
-    borderRadius: 5,
+    borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)',
     outline: 'none',
     fontFamily: 'var(--font-ui)',
@@ -486,7 +507,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
             style={{
               width: 26,
               height: 26,
-              borderRadius: 5,
+              borderRadius: 'var(--radius-sm)',
               flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
@@ -505,7 +526,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
             style={{
               width: 26,
               height: 26,
-              borderRadius: 5,
+              borderRadius: 'var(--radius-sm)',
               flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
@@ -532,7 +553,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           style={{
             ...inputStyle,
             marginLeft: 22,
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             color: 'var(--text-secondary)',
           }}
         />
@@ -540,7 +561,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           <p
             style={{
               margin: '0 0 2px 22px',
-              fontSize: 11.5,
+              fontSize: 'var(--text-sm)',
               color: 'var(--red)',
               lineHeight: 1.5,
             }}
@@ -577,7 +598,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
       <span
         style={{
           flex: 1,
-          fontSize: 13,
+          fontSize: 'var(--text-md)',
           color: 'var(--text-primary)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -640,7 +661,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           style={{
             flexBasis: '100%',
             margin: '2px 0 0 22px',
-            fontSize: 11.5,
+            fontSize: 'var(--text-sm)',
             color: 'var(--red)',
             lineHeight: 1.5,
           }}
@@ -680,7 +701,7 @@ function ActionBtn({
         // 24px is a fine mouse target and a poor finger one.
         width: isMobile ? 34 : 24,
         height: isMobile ? 34 : 24,
-        borderRadius: 4,
+        borderRadius: 'var(--radius-xs)',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',

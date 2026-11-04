@@ -168,7 +168,7 @@ function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number
           display: 'flex',
           alignItems: 'center',
           padding: iconSize > 15 ? 6 : 4,
-          borderRadius: 5,
+          borderRadius: 'var(--radius-sm)',
           transition: 'color 0.15s',
         }}
         onMouseEnter={(e) => {
@@ -191,7 +191,7 @@ function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number
             padding: 4,
             background: 'var(--bg-panel)',
             border: '1px solid var(--border-light)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-md)',
             boxShadow: '0 12px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)',
             zIndex: 30,
             animation: 'fadeIn 0.12s ease',
@@ -209,12 +209,12 @@ function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number
                 alignItems: 'center',
                 gap: 8,
                 padding: '7px 9px',
-                fontSize: 12.5,
+                fontSize: 'var(--text-md)',
                 textAlign: 'left',
                 whiteSpace: 'nowrap',
                 background: 'none',
                 border: 'none',
-                borderRadius: 5,
+                borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-secondary)',
                 opacity: item.disabled ? 0.4 : 1,
                 cursor: item.disabled ? 'default' : 'pointer',
@@ -475,7 +475,9 @@ export default function ArticleReader({
             strokeLinecap="round"
           />
         </svg>
-        <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>选择一篇文章开始阅读</p>
+        <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-tertiary)' }}>
+          选择一篇文章开始阅读
+        </p>
       </div>
     );
   }
@@ -602,7 +604,7 @@ export default function ArticleReader({
               border: 'none',
               cursor: 'pointer',
               padding: '6px 8px 6px 0',
-              fontSize: 15,
+              fontSize: 'var(--text-xl)',
               flexShrink: 0,
             }}
           >
@@ -621,7 +623,7 @@ export default function ArticleReader({
               display: 'flex',
               alignItems: 'center',
               padding: 6,
-              borderRadius: 5,
+              borderRadius: 'var(--radius-sm)',
             }}
           >
             <Star size={18} fill={article.isStarred ? '#F5C518' : 'none'} strokeWidth={1.5} />
@@ -636,7 +638,7 @@ export default function ArticleReader({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 3,
-                fontSize: 13,
+                fontSize: 'var(--text-md)',
                 color: 'var(--accent)',
                 textDecoration: 'none',
                 padding: 6,
@@ -672,7 +674,7 @@ export default function ArticleReader({
         {article.feedName && (
           <div
             style={{
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               fontWeight: 600,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
@@ -690,7 +692,7 @@ export default function ArticleReader({
         <h1
           style={{
             fontFamily: 'var(--font-serif)',
-            fontSize: isMobile ? 22 : 'clamp(22px, 3vw, 28px)',
+            fontSize: isMobile ? 'var(--text-display)' : 'clamp(22px, 3vw, 28px)',
             fontWeight: 600,
             lineHeight: 1.35,
             color: 'var(--text-primary)',
@@ -703,7 +705,7 @@ export default function ArticleReader({
         {article.titleZh?.trim() && (
           <div
             style={{
-              fontSize: isMobile ? 13 : 14,
+              fontSize: isMobile ? 'var(--text-md)' : 'var(--text-lg)',
               lineHeight: 1.45,
               color: 'var(--text-tertiary)',
               marginBottom: 12,
@@ -746,7 +748,7 @@ export default function ArticleReader({
               <span
                 title={formatAuthor(article.author)}
                 style={{
-                  fontSize: 12.5,
+                  fontSize: 'var(--text-md)',
                   color: 'var(--text-secondary)',
                   fontWeight: 500,
                   letterSpacing: '0.01em',
@@ -798,7 +800,7 @@ export default function ArticleReader({
                   display: 'flex',
                   alignItems: 'center',
                   padding: 4,
-                  borderRadius: 5,
+                  borderRadius: 'var(--radius-sm)',
                   transition: 'color 0.15s',
                 }}
                 onMouseEnter={(e) => {
@@ -892,11 +894,11 @@ export default function ArticleReader({
             <button
               onClick={handleFetchFull}
               style={{
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--text-tertiary)',
                 background: 'none',
                 border: '1px solid var(--border)',
-                borderRadius: 5,
+                borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -911,7 +913,7 @@ export default function ArticleReader({
           {isMobile && fullContent === 'loading' && (
             <span
               style={{
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--text-tertiary)',
                 display: 'flex',
                 alignItems: 'center',
@@ -937,11 +939,11 @@ export default function ArticleReader({
               onClick={() => setFullContent(null)}
               title="恢复 RSS 原文"
               style={{
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--accent)',
                 background: 'none',
                 border: '1px solid var(--accent)',
-                borderRadius: 5,
+                borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
                 padding: '3px 8px',
                 display: 'flex',
@@ -962,7 +964,7 @@ export default function ArticleReader({
               marginBottom: 24,
               padding: '12px 16px',
               background: 'var(--bg-panel)',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-light)',
               display: 'flex',
               alignItems: 'center',
@@ -974,7 +976,9 @@ export default function ArticleReader({
               strokeWidth={2}
               style={{ color: 'var(--accent-light)', flexShrink: 0 }}
             />
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+            <span
+              style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', fontWeight: 500 }}
+            >
               播客{article.audioDuration ? ` · ${article.audioDuration}` : ''}
             </span>
             <button
@@ -984,11 +988,11 @@ export default function ArticleReader({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500,
                 color: 'var(--accent)',
                 padding: '4px 10px',
-                borderRadius: 5,
+                borderRadius: 'var(--radius-sm)',
                 border: '1px solid var(--accent)',
                 background: 'none',
                 cursor: 'pointer',
@@ -1040,7 +1044,9 @@ export default function ArticleReader({
             onRetry={() => void runAI('translation')}
           />
         ) : fullError ? (
-          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '20px 0' }}>
+          <div
+            style={{ fontSize: 'var(--text-md)', color: 'var(--text-tertiary)', padding: '20px 0' }}
+          >
             加载失败：{fullError}。
             <button
               onClick={() => setFullContent(null)}
@@ -1050,7 +1056,7 @@ export default function ArticleReader({
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                fontSize: 13,
+                fontSize: 'var(--text-md)',
               }}
             >
               重置
@@ -1064,7 +1070,7 @@ export default function ArticleReader({
               gap: 8,
               padding: '20px 0',
               color: 'var(--text-tertiary)',
-              fontSize: 13,
+              fontSize: 'var(--text-md)',
             }}
           >
             <span
@@ -1313,7 +1319,7 @@ function AISpinner({ label }: { label: string }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
-        fontSize: 12.5,
+        fontSize: 'var(--text-md)',
         color: 'var(--text-tertiary)',
       }}
     >
@@ -1334,7 +1340,7 @@ function AISpinner({ label }: { label: string }) {
 }
 
 const aiSmallButton: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 'var(--text-sm)',
   color: 'var(--accent)',
   background: 'none',
   border: 'none',
@@ -1366,7 +1372,7 @@ function AISummaryBlock({
         marginBottom: 24,
         padding: '12px 16px 14px',
         background: 'var(--bg-panel)',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-md)',
         border: '1px solid var(--border-light)',
       }}
     >
@@ -1376,7 +1382,9 @@ function AISummaryBlock({
           strokeWidth={2}
           style={{ color: 'var(--accent-light)', flexShrink: 0 }}
         />
-        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+        <span
+          style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', fontWeight: 500 }}
+        >
           AI 摘要{state.model ? ` · ${state.model}` : ''}
         </span>
         <button
@@ -1398,7 +1406,7 @@ function AISummaryBlock({
       {state.status === 'loading' && !state.text ? (
         <AISpinner label="生成中…" />
       ) : (
-        <div style={{ fontSize: 14.5, lineHeight: 1.7, color: 'var(--text-primary)' }}>
+        <div style={{ fontSize: 'var(--text-xl)', lineHeight: 1.7, color: 'var(--text-primary)' }}>
           {lines.map((line, i) =>
             /^[-•·]\s*/.test(line) ? (
               <div key={i} style={{ display: 'flex', gap: 8, margin: '2px 0' }}>
@@ -1414,7 +1422,7 @@ function AISummaryBlock({
         </div>
       )}
       {state.status === 'error' && (
-        <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+        <div style={{ fontSize: 'var(--text-md)', color: 'var(--text-tertiary)', marginTop: 6 }}>
           {state.error}
           <button onClick={onRetry} style={{ ...aiSmallButton, marginLeft: 8 }}>
             重试
@@ -1446,7 +1454,7 @@ function TranslationView({
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          fontSize: 12,
+          fontSize: 'var(--text-sm)',
           color: 'var(--text-tertiary)',
           marginBottom: 16,
         }}
@@ -1472,7 +1480,13 @@ function TranslationView({
         </div>
       )}
       {state.status === 'error' && (
-        <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', padding: '8px 0 20px' }}>
+        <div
+          style={{
+            fontSize: 'var(--text-md)',
+            color: 'var(--text-tertiary)',
+            padding: '8px 0 20px',
+          }}
+        >
           {state.error}
           <button onClick={onRetry} style={{ ...aiSmallButton, marginLeft: 8 }}>
             重试
@@ -1487,7 +1501,7 @@ function TranslationView({
 // 15px icon buttons read as a third button language crammed into the same row. Only the
 // color/opacity differ per state — the geometry is identical.
 const textActionStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 'var(--text-sm)',
   background: 'none',
   border: 'none',
   padding: 0,
@@ -1510,7 +1524,7 @@ const clusterGap: React.CSSProperties = { marginLeft: 10 };
 // Dates shrink last (flexShrink 1 against the byline's 100) and ellipsize rather than
 // being chopped mid-glyph by the group's overflow: hidden.
 const metaDateStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 'var(--text-sm)',
   color: 'var(--text-tertiary)',
   whiteSpace: 'nowrap',
   minWidth: 0,
@@ -1521,7 +1535,7 @@ const metaDateStyle: React.CSSProperties = {
 
 const articleContentStyle: React.CSSProperties = {
   fontFamily: 'var(--font-serif)',
-  fontSize: 16,
+  fontSize: 'var(--text-prose)',
   lineHeight: 1.85,
   color: 'var(--text-primary)',
 };
@@ -1550,7 +1564,7 @@ if (typeof document !== 'undefined') {
       .rss-article h3 { font-size: 1.05em; }
       .rss-article a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
       .rss-article img, .rss-article video, .rss-article iframe, .rss-article embed { max-width: 100%; height: auto; }
-      .rss-article img { border-radius: 6px; margin: 1em 0; }
+      .rss-article img { border-radius: var(--radius-sm); margin: 1em 0; }
       .rss-article table { max-width: 100%; overflow-x: auto; display: block; }
       .rss-article blockquote {
         border-left: 3px solid var(--accent);
@@ -1563,7 +1577,7 @@ if (typeof document !== 'undefined') {
         font-family: 'SF Mono', 'Fira Mono', monospace;
         font-size: 0.88em;
         background: var(--bg-panel);
-        border-radius: 4px;
+        border-radius: var(--radius-xs);
       }
       .rss-article pre { padding: 1em; overflow-x: auto; margin: 1em 0; }
       .rss-article code { padding: 0.1em 0.3em; }
@@ -1576,7 +1590,7 @@ if (typeof document !== 'undefined') {
         color: var(--accent);
         background: var(--bg-panel);
         border: 1px solid var(--border-light);
-        border-radius: 4px;
+        border-radius: var(--radius-xs);
         padding: 0 0.35em;
         margin: 0;
         line-height: 1.5;

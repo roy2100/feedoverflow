@@ -25,7 +25,7 @@ export default function AddFeedPanel({ onAdd, onImport, onDone }: AddFeedPanelPr
             display: 'inline-flex',
             gap: 2,
             background: 'var(--bg-panel)',
-            borderRadius: 7,
+            borderRadius: 'var(--radius-sm)',
             padding: 3,
           }}
         >
@@ -40,8 +40,8 @@ export default function AddFeedPanel({ onAdd, onImport, onDone }: AddFeedPanelPr
               onClick={() => setTab(key)}
               style={{
                 padding: '4px 12px',
-                borderRadius: 5,
-                fontSize: 12.5,
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 'var(--text-md)',
                 fontWeight: 500,
                 background: tab === key ? 'var(--bg-reader)' : 'transparent',
                 color: tab === key ? 'var(--text-primary)' : 'var(--text-tertiary)',
@@ -124,7 +124,7 @@ function ManualTab({ onAdd, onDone }: ManualTabProps) {
       {resolvedPreview && (
         <p
           style={{
-            fontSize: 11.5,
+            fontSize: 'var(--text-sm)',
             color: 'var(--text-tertiary)',
             marginTop: -8,
             marginBottom: 12,
@@ -137,7 +137,12 @@ function ManualTab({ onAdd, onDone }: ManualTabProps) {
       )}
       {!isRsshub && !error && (
         <p
-          style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: -8, marginBottom: 12 }}
+          style={{
+            fontSize: 'var(--text-sm)',
+            color: 'var(--text-tertiary)',
+            marginTop: -8,
+            marginBottom: 12,
+          }}
         >
           💡 支持{' '}
           <code style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
@@ -146,7 +151,9 @@ function ManualTab({ onAdd, onDone }: ManualTabProps) {
           格式
         </p>
       )}
-      {error && <p style={{ fontSize: 12, color: 'var(--red)', marginBottom: 14 }}>{error}</p>}
+      {error && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--red)', marginBottom: 14 }}>{error}</p>
+      )}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <GhostBtn onClick={onDone}>取消</GhostBtn>
         <PrimaryBtn type="submit" disabled={adding || !url.trim()}>
@@ -218,7 +225,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
             onClick={() => phase === 'idle' && inputRef.current?.click()}
             style={{
               border: `2px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 10,
+              borderRadius: 'var(--radius-lg)',
               padding: '32px 20px',
               textAlign: 'center',
               cursor: phase === 'importing' ? 'default' : 'pointer',
@@ -241,7 +248,11 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
                     marginBottom: 10,
                   }}
                 />
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>解析中…</p>
+                <p
+                  style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: 0 }}
+                >
+                  解析中…
+                </p>
               </>
             ) : (
               <>
@@ -254,7 +265,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
                 />
                 <p
                   style={{
-                    fontSize: 13.5,
+                    fontSize: 'var(--text-md)',
                     color: 'var(--text-primary)',
                     margin: '0 0 4px',
                     fontWeight: 500,
@@ -262,7 +273,13 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
                 >
                   拖拽 OPML 文件至此
                 </p>
-                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 14px' }}>
+                <p
+                  style={{
+                    fontSize: 'var(--text-sm)',
+                    color: 'var(--text-tertiary)',
+                    margin: '0 0 14px',
+                  }}
+                >
                   支持 .opml 和 .xml 格式
                 </p>
                 <button
@@ -272,11 +289,11 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
                     inputRef.current?.click();
                   }}
                   style={{
-                    fontSize: 12.5,
+                    fontSize: 'var(--text-md)',
                     color: 'var(--accent)',
                     padding: '5px 14px',
                     border: '1px solid var(--accent)',
-                    borderRadius: 6,
+                    borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
                     background: 'none',
                     fontWeight: 500,
@@ -298,7 +315,14 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
               e.target.value = '';
             }}
           />
-          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', margin: 0, lineHeight: 1.6 }}>
+          <p
+            style={{
+              fontSize: 'var(--text-sm)',
+              color: 'var(--text-tertiary)',
+              margin: 0,
+              lineHeight: 1.6,
+            }}
+          >
             OPML 是订阅源的通用导出格式，可从 Feedly、Reeder、NetNewsWire 等应用导出。
           </p>
         </>
@@ -307,7 +331,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
           <CheckCircle size={36} style={{ color: 'var(--accent)', marginBottom: 12 }} />
           <p
             style={{
-              fontSize: 15,
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               color: 'var(--text-primary)',
               margin: '0 0 6px',
@@ -315,11 +339,23 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
           >
             导入完成
           </p>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
+          <p
+            style={{
+              fontSize: 'var(--text-md)',
+              color: 'var(--text-secondary)',
+              margin: '0 0 4px',
+            }}
+          >
             成功导入 <strong>{result?.imported}</strong> 个订阅源
           </p>
           {result && result.skipped > 0 && (
-            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 20px' }}>
+            <p
+              style={{
+                fontSize: 'var(--text-sm)',
+                color: 'var(--text-tertiary)',
+                margin: '0 0 20px',
+              }}
+            >
               跳过 {result.skipped} 个重复项
             </p>
           )}
@@ -340,7 +376,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
           <AlertCircle size={36} style={{ color: 'var(--red)', marginBottom: 12 }} />
           <p
             style={{
-              fontSize: 15,
+              fontSize: 'var(--text-xl)',
               fontWeight: 600,
               color: 'var(--text-primary)',
               margin: '0 0 6px',
@@ -348,7 +384,13 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
           >
             解析失败
           </p>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '0 0 20px' }}>
+          <p
+            style={{
+              fontSize: 'var(--text-sm)',
+              color: 'var(--text-tertiary)',
+              margin: '0 0 20px',
+            }}
+          >
             {errMsg}
           </p>
           <GhostBtn
@@ -383,7 +425,7 @@ const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
       <label
         style={{
           display: 'block',
-          fontSize: 11.5,
+          fontSize: 'var(--text-sm)',
           fontWeight: 500,
           color: 'var(--text-secondary)',
           marginBottom: 5,
@@ -402,10 +444,10 @@ const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         style={{
           width: '100%',
           padding: '8px 10px',
-          fontSize: 13,
+          fontSize: 'var(--text-md)',
           background: 'var(--bg)',
           border: '1px solid var(--border)',
-          borderRadius: 7,
+          borderRadius: 'var(--radius-sm)',
           color: 'var(--text-primary)',
           outline: 'none',
           transition: 'border-color 0.15s',
@@ -430,8 +472,8 @@ function GhostBtn({ onClick, children }: GhostBtnProps) {
       onClick={onClick}
       style={{
         padding: '7px 16px',
-        borderRadius: 7,
-        fontSize: 13,
+        borderRadius: 'var(--radius-sm)',
+        fontSize: 'var(--text-md)',
         color: 'var(--text-secondary)',
         background: 'var(--bg-hover)',
         border: '1px solid var(--border)',
@@ -462,8 +504,8 @@ function PrimaryBtn({ onClick, type = 'button', disabled, children }: PrimaryBtn
       disabled={disabled}
       style={{
         padding: '7px 20px',
-        borderRadius: 7,
-        fontSize: 13,
+        borderRadius: 'var(--radius-sm)',
+        fontSize: 'var(--text-md)',
         fontWeight: 500,
         background: disabled ? 'var(--bg-selected)' : 'var(--accent)',
         color: disabled ? 'var(--text-tertiary)' : '#fff',

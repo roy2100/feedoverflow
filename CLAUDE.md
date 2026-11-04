@@ -33,6 +33,13 @@ rule flags real intent, surface it rather than auto-suppressing.
 
 Single-person project — edit and commit directly on `main`. No feature branches or PRs required.
 
+## Styling
+
+Components use inline styles with tokens from `client/src/index.css`: `--text-*` for font size and
+`--radius-*` for radius, never a literal number. Exceptions: 50%, the article title's `clamp()`,
+`em` sizes inside `.rss-article`, and `TrendChart`'s data marks. `docs/plan-style-scale.md`; what is
+still open is in `docs/todo-style.md`.
+
 ## Deployment
 
 Single-user macOS app, publicly reachable at `https://rss.royl.uk:8443` via a rathole tunnel to an

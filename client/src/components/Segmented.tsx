@@ -17,7 +17,7 @@ export default function Segmented<T extends string | number>({
         marginLeft: 8,
         gap: 2,
         padding: 2,
-        borderRadius: 7,
+        borderRadius: 'var(--radius-sm)',
         background: 'var(--bg-selected)',
       }}
     >
@@ -29,11 +29,11 @@ export default function Segmented<T extends string | number>({
             onClick={() => onSet(o.value)}
             title={o.title}
             style={{
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               fontWeight: 600,
               lineHeight: 1.4,
               padding: '2px 9px',
-              borderRadius: 5,
+              borderRadius: 'var(--radius-sm)',
               border: 'none',
               cursor: 'pointer',
               transition: 'color 0.15s, background 0.15s',

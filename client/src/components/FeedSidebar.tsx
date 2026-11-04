@@ -31,7 +31,7 @@ function FeedIcon({ url }: { url: string }) {
       alt=""
       width={14}
       height={14}
-      style={{ borderRadius: 3, objectFit: 'contain', flexShrink: 0 }}
+      style={{ borderRadius: 'var(--radius-xs)', objectFit: 'contain', flexShrink: 0 }}
       onError={() => setFailed(true)}
     />
   );
@@ -165,7 +165,7 @@ export default function FeedSidebar({
           )}
           <span
             style={{
-              fontSize: isMobile ? 15 : 12,
+              fontSize: isMobile ? 'var(--text-xl)' : 'var(--text-sm)',
               fontWeight: 600,
               letterSpacing: isMobile ? 0 : '0.08em',
               textTransform: isMobile ? 'none' : 'uppercase',
@@ -226,11 +226,11 @@ export default function FeedSidebar({
               padding: isMobile
                 ? '9px 28px 9px 30px'
                 : `6px ${20 + (scopeToggle ? 20 : 0) + (query ? 20 : 0)}px 6px 28px`,
-              fontSize: isMobile ? 15 : 13,
+              fontSize: isMobile ? 'var(--text-xl)' : 'var(--text-md)',
               color: 'var(--text-primary)',
               background: 'var(--bg)',
               border: '1px solid var(--border)',
-              borderRadius: 7,
+              borderRadius: 'var(--radius-sm)',
               outline: 'none',
             }}
           />
@@ -371,7 +371,7 @@ export default function FeedSidebar({
         >
           <span
             style={{
-              fontSize: 10,
+              fontSize: 'var(--text-xs)',
               color: 'var(--text-tertiary)',
               letterSpacing: '0.04em',
               fontVariantNumeric: 'tabular-nums',
@@ -406,7 +406,7 @@ function IconBtn({ onClick, title, isMobile, children }: IconBtnProps) {
       style={{
         color: 'var(--text-tertiary)',
         padding: isMobile ? 6 : 4,
-        borderRadius: 6,
+        borderRadius: 'var(--radius-sm)',
         transition: 'color 0.15s, background 0.15s',
         background: 'none',
         border: 'none',
@@ -438,7 +438,7 @@ function SectionLabel({ children, style }: SectionLabelProps) {
     <div
       style={{
         padding: '2px 12px 6px',
-        fontSize: 10.5,
+        fontSize: 'var(--text-xs)',
         fontWeight: 600,
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
@@ -478,7 +478,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
         gap: isMobile ? 12 : 8,
         background: hl ? 'var(--bg-selected)' : 'transparent',
         color: hl ? 'var(--text-primary)' : 'var(--text-secondary)',
-        fontSize: isMobile ? 15 : 13,
+        fontSize: isMobile ? 'var(--text-xl)' : 'var(--text-md)',
         fontWeight: hl ? 500 : 400,
         textAlign: 'left',
         border: 'none',
@@ -498,7 +498,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
       {count != null && count > 0 && (
         <span
           style={{
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             color: hl ? 'var(--accent)' : 'var(--text-tertiary)',
             fontWeight: 500,
             flexShrink: 0,

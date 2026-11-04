@@ -96,7 +96,7 @@ export default function ManageModal({
         style={{
           background: 'var(--bg-reader)',
           border: '1px solid var(--border)',
-          borderRadius: 12,
+          borderRadius: 'var(--radius-lg)',
           // Fixed widths would overflow a phone; this modal is reachable on mobile
           // because it owns the per-feed notification toggle.
           width: 'min(560px, calc(100vw - 32px))',
@@ -130,7 +130,7 @@ export default function ManageModal({
                   width: 28,
                   height: 28,
                   marginLeft: -6,
-                  borderRadius: 6,
+                  borderRadius: 'var(--radius-sm)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -146,7 +146,12 @@ export default function ManageModal({
                 <ArrowLeft size={15} />
               </button>
               <span
-                style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}
+                style={{
+                  fontSize: 'var(--text-lg)',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  flex: 1,
+                }}
               >
                 {subTitle}
               </span>
@@ -158,7 +163,7 @@ export default function ManageModal({
                   display: 'flex',
                   gap: 2,
                   background: 'var(--bg-panel)',
-                  borderRadius: 7,
+                  borderRadius: 'var(--radius-sm)',
                   padding: 3,
                   flexShrink: 0,
                 }}
@@ -174,8 +179,8 @@ export default function ManageModal({
                     onClick={() => setTab(key)}
                     style={{
                       padding: '4px 14px',
-                      borderRadius: 5,
-                      fontSize: 12.5,
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: 'var(--text-md)',
                       fontWeight: 500,
                       background: tab === key ? 'var(--bg-reader)' : 'transparent',
                       color: tab === key ? 'var(--text-primary)' : 'var(--text-tertiary)',
@@ -189,7 +194,7 @@ export default function ManageModal({
                   </button>
                 ))}
               </div>
-              <span style={{ flex: 1, fontSize: 12, color: 'var(--text-tertiary)' }}>
+              <span style={{ flex: 1, fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)' }}>
                 {tab === 'feeds' ? feeds.length : collections.length} 个
               </span>
             </>
@@ -201,7 +206,7 @@ export default function ManageModal({
             style={{
               width: 28,
               height: 28,
-              borderRadius: 6,
+              borderRadius: 'var(--radius-sm)',
               background: 'var(--bg-hover)',
               display: 'flex',
               alignItems: 'center',

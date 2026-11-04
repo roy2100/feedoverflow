@@ -117,9 +117,9 @@ export default function TrendChart() {
         padding: '6px 8px',
         background: 'var(--bg-reader)',
         border: '1px solid var(--border-light)',
-        borderRadius: 6,
+        borderRadius: 'var(--radius-sm)',
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        fontSize: 11,
+        fontSize: 'var(--text-xs)',
         lineHeight: 1.5,
         color: 'var(--text-secondary)',
         pointerEvents: 'none',
@@ -156,7 +156,7 @@ export default function TrendChart() {
           marginBottom: 8,
         }}
       >
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
           近 {days} 天{trend && ` · ${trend.matched} 篇`}
         </span>
         <Segmented<TrendDays>
@@ -277,7 +277,7 @@ export default function TrendChart() {
           gap: 12,
           minHeight: 20,
           marginTop: 2,
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           color: 'var(--text-tertiary)',
         }}
       >
@@ -312,11 +312,11 @@ export default function TrendChart() {
               display: 'flex',
               alignItems: 'center',
               gap: 3,
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               color: 'var(--accent)',
               background: 'var(--bg-selected)',
               border: 'none',
-              borderRadius: 5,
+              borderRadius: 'var(--radius-sm)',
               padding: '2px 6px',
               cursor: 'pointer',
             }}

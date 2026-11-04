@@ -20,7 +20,7 @@ export default function DemoBanner() {
         justifyContent: 'center',
         gap: '0.5em',
         padding: '0 12px',
-        fontSize: 13,
+        fontSize: 'var(--text-md)',
         fontWeight: 600,
         color: '#fff',
         background: 'linear-gradient(90deg, #b45309, #d97706)',

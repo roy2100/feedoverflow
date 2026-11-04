@@ -113,7 +113,7 @@ export default function PodcastPlayer({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 5,
+    borderRadius: 'var(--radius-sm)',
     flexShrink: 0,
     transition: 'background 0.12s',
   };
@@ -152,7 +152,7 @@ export default function PodcastPlayer({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 fontWeight: 500,
                 color: 'var(--text-primary)',
                 overflow: 'hidden',
@@ -164,7 +164,13 @@ export default function PodcastPlayer({
               {decodeEntities(episode.title)}
             </div>
             {episode.feedName && (
-              <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+              <div
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--text-tertiary)',
+                  lineHeight: 1.4,
+                }}
+              >
                 {episode.feedName}
               </div>
             )}
@@ -173,7 +179,7 @@ export default function PodcastPlayer({
             onClick={cycleSpeed}
             style={{
               ...btnStyle,
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               fontWeight: 600,
               color: 'var(--accent-light)',
               padding: '2px 6px',
@@ -196,7 +202,7 @@ export default function PodcastPlayer({
             onClick={() => skip(-15)}
             style={{
               ...btnStyle,
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               fontWeight: 600,
               color: 'var(--text-secondary)',
               padding: '2px 5px',
@@ -217,7 +223,7 @@ export default function PodcastPlayer({
             onClick={() => skip(15)}
             style={{
               ...btnStyle,
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               fontWeight: 600,
               color: 'var(--text-secondary)',
               padding: '2px 5px',
@@ -227,7 +233,7 @@ export default function PodcastPlayer({
           </button>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               color: 'var(--text-tertiary)',
               flexShrink: 0,
               minWidth: 38,
@@ -273,7 +279,7 @@ export default function PodcastPlayer({
       <div style={{ minWidth: 0, width: 180, flexShrink: 0 }}>
         <div
           style={{
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             fontWeight: 500,
             color: 'var(--text-primary)',
             overflow: 'hidden',
@@ -287,7 +293,7 @@ export default function PodcastPlayer({
         {episode.feedName && (
           <div
             style={{
-              fontSize: 10.5,
+              fontSize: 'var(--text-xs)',
               color: 'var(--text-tertiary)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -305,7 +311,7 @@ export default function PodcastPlayer({
         title="-15秒"
         style={{
           ...btnStyle,
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           fontWeight: 600,
           color: 'var(--text-secondary)',
           padding: '3px 6px',
@@ -318,7 +324,7 @@ export default function PodcastPlayer({
 
       <span
         style={{
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           color: 'var(--text-tertiary)',
           flexShrink: 0,
           minWidth: 32,
@@ -338,7 +344,14 @@ export default function PodcastPlayer({
         style={{ flex: 1, accentColor: 'var(--accent)', cursor: 'pointer', height: 4 }}
       />
 
-      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0, minWidth: 32 }}>
+      <span
+        style={{
+          fontSize: 'var(--text-xs)',
+          color: 'var(--text-tertiary)',
+          flexShrink: 0,
+          minWidth: 32,
+        }}
+      >
         {fmt(effectiveDuration)}
       </span>
 
@@ -347,7 +360,7 @@ export default function PodcastPlayer({
         title="+15秒"
         style={{
           ...btnStyle,
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           fontWeight: 600,
           color: 'var(--text-secondary)',
           padding: '3px 6px',
@@ -363,7 +376,7 @@ export default function PodcastPlayer({
         title="切换播放速度"
         style={{
           ...btnStyle,
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           fontWeight: 600,
           color: 'var(--accent-light)',
           padding: '3px 7px',

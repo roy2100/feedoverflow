@@ -49,7 +49,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
         style={{
           background: 'var(--bg-reader)',
           border: '1px solid var(--border)',
-          borderRadius: 12,
+          borderRadius: 'var(--radius-lg)',
           padding: '36px 32px',
           width: 320,
           maxWidth: '90vw',
@@ -60,7 +60,13 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: 4 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div
+            style={{
+              fontSize: 'var(--text-display)',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+            }}
+          >
             FeedOverflow
           </div>
         </div>
@@ -75,11 +81,11 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
           required
           style={{
             padding: '10px 12px',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border)',
             background: 'var(--bg-panel)',
             color: 'var(--text-primary)',
-            fontSize: 15,
+            fontSize: 'var(--text-xl)',
             outline: 'none',
             fontFamily: 'var(--font-ui)',
           }}
@@ -92,28 +98,30 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
           required
           style={{
             padding: '10px 12px',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border)',
             background: 'var(--bg-panel)',
             color: 'var(--text-primary)',
-            fontSize: 15,
+            fontSize: 'var(--text-xl)',
             outline: 'none',
             fontFamily: 'var(--font-ui)',
           }}
         />
         {error && (
-          <div style={{ color: 'var(--red)', fontSize: 13, textAlign: 'center' }}>{error}</div>
+          <div style={{ color: 'var(--red)', fontSize: 'var(--text-md)', textAlign: 'center' }}>
+            {error}
+          </div>
         )}
         <button
           type="submit"
           disabled={loading || !user || !pass}
           style={{
             padding: '10px',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-md)',
             border: 'none',
             background: loading || !user || !pass ? 'var(--bg-selected)' : 'var(--accent)',
             color: loading || !user || !pass ? 'var(--text-tertiary)' : '#fff',
-            fontSize: 15,
+            fontSize: 'var(--text-xl)',
             fontWeight: 600,
             cursor: loading || !user || !pass ? 'default' : 'pointer',
             fontFamily: 'var(--font-ui)',
