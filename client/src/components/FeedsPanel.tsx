@@ -180,7 +180,7 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
               padding: '4px 10px',
               borderRadius: 'var(--radius-sm)',
               fontSize: 'var(--text-sm)',
-              fontWeight: 500,
+              fontWeight: 'var(--weight-medium)',
               background: device === 'on' ? 'var(--bg-selected)' : 'var(--accent)',
               color: device === 'on' ? 'var(--text-secondary)' : '#fff',
               border: 'none',
@@ -252,10 +252,10 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '7px 12px',
+            padding: '8px 12px',
             borderRadius: 'var(--radius-sm)',
             fontSize: 'var(--text-md)',
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             background: 'var(--accent)',
             color: '#fff',
             border: 'none',
@@ -273,10 +273,10 @@ export default function FeedsPanel({ feeds, onDelete, onUpdate, onAdd }: FeedsPa
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '7px 12px',
+              padding: '8px 12px',
               borderRadius: 'var(--radius-sm)',
               fontSize: 'var(--text-md)',
-              fontWeight: 500,
+              fontWeight: 'var(--weight-medium)',
               background: 'none',
               color: 'var(--text-secondary)',
               border: '1px solid var(--border)',
@@ -552,7 +552,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
           autoCorrect="off"
           style={{
             ...inputStyle,
-            marginLeft: 22,
+            marginLeft: 24,
             fontSize: 'var(--text-sm)',
             color: 'var(--text-secondary)',
           }}
@@ -560,7 +560,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
         {error && (
           <p
             style={{
-              margin: '0 0 2px 22px',
+              margin: '0 0 2px 24px',
               fontSize: 'var(--text-sm)',
               color: 'var(--red)',
               lineHeight: 1.5,
@@ -586,7 +586,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
         display: 'flex',
         alignItems: 'center',
         flexWrap: 'wrap',
-        padding: '7px 20px',
+        padding: '8px 20px',
         gap: 8,
         background: hovered ? 'var(--bg-hover)' : 'transparent',
         transition: 'background 0.1s',
@@ -660,7 +660,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
         <p
           style={{
             flexBasis: '100%',
-            margin: '2px 0 0 22px',
+            margin: '2px 0 0 24px',
             fontSize: 'var(--text-sm)',
             color: 'var(--red)',
             lineHeight: 1.5,

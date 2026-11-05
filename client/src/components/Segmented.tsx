@@ -30,9 +30,9 @@ export default function Segmented<T extends string | number>({
             title={o.title}
             style={{
               fontSize: 'var(--text-xs)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               lineHeight: 1.4,
-              padding: '2px 9px',
+              padding: '2px 8px',
               borderRadius: 'var(--radius-sm)',
               border: 'none',
               cursor: 'pointer',

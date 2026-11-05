@@ -153,7 +153,7 @@ export default function PodcastPlayer({
             <div
               style={{
                 fontSize: 'var(--text-sm)',
-                fontWeight: 500,
+                fontWeight: 'var(--weight-medium)',
                 color: 'var(--text-primary)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -180,7 +180,7 @@ export default function PodcastPlayer({
             style={{
               ...btnStyle,
               fontSize: 'var(--text-xs)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               color: 'var(--accent-light)',
               padding: '2px 6px',
               minWidth: 28,
@@ -203,9 +203,9 @@ export default function PodcastPlayer({
             style={{
               ...btnStyle,
               fontSize: 'var(--text-xs)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               color: 'var(--text-secondary)',
-              padding: '2px 5px',
+              padding: '2px 4px',
             }}
           >
             -15
@@ -224,9 +224,9 @@ export default function PodcastPlayer({
             style={{
               ...btnStyle,
               fontSize: 'var(--text-xs)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               color: 'var(--text-secondary)',
-              padding: '2px 5px',
+              padding: '2px 4px',
             }}
           >
             +15
@@ -279,7 +279,7 @@ export default function PodcastPlayer({
         <div
           style={{
             fontSize: 'var(--text-sm)',
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             color: 'var(--text-primary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -311,9 +311,9 @@ export default function PodcastPlayer({
         style={{
           ...btnStyle,
           fontSize: 'var(--text-xs)',
-          fontWeight: 600,
+          fontWeight: 'var(--weight-semibold)',
           color: 'var(--text-secondary)',
-          padding: '3px 6px',
+          padding: '4px 6px',
         }}
         className="hover-bg"
       >
@@ -359,9 +359,9 @@ export default function PodcastPlayer({
         style={{
           ...btnStyle,
           fontSize: 'var(--text-xs)',
-          fontWeight: 600,
+          fontWeight: 'var(--weight-semibold)',
           color: 'var(--text-secondary)',
-          padding: '3px 6px',
+          padding: '4px 6px',
         }}
         className="hover-bg"
       >
@@ -374,9 +374,9 @@ export default function PodcastPlayer({
         style={{
           ...btnStyle,
           fontSize: 'var(--text-xs)',
-          fontWeight: 600,
+          fontWeight: 'var(--weight-semibold)',
           color: 'var(--accent-light)',
-          padding: '3px 7px',
+          padding: '4px 8px',
           minWidth: 30,
         }}
         className="hover-bg"
@@ -387,7 +387,7 @@ export default function PodcastPlayer({
       <button
         onClick={onClose}
         title="关闭播放器"
-        style={{ ...btnStyle, padding: 5, color: 'var(--text-tertiary)' }}
+        style={{ ...btnStyle, padding: 6, color: 'var(--text-tertiary)' }}
         className="hover-primary-bg"
       >
         <X size={14} strokeWidth={2} />

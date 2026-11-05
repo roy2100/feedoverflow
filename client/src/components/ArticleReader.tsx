@@ -203,7 +203,7 @@ function ActionMenu({ items, iconSize }: { items: ActionItem[]; iconSize: number
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                padding: '7px 9px',
+                padding: '8px 10px',
                 fontSize: 'var(--text-md)',
                 textAlign: 'left',
                 whiteSpace: 'nowrap',
@@ -629,7 +629,7 @@ export default function ArticleReader({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 3,
+                gap: 4,
                 fontSize: 'var(--text-md)',
                 color: 'var(--accent)',
                 textDecoration: 'none',
@@ -667,7 +667,7 @@ export default function ArticleReader({
           <div
             style={{
               fontSize: 'var(--text-xs)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: 'var(--accent)',
@@ -685,7 +685,7 @@ export default function ArticleReader({
           style={{
             fontFamily: 'var(--font-serif)',
             fontSize: isMobile ? 'var(--text-display)' : 'clamp(22px, 3vw, 28px)',
-            fontWeight: 600,
+            fontWeight: 'var(--weight-semibold)',
             lineHeight: 1.35,
             color: 'var(--text-primary)',
             marginBottom: article.titleZh?.trim() ? 6 : 12,
@@ -742,7 +742,7 @@ export default function ArticleReader({
                 style={{
                   fontSize: 'var(--text-md)',
                   color: 'var(--text-secondary)',
-                  fontWeight: 500,
+                  fontWeight: 'var(--weight-medium)',
                   letterSpacing: '0.01em',
                   // minWidth: 0 overrides the automatic minimum size, without which a
                   // nowrap span refuses to shrink and would push the actions out.
@@ -887,7 +887,7 @@ export default function ArticleReader({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
-                padding: '3px 8px',
+                padding: '4px 8px',
               }}
             >
               <AlignLeft size={11} />
@@ -929,7 +929,7 @@ export default function ArticleReader({
                 border: '1px solid var(--accent)',
                 borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
-                padding: '3px 8px',
+                padding: '4px 8px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
@@ -961,7 +961,11 @@ export default function ArticleReader({
               style={{ color: 'var(--accent-light)', flexShrink: 0 }}
             />
             <span
-              style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', fontWeight: 500 }}
+              style={{
+                fontSize: 'var(--text-sm)',
+                color: 'var(--text-tertiary)',
+                fontWeight: 'var(--weight-medium)',
+              }}
             >
               播客{article.audioDuration ? ` · ${article.audioDuration}` : ''}
             </span>
@@ -971,9 +975,9 @@ export default function ArticleReader({
                 marginLeft: 'auto',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 5,
+                gap: 4,
                 fontSize: 'var(--text-sm)',
-                fontWeight: 500,
+                fontWeight: 'var(--weight-medium)',
                 color: 'var(--accent)',
                 padding: '4px 10px',
                 borderRadius: 'var(--radius-sm)',
@@ -1366,7 +1370,11 @@ function AISummaryBlock({
           style={{ color: 'var(--accent-light)', flexShrink: 0 }}
         />
         <span
-          style={{ fontSize: 'var(--text-sm)', color: 'var(--text-tertiary)', fontWeight: 500 }}
+          style={{
+            fontSize: 'var(--text-sm)',
+            color: 'var(--text-tertiary)',
+            fontWeight: 'var(--weight-medium)',
+          }}
         >
           AI 摘要{state.model ? ` · ${state.model}` : ''}
         </span>
@@ -1447,7 +1455,9 @@ function TranslationView({
           strokeWidth={2}
           style={{ color: 'var(--accent-light)', flexShrink: 0 }}
         />
-        <span style={{ fontWeight: 500 }}>译文{state.model ? ` · ${state.model}` : ''}</span>
+        <span style={{ fontWeight: 'var(--weight-medium)' }}>
+          译文{state.model ? ` · ${state.model}` : ''}
+        </span>
         <button onClick={onShowOriginal} style={{ ...aiSmallButton, marginLeft: 'auto' }}>
           查看原文
         </button>
@@ -1536,7 +1546,7 @@ if (typeof document !== 'undefined') {
       .rss-article > :last-child { margin-bottom: 0; }
       .rss-article h1, .rss-article h2, .rss-article h3 {
         font-family: var(--font-serif);
-        font-weight: 600;
+        font-weight: var(--weight-semibold);
         margin-top: 1.6em;
         margin-bottom: 0.6em;
         line-height: 1.3;

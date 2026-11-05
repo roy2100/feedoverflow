@@ -21,7 +21,7 @@ export default function DemoBanner() {
         gap: '0.5em',
         padding: '0 12px',
         fontSize: 'var(--text-md)',
-        fontWeight: 600,
+        fontWeight: 'var(--weight-semibold)',
         color: '#fff',
         background: 'linear-gradient(90deg, #b45309, #d97706)',
         boxShadow: '0 1px 4px rgba(0,0,0,0.25)',

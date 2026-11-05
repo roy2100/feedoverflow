@@ -11,7 +11,7 @@ interface SettingsModalProps {
 
 const sectionStyle: React.CSSProperties = {
   fontSize: 'var(--text-xs)',
-  fontWeight: 600,
+  fontWeight: 'var(--weight-semibold)',
   letterSpacing: '0.1em',
   textTransform: 'uppercase',
   color: 'var(--text-tertiary)',
@@ -21,9 +21,9 @@ const sectionStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 'var(--text-sm)',
-  fontWeight: 500,
+  fontWeight: 'var(--weight-medium)',
   color: 'var(--text-secondary)',
-  marginBottom: 5,
+  marginBottom: 4,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -43,7 +43,7 @@ const primaryBtnStyle: React.CSSProperties = {
   padding: '8px 16px',
   borderRadius: 'var(--radius-sm)',
   fontSize: 'var(--text-md)',
-  fontWeight: 500,
+  fontWeight: 'var(--weight-medium)',
   background: 'var(--accent)',
   color: '#fff',
   border: 'none',
@@ -51,14 +51,14 @@ const primaryBtnStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
   display: 'flex',
   alignItems: 'center',
-  gap: 5,
+  gap: 4,
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
   padding: '8px 14px',
   borderRadius: 'var(--radius-sm)',
   fontSize: 'var(--text-md)',
-  fontWeight: 500,
+  fontWeight: 'var(--weight-medium)',
   background: 'var(--bg-selected)',
   color: 'var(--text-secondary)',
   border: 'none',
@@ -214,7 +214,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         {/* Header */}
         <div
           style={{
-            padding: '18px 20px 14px',
+            padding: '20px 20px 14px',
             borderBottom: '1px solid var(--border-light)',
             display: 'flex',
             alignItems: 'center',
@@ -222,7 +222,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           }}
         >
           <span
-            style={{ fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)' }}
+            style={{
+              fontSize: 'var(--text-lg)',
+              fontWeight: 'var(--weight-semibold)',
+              color: 'var(--text-primary)',
+            }}
           >
             设置
           </span>
@@ -285,7 +289,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   padding: '8px 16px',
                   borderRadius: 'var(--radius-sm)',
                   fontSize: 'var(--text-md)',
-                  fontWeight: 500,
+                  fontWeight: 'var(--weight-medium)',
                   background: saved
                     ? 'var(--accent)'
                     : saving || !rsshubBase.trim()
@@ -299,7 +303,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   whiteSpace: 'nowrap',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: 4,
                 }}
               >
                 {saved ? (

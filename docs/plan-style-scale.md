@@ -55,4 +55,5 @@ Radius: 3, 4 → xs. 5, 6, 7 → sm. 8 → md. 10, 12 → lg. 50% stays.
 
 Done as planned, in two commits: 185 values moved to tokens, 19 hover handlers to 8 classes. Tests,
 typecheck, format, lint and build pass. The look is for the owner to verify by hand (desktop +
-iPhone), above all the wrapping risk. `docs/todo-style.md` holds the rest.
+iPhone), above all the wrapping risk. The follow-ups in `docs/todo-style.md` are now complete:
+an AST/CSS regression test, weight tokens, a color baseline and the spacing cleanup.

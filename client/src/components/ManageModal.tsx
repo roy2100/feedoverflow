@@ -112,7 +112,7 @@ export default function ManageModal({
             an open editor cannot have its unsaved rules swapped out from under it. */}
         <div
           style={{
-            padding: '13px 20px',
+            padding: '14px 20px',
             borderBottom: '1px solid var(--border-light)',
             display: 'flex',
             alignItems: 'center',
@@ -147,7 +147,7 @@ export default function ManageModal({
               <span
                 style={{
                   fontSize: 'var(--text-lg)',
-                  fontWeight: 600,
+                  fontWeight: 'var(--weight-semibold)',
                   color: 'var(--text-primary)',
                   flex: 1,
                 }}
@@ -163,7 +163,7 @@ export default function ManageModal({
                   gap: 2,
                   background: 'var(--bg-panel)',
                   borderRadius: 'var(--radius-sm)',
-                  padding: 3,
+                  padding: 2,
                   flexShrink: 0,
                 }}
               >
@@ -180,7 +180,7 @@ export default function ManageModal({
                       padding: '4px 14px',
                       borderRadius: 'var(--radius-sm)',
                       fontSize: 'var(--text-md)',
-                      fontWeight: 500,
+                      fontWeight: 'var(--weight-medium)',
                       background: tab === key ? 'var(--bg-reader)' : 'transparent',
                       color: tab === key ? 'var(--text-primary)' : 'var(--text-tertiary)',
                       border: tab === key ? '1px solid var(--border)' : '1px solid transparent',

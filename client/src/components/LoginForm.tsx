@@ -63,7 +63,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
           <div
             style={{
               fontSize: 'var(--text-display)',
-              fontWeight: 700,
+              fontWeight: 'var(--weight-bold)',
               color: 'var(--text-primary)',
             }}
           >
@@ -122,7 +122,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
             background: loading || !user || !pass ? 'var(--bg-selected)' : 'var(--accent)',
             color: loading || !user || !pass ? 'var(--text-tertiary)' : '#fff',
             fontSize: 'var(--text-xl)',
-            fontWeight: 600,
+            fontWeight: 'var(--weight-semibold)',
             cursor: loading || !user || !pass ? 'default' : 'pointer',
             fontFamily: 'var(--font-ui)',
             transition: 'background 0.15s',

@@ -35,10 +35,14 @@ Single-person project — edit and commit directly on `main`. No feature branche
 
 ## Styling
 
-Components use inline styles with tokens from `client/src/index.css`: `--text-*` for font size and
-`--radius-*` for radius, never a literal number. Exceptions: 50%, the article title's `clamp()`,
-`em` sizes inside `.rss-article`, and `TrendChart`'s data marks. `docs/plan-style-scale.md`; what is
-still open is in `docs/todo-style.md`.
+Components use inline styles with tokens from `client/src/index.css`: `--text-*` for font size,
+`--radius-*` for radius, and `--weight-*` for font weight, never a literal number. Exceptions: 50%,
+the article title's `clamp()`, `em` sizes inside `.rss-article`, SVG text size attributes, and
+`TrendChart`'s data marks. `docs/plan-style-scale.md`; completion notes are in `docs/todo-style.md`.
+`client/src/__tests__/styleScale.test.ts` enforces the scale through the TypeScript AST and parses
+CSS too. Raw colors have a ceiling per value in `style-colors.baseline.json`: lower/remove entries
+when migrating to tokens; never raise them to pass a test. For UI spacing, use the neighbouring
+values instead of reintroducing 3, 5, 7, 9, 13, 18 or 22px; prose `em` spacing stays relative.
 
 Hover color is a `.hover-*` class in `index.css`, never `onMouseEnter` writing to `element.style`.
 Handlers are for logic: the rows in `FeedsPanel` and `CollectionsPanel` reveal actions and disarm a

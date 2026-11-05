@@ -166,7 +166,7 @@ export default function FeedSidebar({
           <span
             style={{
               fontSize: isMobile ? 'var(--text-xl)' : 'var(--text-sm)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               letterSpacing: isMobile ? 0 : '0.08em',
               textTransform: isMobile ? 'none' : 'uppercase',
               color: isMobile ? 'var(--text-primary)' : 'var(--text-tertiary)',
@@ -432,7 +432,7 @@ function SectionLabel({ children, style }: SectionLabelProps) {
       style={{
         padding: '2px 12px 6px',
         fontSize: 'var(--text-xs)',
-        fontWeight: 600,
+        fontWeight: 'var(--weight-semibold)',
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
         color: 'var(--text-tertiary)',
@@ -472,7 +472,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
         background: hl ? 'var(--bg-selected)' : 'transparent',
         color: hl ? 'var(--text-primary)' : 'var(--text-secondary)',
         fontSize: isMobile ? 'var(--text-xl)' : 'var(--text-md)',
-        fontWeight: hl ? 500 : 400,
+        fontWeight: hl ? 'var(--weight-medium)' : 'var(--weight-regular)',
         textAlign: 'left',
         border: 'none',
         cursor: 'default',
@@ -493,7 +493,7 @@ function NavItem({ label, icon, iconColor, count, selected, onClick, isMobile }:
           style={{
             fontSize: 'var(--text-sm)',
             color: hl ? 'var(--accent)' : 'var(--text-tertiary)',
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             flexShrink: 0,
           }}
         >

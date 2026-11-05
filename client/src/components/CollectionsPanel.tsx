@@ -81,10 +81,10 @@ export function CollectionList({
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '7px 12px',
+            padding: '8px 12px',
             borderRadius: 'var(--radius-sm)',
             fontSize: 'var(--text-md)',
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             background: 'var(--accent)',
             color: '#fff',
             border: 'none',
@@ -128,7 +128,7 @@ function CollectionRow({ collection, feeds, isMobile, onEdit, onDelete }: Collec
         transition: 'background 0.1s',
       }}
     >
-      <Layers size={13} style={{ color: '#3B9E6E', flexShrink: 0, marginTop: 3 }} />
+      <Layers size={13} style={{ color: '#3B9E6E', flexShrink: 0, marginTop: 2 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 'var(--text-md)', color: 'var(--text-primary)' }}>
           {collection.name}
@@ -215,7 +215,7 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
 
   const fieldStyle: React.CSSProperties = {
     fontSize: 'var(--text-md)',
-    padding: '5px 8px',
+    padding: '6px 8px',
     background: 'var(--bg)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-sm)',
@@ -343,7 +343,7 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
         <button
           onClick={onCancel}
           style={{
-            padding: '7px 14px',
+            padding: '8px 14px',
             borderRadius: 'var(--radius-sm)',
             fontSize: 'var(--text-md)',
             background: 'var(--bg-selected)',
@@ -358,10 +358,10 @@ export function CollectionEditor({ collection, feeds, onCancel, onSave }: Collec
           onClick={handleSave}
           disabled={saving}
           style={{
-            padding: '7px 14px',
+            padding: '8px 14px',
             borderRadius: 'var(--radius-sm)',
             fontSize: 'var(--text-md)',
-            fontWeight: 500,
+            fontWeight: 'var(--weight-medium)',
             background: 'var(--accent)',
             color: '#fff',
             border: 'none',

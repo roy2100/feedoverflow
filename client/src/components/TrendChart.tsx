@@ -126,10 +126,13 @@ export default function TrendChart() {
         zIndex: 1,
       }}
     >
-      <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+      <div style={{ color: 'var(--text-primary)', fontWeight: 'var(--weight-semibold)' }}>
         {longLabel(focus.date)}
         {focusIdx === n - 1 && (
-          <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · 进行中</span>
+          <span style={{ color: 'var(--text-tertiary)', fontWeight: 'var(--weight-regular)' }}>
+            {' '}
+            · 进行中
+          </span>
         )}
       </div>
       <div>
@@ -311,7 +314,7 @@ export default function TrendChart() {
               marginLeft: 'auto',
               display: 'flex',
               alignItems: 'center',
-              gap: 3,
+              gap: 4,
               fontSize: 'var(--text-xs)',
               color: 'var(--accent)',
               background: 'var(--bg-selected)',

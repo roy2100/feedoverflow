@@ -32,6 +32,10 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
   --star: #f5c518;
   --font-ui: 'DM Sans', -apple-system, sans-serif;
   /* Letters render with Noto Serif SC (exactly as before). The curly quotes,
@@ -183,7 +187,7 @@ input {
   input,
   textarea,
   select {
-    font-size: 16px !important;
+    font-size: var(--text-prose) !important;
   }
 }
 
@@ -196,7 +200,7 @@ input {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-tertiary);

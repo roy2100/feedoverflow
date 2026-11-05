@@ -187,7 +187,7 @@ export default function ArticleList({
         <h2
           style={{
             fontSize: isMobile ? 'var(--text-prose)' : 'var(--text-lg)',
-            fontWeight: 600,
+            fontWeight: 'var(--weight-semibold)',
             color: 'var(--text-primary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -300,7 +300,7 @@ function SkeletonItem({ isMobile }: { isMobile?: boolean }) {
   const p = isMobile ? '14px 16px' : '12px 16px';
   return (
     <div style={{ padding: p, borderBottom: '1px solid var(--border-light)' }}>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div className="skeleton-bar" style={{ height: 9, width: '38%' }} />
         <div className="skeleton-bar" style={{ height: 12, width: '92%' }} />
         <div className="skeleton-bar" style={{ height: 12, width: '68%' }} />
@@ -340,7 +340,7 @@ function ArticleItem({
 }: ArticleItemProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? 'var(--text-lg)' : 'var(--text-md)',
-    fontWeight: 400,
+    fontWeight: 'var(--weight-regular)',
     color: 'var(--text-primary)',
     lineHeight: 1.45,
     display: '-webkit-box',
@@ -398,12 +398,12 @@ function ArticleItem({
           ) : (
             <>
               {/* Feed name + time on one row */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
                 {article.feedName && (
                   <span
                     style={{
                       fontSize: 'var(--text-xs)',
-                      fontWeight: 600,
+                      fontWeight: 'var(--weight-semibold)',
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase',
                       color: 'var(--accent-light)',
@@ -434,9 +434,9 @@ function ArticleItem({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 3,
+                gap: 4,
                 fontSize: 'var(--text-xs)',
-                fontWeight: 500,
+                fontWeight: 'var(--weight-medium)',
                 color: episodePlaying || episodeBuffering ? 'var(--accent)' : 'var(--accent-light)',
                 background: 'none',
                 border: 'none',

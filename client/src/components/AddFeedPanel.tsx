@@ -26,7 +26,7 @@ export default function AddFeedPanel({ onAdd, onImport, onDone }: AddFeedPanelPr
             gap: 2,
             background: 'var(--bg-panel)',
             borderRadius: 'var(--radius-sm)',
-            padding: 3,
+            padding: 2,
           }}
         >
           {(
@@ -42,7 +42,7 @@ export default function AddFeedPanel({ onAdd, onImport, onDone }: AddFeedPanelPr
                 padding: '4px 12px',
                 borderRadius: 'var(--radius-sm)',
                 fontSize: 'var(--text-md)',
-                fontWeight: 500,
+                fontWeight: 'var(--weight-medium)',
                 background: tab === key ? 'var(--bg-reader)' : 'transparent',
                 color: tab === key ? 'var(--text-primary)' : 'var(--text-tertiary)',
                 border: tab === key ? '1px solid var(--border)' : '1px solid transparent',
@@ -112,7 +112,7 @@ function ManualTab({ onAdd, onDone }: ManualTabProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ padding: '18px 20px 20px' }}>
+    <form onSubmit={handleSubmit} style={{ padding: '20px 20px 20px' }}>
       <Field
         ref={urlRef}
         label="订阅地址"
@@ -212,7 +212,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
   };
 
   return (
-    <div style={{ padding: '18px 20px 20px' }}>
+    <div style={{ padding: '20px 20px 20px' }}>
       {phase === 'idle' || phase === 'importing' ? (
         <>
           <div
@@ -268,7 +268,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
                     fontSize: 'var(--text-md)',
                     color: 'var(--text-primary)',
                     margin: '0 0 4px',
-                    fontWeight: 500,
+                    fontWeight: 'var(--weight-medium)',
                   }}
                 >
                   拖拽 OPML 文件至此
@@ -291,12 +291,12 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
                   style={{
                     fontSize: 'var(--text-md)',
                     color: 'var(--accent)',
-                    padding: '5px 14px',
+                    padding: '6px 14px',
                     border: '1px solid var(--accent)',
                     borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
                     background: 'none',
-                    fontWeight: 500,
+                    fontWeight: 'var(--weight-medium)',
                   }}
                 >
                   选择文件
@@ -332,7 +332,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
           <p
             style={{
               fontSize: 'var(--text-xl)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               color: 'var(--text-primary)',
               margin: '0 0 6px',
             }}
@@ -377,7 +377,7 @@ function OpmlTab({ onImport, onDone }: OpmlTabProps) {
           <p
             style={{
               fontSize: 'var(--text-xl)',
-              fontWeight: 600,
+              fontWeight: 'var(--weight-semibold)',
               color: 'var(--text-primary)',
               margin: '0 0 6px',
             }}
@@ -426,9 +426,9 @@ const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         style={{
           display: 'block',
           fontSize: 'var(--text-sm)',
-          fontWeight: 500,
+          fontWeight: 'var(--weight-medium)',
           color: 'var(--text-secondary)',
-          marginBottom: 5,
+          marginBottom: 4,
         }}
       >
         {label}
@@ -471,7 +471,7 @@ function GhostBtn({ onClick, children }: GhostBtnProps) {
       type="button"
       onClick={onClick}
       style={{
-        padding: '7px 16px',
+        padding: '8px 16px',
         borderRadius: 'var(--radius-sm)',
         fontSize: 'var(--text-md)',
         color: 'var(--text-secondary)',
@@ -502,10 +502,10 @@ function PrimaryBtn({ onClick, type = 'button', disabled, children }: PrimaryBtn
       onClick={onClick}
       disabled={disabled}
       style={{
-        padding: '7px 20px',
+        padding: '8px 20px',
         borderRadius: 'var(--radius-sm)',
         fontSize: 'var(--text-md)',
-        fontWeight: 500,
+        fontWeight: 'var(--weight-medium)',
         background: disabled ? 'var(--bg-selected)' : 'var(--accent)',
         color: disabled ? 'var(--text-tertiary)' : '#fff',
         border: 'none',
