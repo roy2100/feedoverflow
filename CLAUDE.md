@@ -281,8 +281,15 @@ language, drop stale/redundant chrome.
   both actions until the store sees a configured endpoint. Output is plain paragraphs, not
   HTML: an 8B model does not round-trip markup. Maintenance purges `article_ai` orphans.
   Rationale: `docs/plan-article-ai-opml-export.md`.
-  - **The endpoint runs locally** (Ollama, `http://localhost:11434/v1`), and the model it serves
-    must be a **general instruct model that does not think**. Both halves are scar tissue:
+  - **The endpoint is `codex/gpt-6.1-terra` through the local magpie gateway**
+    (`http://127.0.0.1:3425/v1`, any key), paid from a subscription quota that expires unused. Its
+    native API is Responses, but on Luna the `/chat/completions` shim showed the same output class
+    as native Responses, so this stays one plain client: don't add a Responses path. The shim
+    **ignores `max_tokens`**, and each call carries thousands of prompt tokens added behind the
+    gateway. Don't move back to `codex/gpt-6-luna` without re-measuring: it appends stray tokens
+    that `clean` does not catch (`做客}}`, `三分彩`). Measurements: `docs/plan-magpie-gpt6-luna.md`.
+  - **A local Ollama endpoint** (`http://localhost:11434/v1`) must serve a
+    **general instruct model that does not think**. Both halves are scar tissue:
     - A *dedicated translation* model (Hunyuan-MT-7B and friends) cannot run this prompt. Its chat
       template has no multi-turn support, so `exampleTurns` is silently dropped, and it has no
       instruction layer to honour 「只有「标题：」后面那一行需要翻译」 — measured, it translated the
