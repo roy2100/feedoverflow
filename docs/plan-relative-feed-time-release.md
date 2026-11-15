@@ -34,3 +34,14 @@ Out of scope:
 ## Complexity
 
 Low: one UI file, documentation, and the existing deployment workflow.
+
+## Outcome
+
+- Committed the relative publication-date display as `0ce076d` and pushed `main` to `origin`, including the preceding management-list changes.
+- Formatting, lint, and diff checks passed before commit. The change had also passed all 25 feed-panel/style-scale tests and client TypeScript checks.
+- Automatic approval initially blocked production deployment pending explicit confirmation of `~/Deploy/feedoverflow` and `com.feedoverflow.app`. The user confirmed both targets, and the existing deployment script then completed successfully.
+- Production client build, Go binary build, launchd restart, and loopback `/healthz` verification passed. The app is running, and the reverse-tunnel launchd process is also running.
+- The generated management bundle, deployed file, and bundle served by the local public listener have identical SHA-256 hashes: `f36571b2d7625a404faed939a62386b6aad225f84eceafb065a3aa8bd036a45e`.
+- Public HTTPS verification could not complete: both ordinary and direct IPv4 requests failed during TLS negotiation with `SSL_ERROR_SYSCALL`. Deployment is locally verified; public reachability remains unverified. No tunnel or TLS configuration was changed.
+- Deployment did not modify tracked dependency files. `npm install` reported 16 dependency vulnerabilities (3 low, 7 moderate, 6 high); no dependency upgrades were attempted in this release.
+- No browser automation or screenshots were used.

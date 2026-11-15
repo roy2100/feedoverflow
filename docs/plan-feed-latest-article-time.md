@@ -49,7 +49,7 @@ Implemented as planned.
 - SQLite `EXPLAIN QUERY PLAN` on an in-memory schema confirms the timestamp subquery uses the covering `idx_article_states_feed_pub` index.
 - Follow-up UI changes requested by the user make feed and collection action buttons always visible and remove row-wide hover backgrounds. Button hover feedback and two-step deletion remain intact; leaving a row cancels a pending delete.
 - Follow-up validation passed: all 25 feed-panel/style-scale tests and all 13 management-modal/style-scale tests, plus TypeScript, formatting, lint, and diff checks.
-- No browser automation or screenshots were used. No deployment was performed.
+- No browser automation or screenshots were used. The subsequent release and deployment results are recorded in `docs/plan-relative-feed-time-release.md`.
 
 ### Manual UI Verification
 
