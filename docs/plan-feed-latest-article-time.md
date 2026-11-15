@@ -42,7 +42,7 @@ Low: one indexed query extension, API/client type changes, and a small existing-
 Implemented as planned.
 
 - `ListFeeds` exposes nullable `latest_article_at` using a per-feed indexed maximum of `pub_ts`. Missing and zero timestamps return null; starred articles remain eligible. Fetch timestamps, content-edit timestamps, and orphaned articles do not affect the result.
-- Feed rows show `最新文章：` followed by the local publication date and time beneath the source name, with a full timestamp tooltip and a semantic `time` element. Unknown timestamps show `暂无文章时间`.
+- Feed rows show `最新文章：` followed by a relative local calendar date (`今天`, `昨天`, or `N 天前`) beneath the source name, with a full timestamp tooltip and a semantic `time` element. Future dates show `明天` or `N 天后`; unknown timestamps show `暂无文章时间`. Calendar-date comparison is independent of daylight-saving day length.
 - Opening management refreshes timestamps through the store. Only timestamp fields are merged, preserving concurrent feed additions, deletions, and edits. Failed requests preserve existing values.
 - Backend regression coverage verifies per-feed maxima and unknown timestamps. Store regression coverage verifies refresh races and failed requests.
 - Validation passed: `make -C server-go check`; all 21 client test files / 283 tests; client TypeScript checks; formatting and lint checks; `git diff --check`.

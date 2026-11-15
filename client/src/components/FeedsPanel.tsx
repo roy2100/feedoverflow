@@ -24,6 +24,18 @@ import {
 } from '../lib/push';
 import type { Feed, FeedPatch } from '../types';
 
+function formatFeedArticleDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  // Compare local calendar dates without treating a DST day as exactly 24 hours.
+  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const days = (day(now) - day(date)) / 86_400_000;
+  if (days === 0) return '今天';
+  if (days === 1) return '昨天';
+  if (days === -1) return '明天';
+  return days > 0 ? `${days} 天前` : `${-days} 天后`;
+}
+
 function fallbackCopy(text: string, onDone: () => void) {
   const ta = document.createElement('textarea');
   ta.value = text;
@@ -616,14 +628,7 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
             <>
               最新文章：
               <time dateTime={new Date(feed.latest_article_at).toISOString()}>
-                {new Date(feed.latest_article_at).toLocaleString('zh-CN', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })}
+                {formatFeedArticleDate(feed.latest_article_at)}
               </time>
             </>
           ) : (
