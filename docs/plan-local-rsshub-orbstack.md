@@ -72,5 +72,6 @@ Implemented as planned with no deviations:
   - `zaobao/realtime`: `200` (`9.91s`)
   - `zaobao/realtime/world`: `200` (`18.53s` cold fetch)
 - Host Stash TUN covered container egress (`telegram/*`, `zaobao/*`, `anthropic/*`) directly without setting `PROXY_URI`.
-- Container memory after probing all 12 routes: `242MiB / 256MiB` (`94.5%`), `OOMKilled=false`, `RestartCount=0`. Note: headroom is tight (~14 MiB); bump to `320m` / `256` if concurrent polling causes OOM restarts later.
+- Container memory after probing all 12 routes at the initial `256m` / `192` cap: `242MiB / 256MiB` (`94.5%`), `OOMKilled=false`, `RestartCount=0`.
+- Bumped `scripts/rsshub/compose.yml` to `mem_limit: 320m`, `memswap_limit: 320m`, `NODE_OPTIONS=--max-old-space-size=256` for safer headroom and recreated the container: `http://127.0.0.1:1200/` ready in 2s, `docker stats` `241.8MiB / 320MiB` (`75.56%`), `Memory=335544320`, `OOMKilled=false`, `Status=running`.
 - Updated `scripts/README.md`.

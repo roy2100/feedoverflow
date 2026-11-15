@@ -6,11 +6,11 @@ services:
       - "127.0.0.1:1200:1200"
     environment:
       NODE_ENV: production
-      NODE_OPTIONS: "--max-old-space-size=192"
+      NODE_OPTIONS: "--max-old-space-size=256"
       CACHE_TYPE: memory
       CACHE_EXPIRE: "300"
       CACHE_CONTENT_EXPIRE: "300"
       TZ: Asia/Shanghai
-    mem_limit: 256m
-    memswap_limit: 256m
+    mem_limit: 320m
+    memswap_limit: 320m
     restart: unless-stopped

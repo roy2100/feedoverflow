@@ -17,7 +17,7 @@ rollout never touches the service definition and a one-time setup never rebuilds
 | `lib.sh` | Shared config vars + launchd helpers (`reload_service`, `kickstart_service`, `health_check`) sourced by the deploy/service scripts. |
 | `burst-latency.sh` | Concurrent-burst latency smoke test against a running server (loopback `:4002`). |
 | `loc.sh` | Lines-of-code report for the repo. |
-| `rsshub/compose.yml` | Local OrbStack RSSHub container (`diygod/rsshub:latest` on `127.0.0.1:1200`, 256 MiB memory cap, replaces the VPS SSH tunnel). |
+| `rsshub/compose.yml` | Local OrbStack RSSHub container (`diygod/rsshub:latest` on `127.0.0.1:1200`, 320 MiB memory cap, replaces the VPS SSH tunnel). |
 
 ## Env the Go plist sets
 
