@@ -29,6 +29,67 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('refreshFeedTimes', () => {
+  it('refreshes times without undoing feed changes made while the request was pending', async () => {
+    let resolve!: (response: unknown) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      ),
+    );
+    const refresh = useStore.getState().refreshFeedTimes();
+    useStore.setState({
+      feeds: [
+        { id: 'kept', name: 'Renamed', url: 'https://new.example/rss' },
+        { id: 'added', name: 'New', url: 'https://added.example/rss' },
+      ],
+    });
+    resolve({
+      ok: true,
+      json: async () => [
+        {
+          id: 'kept',
+          name: 'Old',
+          url: 'https://old.example/rss',
+          latest_article_at: 1700000000000,
+        },
+        { id: 'deleted', name: 'Removed', url: 'https://deleted.example/rss' },
+      ],
+    });
+
+    await refresh;
+
+    expect(useStore.getState().feeds).toEqual([
+      {
+        id: 'kept',
+        name: 'Renamed',
+        url: 'https://new.example/rss',
+        latest_article_at: 1700000000000,
+      },
+      { id: 'added', name: 'New', url: 'https://added.example/rss' },
+    ]);
+  });
+
+  it('preserves the existing timestamp when the refresh fails', async () => {
+    const feed = {
+      id: 'f',
+      name: 'F',
+      url: 'https://f.example/rss',
+      latest_article_at: 1700000000000,
+    };
+    useStore.setState({ feeds: [feed] });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    await useStore.getState().refreshFeedTimes();
+
+    expect(useStore.getState().feeds).toEqual([feed]);
+  });
+});
+
 // ─── toggleStar ─────────────────────────────────────────────────────────────
 
 describe('toggleStar', () => {

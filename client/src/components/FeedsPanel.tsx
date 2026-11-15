@@ -359,20 +359,17 @@ interface FeedRowProps {
 }
 
 function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }: FeedRowProps) {
-  // Touch devices have no hover, so the row actions can never reveal themselves
-  // there — on mobile they are simply always visible.
+  // Touch devices get larger action targets.
   const isMobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(feed.name);
   const [url, setUrl] = useState(feed.url);
   const [error, setError] = useState('');
-  const [hovered, setHovered] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   // Deleting a feed also purges its non-starred articles, so it is two-step:
-  // the first click arms, the second commits. The icons sit 24px apart, appear
-  // under a cursor that is already moving, and 删除 is next to 编辑 — a single
-  // misclick should not be able to destroy anything.
+  // the first click arms, the second commits. 删除 sits next to 编辑, so a
+  // single misclick should not be able to destroy anything.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const disarmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -577,85 +574,106 @@ function FeedRow({ feed, onDelete, onUpdate, onTogglePush, pushBusy, pushError }
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false);
-        disarm();
-      }}
+      onMouseLeave={disarm}
       style={{
         display: 'flex',
         alignItems: 'center',
         flexWrap: 'wrap',
         padding: '8px 20px',
         gap: 8,
-        background: hovered ? 'var(--bg-hover)' : 'transparent',
-        transition: 'background 0.1s',
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <FeedIcon url={feed.url} />
       </span>
-      <span
-        style={{
-          flex: 1,
-          fontSize: 'var(--text-md)',
-          color: 'var(--text-primary)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {feed.name}
-      </span>
-      {/* The bell stays visible once on: an active push subscription is state the
-          user must be able to see without hovering (and without a mouse at all). */}
-      {(hovered || pushOn || isMobile) && (
-        <ActionBtn
-          onClick={() => {
-            if (!pushBusy) void onTogglePush(feed, !pushOn);
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            display: 'block',
+            fontSize: 'var(--text-md)',
+            color: 'var(--text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
-          title={pushOn ? '关闭更新推送' : '开启更新推送'}
-          color={pushOn ? 'var(--accent)' : 'var(--text-tertiary)'}
+        >
+          {feed.name}
+        </span>
+        <span
+          title={
+            feed.latest_article_at
+              ? `最新文章发布时间：${new Date(feed.latest_article_at).toLocaleString('zh-CN')}`
+              : '尚无已保存文章的有效发布时间'
+          }
+          style={{
+            display: 'block',
+            marginTop: 2,
+            fontSize: 'var(--text-xs)',
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          {feed.latest_article_at ? (
+            <>
+              最新文章：
+              <time dateTime={new Date(feed.latest_article_at).toISOString()}>
+                {new Date(feed.latest_article_at).toLocaleString('zh-CN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })}
+              </time>
+            </>
+          ) : (
+            '暂无文章时间'
+          )}
+        </span>
+      </span>
+      <ActionBtn
+        onClick={() => {
+          if (!pushBusy) void onTogglePush(feed, !pushOn);
+        }}
+        title={pushOn ? '关闭更新推送' : '开启更新推送'}
+        color={pushOn ? 'var(--accent)' : 'var(--text-tertiary)'}
+        hoverColor="var(--accent)"
+        isMobile={isMobile}
+      >
+        {pushOn ? <Bell size={11} /> : <BellOff size={11} />}
+      </ActionBtn>
+      {/* Gap, not just spacing: the bell is a state toggle, the three that follow
+          are actions. Crowding them into one strip read as a single group. */}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 6 }}>
+        <ActionBtn
+          onClick={handleCopy}
+          title={copied ? '已复制' : '复制链接'}
+          color={copied ? 'var(--accent)' : 'var(--text-tertiary)'}
           hoverColor="var(--accent)"
           isMobile={isMobile}
         >
-          {pushOn ? <Bell size={11} /> : <BellOff size={11} />}
+          {copied ? <CopyCheck size={11} /> : <Copy size={11} />}
         </ActionBtn>
-      )}
-      {/* Gap, not just spacing: the bell is a state toggle, the three that follow
-          are actions. Crowding them into one strip read as a single group. */}
-      {(hovered || isMobile) && (
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 6 }}>
-          <ActionBtn
-            onClick={handleCopy}
-            title={copied ? '已复制' : '复制链接'}
-            color={copied ? 'var(--accent)' : 'var(--text-tertiary)'}
-            hoverColor="var(--accent)"
-            isMobile={isMobile}
-          >
-            {copied ? <CopyCheck size={11} /> : <Copy size={11} />}
-          </ActionBtn>
-          <ActionBtn
-            onClick={() => setEditing(true)}
-            title="编辑"
-            color="var(--text-tertiary)"
-            hoverColor="var(--accent)"
-            isMobile={isMobile}
-          >
-            <Pencil size={11} />
-          </ActionBtn>
-          <ActionBtn
-            onClick={handleDelete}
-            title={confirmingDelete ? '再点一次确认删除' : '删除'}
-            color={confirmingDelete ? 'var(--red)' : 'var(--text-tertiary)'}
-            hoverColor="var(--red)"
-            isMobile={isMobile}
-            armed={confirmingDelete}
-          >
-            {confirmingDelete ? <Check size={11} /> : <Trash2 size={11} />}
-          </ActionBtn>
-        </div>
-      )}
+        <ActionBtn
+          onClick={() => setEditing(true)}
+          title="编辑"
+          color="var(--text-tertiary)"
+          hoverColor="var(--accent)"
+          isMobile={isMobile}
+        >
+          <Pencil size={11} />
+        </ActionBtn>
+        <ActionBtn
+          onClick={handleDelete}
+          title={confirmingDelete ? '再点一次确认删除' : '删除'}
+          color={confirmingDelete ? 'var(--red)' : 'var(--text-tertiary)'}
+          hoverColor="var(--red)"
+          isMobile={isMobile}
+          armed={confirmingDelete}
+        >
+          {confirmingDelete ? <Check size={11} /> : <Trash2 size={11} />}
+        </ActionBtn>
+      </div>
       {pushError && (
         <p
           style={{

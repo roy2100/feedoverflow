@@ -54,10 +54,14 @@ func scanArticleRow(rows *sql.Rows, r *articles.Row, extra ...any) error {
 	}, extra...)...)
 }
 
-// ListFeeds — GET /api/feeds: raw feed rows ordered by rowid (category omitted).
+// ListFeeds — GET /api/feeds: feed rows and their latest article publication time,
+// ordered by rowid. The correlated MAX uses idx_article_states_feed_pub without
+// reading article bodies; zero is the sentinel for an unknown publication date.
 func ListFeeds(db *sql.DB) ([]model.Feed, error) {
 	rows, err := db.Query(
-		`SELECT id, name, url, last_fetched_at, COALESCE(push_enabled, 0) FROM feeds ORDER BY rowid`)
+		`SELECT id, name, url, last_fetched_at, COALESCE(push_enabled, 0),
+		 (SELECT NULLIF(MAX(pub_ts), 0) FROM article_states WHERE feed_id = feeds.id)
+		 FROM feeds ORDER BY rowid`)
 	if err != nil {
 		return nil, err
 	}
@@ -65,13 +69,8 @@ func ListFeeds(db *sql.DB) ([]model.Feed, error) {
 	feeds := []model.Feed{}
 	for rows.Next() {
 		var f model.Feed
-		var last sql.NullInt64
-		if err := rows.Scan(&f.ID, &f.Name, &f.URL, &last, &f.PushEnabled); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.URL, &f.LastFetchedAt, &f.PushEnabled, &f.LatestArticleAt); err != nil {
 			return nil, err
-		}
-		if last.Valid {
-			v := last.Int64
-			f.LastFetchedAt = &v
 		}
 		feeds = append(feeds, f)
 	}

@@ -10,6 +10,9 @@ type Feed struct {
 	Name          string `json:"name"`
 	URL           string `json:"url"`
 	LastFetchedAt *int64 `json:"last_fetched_at"`
+	// LatestArticleAt is the newest stored publication time in epoch milliseconds,
+	// populated by ListFeeds. Nil means no usable publication timestamp.
+	LatestArticleAt *int64 `json:"latest_article_at"`
 	// PushEnabled is the per-feed Web Push opt-in (default off). The notification
 	// watermark (feeds.last_notified_ts) is deliberately not exposed — it is
 	// poller bookkeeping, not something a client acts on.

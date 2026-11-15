@@ -59,6 +59,7 @@ interface StoreState {
   trend: TrendData | null;
 
   init: () => Promise<void>;
+  refreshFeedTimes: () => Promise<void>;
   loadArticles: (view: View) => Promise<void>;
   selectView: (view: View) => void;
   search: (query: string) => void;
@@ -120,6 +121,24 @@ export const useStore = create<StoreState>((set, get) => ({
         if (c) set({ llmReady: !!(c.key_set && c.base_url && c.model) });
       })
       .catch(() => {});
+  },
+
+  refreshFeedTimes: async () => {
+    try {
+      const r = await apiFetch(`${API}/feeds`);
+      if (!r.ok) return;
+      const feeds = (await r.json()) as Feed[];
+      const times = new Map(feeds.map((f) => [f.id, f.latest_article_at]));
+      // Only refresh times: an overlapping rename/add/delete must not be undone
+      // by the snapshot that was requested when management opened.
+      set((state) => ({
+        feeds: state.feeds.map((f) =>
+          times.has(f.id) ? { ...f, latest_article_at: times.get(f.id) } : f,
+        ),
+      }));
+    } catch (e) {
+      console.error(e);
+    }
   },
 
   loadArticles: async (view) => {

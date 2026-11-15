@@ -70,6 +70,7 @@ export default function App() {
     selectedArticle,
     loadingArticles,
     init,
+    refreshFeedTimes,
     selectView,
     search,
     selectArticle,
@@ -91,6 +92,10 @@ export default function App() {
     setSearchTab,
     llmReady,
   } = useStore();
+
+  useEffect(() => {
+    if (manage) void refreshFeedTimes();
+  }, [manage, refreshFeedTimes]);
 
   // Label for the scopable base view (Starred / a feed). Null ⇒ not scopable ⇒ no toggle.
   const scopeLabel =

@@ -4,6 +4,8 @@ export interface Feed {
   id: string;
   name: string;
   url: string;
+  /** Newest stored article publication time (epoch ms), null when unknown. */
+  latest_article_at?: number | null;
   /** Per-feed Web Push opt-in. Absent on responses from an older server. */
   push_enabled?: boolean;
 }

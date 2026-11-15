@@ -107,25 +107,18 @@ interface CollectionRowProps {
 }
 
 function CollectionRow({ collection, feeds, isMobile, onEdit, onDelete }: CollectionRowProps) {
-  const [hovered, setHovered] = useState(false);
   // Two-step delete, same as FeedsPanel: the first click arms, the second
   // commits, and leaving the row disarms so nothing stays armed unattended.
   const [confirming, setConfirming] = useState(false);
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false);
-        setConfirming(false);
-      }}
+      onMouseLeave={() => setConfirming(false)}
       style={{
         display: 'flex',
         alignItems: 'flex-start',
         padding: '8px 20px',
         gap: 10,
-        background: hovered ? 'var(--bg-hover)' : 'transparent',
-        transition: 'background 0.1s',
       }}
     >
       <Layers size={13} style={{ color: '#3B9E6E', flexShrink: 0, marginTop: 2 }} />
@@ -139,29 +132,27 @@ function CollectionRow({ collection, feeds, isMobile, onEdit, onDelete }: Collec
           ))}
         </div>
       </div>
-      {(hovered || isMobile) && (
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <RowBtn onClick={onEdit} title="编辑" color="var(--text-tertiary)" isMobile={isMobile}>
-            <Pencil size={11} />
-          </RowBtn>
-          <RowBtn
-            onClick={() => {
-              if (!confirming) {
-                setConfirming(true);
-                return;
-              }
-              setConfirming(false);
-              void onDelete();
-            }}
-            title={confirming ? '再点一次确认删除' : '删除'}
-            color={confirming ? 'var(--red)' : 'var(--text-tertiary)'}
-            isMobile={isMobile}
-            armed={confirming}
-          >
-            {confirming ? <Check size={11} /> : <Trash2 size={11} />}
-          </RowBtn>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <RowBtn onClick={onEdit} title="编辑" color="var(--text-tertiary)" isMobile={isMobile}>
+          <Pencil size={11} />
+        </RowBtn>
+        <RowBtn
+          onClick={() => {
+            if (!confirming) {
+              setConfirming(true);
+              return;
+            }
+            setConfirming(false);
+            void onDelete();
+          }}
+          title={confirming ? '再点一次确认删除' : '删除'}
+          color={confirming ? 'var(--red)' : 'var(--text-tertiary)'}
+          isMobile={isMobile}
+          armed={confirming}
+        >
+          {confirming ? <Check size={11} /> : <Trash2 size={11} />}
+        </RowBtn>
+      </div>
     </div>
   );
 }

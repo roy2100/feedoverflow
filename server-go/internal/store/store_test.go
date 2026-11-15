@@ -130,6 +130,39 @@ func TestListFeeds(t *testing.T) {
 	}
 }
 
+func TestListFeedsLatestArticleTime(t *testing.T) {
+	h := newTestDB(t)
+	w := h.Writer()
+	for _, id := range []string{"first", "second", "empty", "undated"} {
+		insertFeed(t, w, id, id, "https://"+id, int64(1900000000000))
+	}
+	insertArticle(t, w, af{id: "new", feedID: "first", pubTs: 1700000000000})
+	// An older article edited later must not become the latest publication.
+	insertArticle(t, w, af{id: "old", feedID: "first", pubTs: 1600000000000,
+		contentUpdatedAt: int64(2000000000000)})
+	insertArticle(t, w, af{id: "other", feedID: "second", pubTs: 1800000000000, isStarred: 1})
+	insertArticle(t, w, af{id: "unknown", feedID: "undated", pubTs: 0})
+	insertArticle(t, w, af{id: "orphan", feedID: "deleted", pubTs: 2100000000000})
+
+	feeds, err := store.ListFeeds(h.Reader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feeds) != 4 {
+		t.Fatalf("want 4 feeds, got %d", len(feeds))
+	}
+	want := []int64{1700000000000, 1800000000000, 0, 0}
+	for i, f := range feeds {
+		if want[i] == 0 {
+			if f.LatestArticleAt != nil {
+				t.Errorf("feed %s: want nil, got %d", f.ID, *f.LatestArticleAt)
+			}
+		} else if f.LatestArticleAt == nil || *f.LatestArticleAt != want[i] {
+			t.Errorf("feed %s: want %d, got %v", f.ID, want[i], f.LatestArticleAt)
+		}
+	}
+}
+
 func TestFeedIDs(t *testing.T) {
 	h := newTestDB(t)
 	insertFeed(t, h.Writer(), "b", "B", "http://b", nil)
