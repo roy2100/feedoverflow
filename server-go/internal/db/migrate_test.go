@@ -114,4 +114,7 @@ func TestInitSchemaIsIdempotent(t *testing.T) {
 	if enabled != 1 || model != "kimi-k2" {
 		t.Fatalf("re-init clobbered config: enabled=%d model=%q", enabled, model)
 	}
+	if !hasColumn(t, h.Reader(), "article_states", "last_opened_at") {
+		t.Fatal("article_states missing last_opened_at column")
+	}
 }

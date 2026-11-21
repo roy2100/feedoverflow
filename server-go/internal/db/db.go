@@ -188,6 +188,10 @@ func InitSchema(db *sql.DB) error {
 	// per-article state like is_starred, and is meaningless once the article is gone.
 	execIgnore(db, `ALTER TABLE article_states ADD COLUMN play_position INTEGER`)
 	execIgnore(db, `ALTER TABLE article_states ADD COLUMN play_updated_at INTEGER`)
+	// Last-opened timestamp (epoch ms); NULL until opened in the reader. Drives
+	// GET /api/history (newest-opened first) and rides on the article row so feed
+	// deletion and size-cap trimming clean up unstarred history automatically.
+	execIgnore(db, `ALTER TABLE article_states ADD COLUMN last_opened_at INTEGER`)
 
 	if _, err := db.Exec(
 		`CREATE INDEX IF NOT EXISTS idx_article_states_feed_pub ON article_states (feed_id, pub_ts)`,
@@ -236,6 +240,13 @@ func InitSchema(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_article_states_podcast_ts ON article_states (pub_ts DESC) WHERE audio_url IS NOT NULL AND audio_url != ''`,
 	); err != nil {
 		return fmt.Errorf("idx podcast: %w", err)
+	}
+	// Partial index over opened rows only: GET /api/history filters on
+	// last_opened_at IS NOT NULL and orders by (last_opened_at DESC, article_id DESC).
+	if _, err := db.Exec(
+		`CREATE INDEX IF NOT EXISTS idx_article_states_opened ON article_states (last_opened_at DESC, article_id DESC) WHERE last_opened_at IS NOT NULL`,
+	); err != nil {
+		return fmt.Errorf("idx opened: %w", err)
 	}
 
 	// Rules are always read by collection, never globally.

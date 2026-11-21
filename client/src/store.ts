@@ -158,6 +158,7 @@ export const useStore = create<StoreState>((set, get) => ({
         today: `${API}/today`,
         starred: `${API}/starred`,
         podcast: `${API}/podcasts`,
+        history: `${API}/history`,
       };
       let url: string;
       if (view.type === 'trend') {
@@ -284,6 +285,7 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   selectArticle: (article) => {
+    if (get().selectedArticle?.id === article.id) return;
     apiFetch(`${API}/current-article`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

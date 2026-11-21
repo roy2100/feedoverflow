@@ -5,6 +5,7 @@ import {
   Star,
   List,
   Podcast,
+  History,
   Rss,
   Layers,
   SquarePen,
@@ -323,6 +324,14 @@ export default function FeedSidebar({
           iconColor="#8E5BD9"
           selected={hlType === 'podcast'}
           onClick={() => onSelectView({ type: 'podcast' })}
+        />
+        <NavItem
+          isMobile={isMobile}
+          label="最近阅读"
+          icon={<History size={isMobile ? 16 : 13} strokeWidth={2} />}
+          iconColor="var(--text-secondary)"
+          selected={hlType === 'history'}
+          onClick={() => onSelectView({ type: 'history' })}
         />
 
         {/* Collections — saved streams merging several feeds. Purely a list, like

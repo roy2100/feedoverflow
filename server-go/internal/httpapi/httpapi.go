@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -133,6 +134,7 @@ func (s *Server) mountAPIRoutes(r chi.Router) {
 	r.Get("/api/today", s.getToday)
 	r.Get("/api/starred", s.getStarred)
 	r.Get("/api/podcasts", s.getPodcasts)
+	r.Get("/api/history", s.getHistory)
 	r.Get("/api/starred/count", s.getStarredCount)
 	r.Post("/api/articles/star", s.postStar)
 	r.Get("/api/articles/{id}", s.getArticle)
@@ -311,6 +313,31 @@ func (s *Server) getPodcasts(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+const (
+	historyDefaultLimit = 200
+	historyMaxLimit     = 500
+)
+
+func (s *Server) getHistory(w http.ResponseWriter, r *http.Request) {
+	limit := historyDefaultLimit
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > historyMaxLimit {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "limit 取值 1–500"})
+			return
+		}
+		limit = n
+	}
+	rows, err := store.History(s.DB.Reader(), limit)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"articles": articles.NormalizePubDates(toArticles(rows, wantSummary(r), false)),
+	})
+}
+
 func (s *Server) getStarredCount(w http.ResponseWriter, _ *http.Request) {
 	n, err := store.StarredCount(s.DB.Reader())
 	if err != nil {
@@ -431,6 +458,12 @@ func (s *Server) postCurrentArticle(w http.ResponseWriter, r *http.Request) {
 		s.curArticle = body.Article
 	}
 	s.curMu.Unlock()
+	var meta struct {
+		ID string `json:"id"`
+	}
+	if len(body.Article) > 0 && json.Unmarshal(body.Article, &meta) == nil && meta.ID != "" {
+		_ = store.TouchOpened(s.DB.Writer(), meta.ID, time.Now().UnixMilli())
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

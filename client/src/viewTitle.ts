@@ -14,6 +14,8 @@ export function viewTitle(view: View): string {
       return '收藏';
     case 'podcast':
       return '播客';
+    case 'history':
+      return '最近阅读';
     case 'search':
     case 'trend': // same query, other tab — the header's 结果 | 趋势 toggle tells them apart
       return `搜索：${view.query ?? ''}`;

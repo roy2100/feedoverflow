@@ -15,6 +15,7 @@ describe('viewTitle', () => {
     [{ type: 'today' }, '今日'],
     [{ type: 'starred' }, '收藏'],
     [{ type: 'podcast' }, '播客'],
+    [{ type: 'history' }, '最近阅读'],
     [{ type: 'feed', feed }, '少数派'],
     [{ type: 'collection', collection }, '每日'],
     [{ type: 'search', query: 'rust' }, '搜索：rust'],

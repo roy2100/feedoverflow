@@ -180,6 +180,19 @@ func Podcasts(db *sql.DB) ([]articles.Row, error) {
 	return scanArticleRows(rows)
 }
 
+// History — GET /api/history: opened rows, newest-opened first, capped at limit.
+func History(db *sql.DB, limit int) ([]articles.Row, error) {
+	rows, err := db.Query(
+		`SELECT `+articleColsNoContent+` FROM article_states
+		 WHERE last_opened_at IS NOT NULL
+		 ORDER BY last_opened_at DESC, article_id DESC
+		 LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return scanArticleRows(rows)
+}
+
 // StarredCount — GET /api/starred/count.
 func StarredCount(db *sql.DB) (int64, error) {
 	var n int64

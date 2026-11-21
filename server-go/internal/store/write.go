@@ -57,3 +57,12 @@ func ClearFeedFreshness(w *sql.DB) error {
 	_, err := w.Exec(`UPDATE feeds SET last_fetched_at = NULL`)
 	return err
 }
+
+// TouchOpened stamps last_opened_at (epoch ms) on an existing article_states row.
+// Every write is an UPDATE: an unknown or already-trimmed id is a silent no-op so
+// opening can never mint a title-less row.
+func TouchOpened(w *sql.DB, id string, now int64) error {
+	_, err := w.Exec(
+		`UPDATE article_states SET last_opened_at = ? WHERE article_id = ?`, now, id)
+	return err
+}

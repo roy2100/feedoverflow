@@ -87,6 +87,46 @@ func TestCurrentArticle(t *testing.T) {
 	}
 }
 
+func TestHistoryEndpointAndCurrentArticleTouch(t *testing.T) {
+	s := &Server{DB: testDB(t)}
+	h := s.NewLocalRouter()
+	seedSummaryRow(t, s, "a1", "1")
+	seedSummaryRow(t, s, "a2", "1")
+
+	// Empty history returns [].
+	rec := do(h, "GET", "/api/history", "", nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"articles":[]`) {
+		t.Fatalf("empty history: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Opening a1 then a2 via POST /api/current-article stamps last_opened_at.
+	do(h, "POST", "/api/current-article", `{"article":{"id":"a1","title":"One"}}`, jsonHdr())
+	if _, err := s.DB.Writer().Exec(`UPDATE article_states SET last_opened_at = 100 WHERE article_id = 'a1'`); err != nil {
+		t.Fatal(err)
+	}
+	do(h, "POST", "/api/current-article", `{"article":{"id":"a2","title":"Two"}}`, jsonHdr())
+	// Unknown id and null clear do not mint rows or fail.
+	do(h, "POST", "/api/current-article", `{"article":{"id":"ghost","title":"Ghost"}}`, jsonHdr())
+	do(h, "POST", "/api/current-article", `{"article":null}`, jsonHdr())
+
+	// Limit=1 returns only the most recently opened article (a2), with content stripped.
+	summary, content := listFields(t, do(h, "GET", "/api/history?limit=1", "", nil).Body.String())
+	if summary != "" || content != "" {
+		t.Fatalf("default summary/content not stripped: %q / %q", summary, content)
+	}
+	summary, content = listFields(t, do(h, "GET", "/api/history?limit=1&summary=1", "", nil).Body.String())
+	if summary != "the summary" || content != "" {
+		t.Fatalf("summary=1: got %q / %q", summary, content)
+	}
+
+	// Invalid limit values return 400.
+	for _, bad := range []string{"0", "-1", "501", "abc"} {
+		if rec := do(h, "GET", "/api/history?limit="+bad, "", nil); rec.Code != 400 {
+			t.Fatalf("limit=%s: want 400, got %d", bad, rec.Code)
+		}
+	}
+}
+
 func TestSettingsPatch(t *testing.T) {
 	s := &Server{DB: testDB(t)}
 	h := s.NewLocalRouter()

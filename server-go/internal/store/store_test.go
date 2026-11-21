@@ -6,6 +6,7 @@ import (
 
 	"rss-reader/server-go/internal/articles"
 	"rss-reader/server-go/internal/db"
+	"rss-reader/server-go/internal/model"
 	"rss-reader/server-go/internal/store"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -266,6 +267,62 @@ func TestPodcasts(t *testing.T) {
 	}
 	// Only audio-bearing rows, newest by pub_ts first.
 	eqStrings(t, articleIDs(pods), []string{"p_new", "p_old"})
+}
+
+func TestHistoryAndTouchOpened(t *testing.T) {
+	h := newTestDB(t)
+	w := h.Writer()
+	r := h.Reader()
+	insertFeed(t, w, "f1", "Feed One", "http://f1/rss", nil)
+	// pubTs is inverted relative to open order so pub_ts sorting would fail.
+	insertArticle(t, w, af{id: "a", feedID: "f1", link: "http://f1/a", title: "A", pubTs: 3000, content: "body-a"})
+	insertArticle(t, w, af{id: "b", feedID: "f1", link: "http://f1/b", title: "B", pubTs: 2000, content: "body-b"})
+	insertArticle(t, w, af{id: "c", feedID: "f1", link: "http://f1/c", title: "C", pubTs: 1000, content: "body-c"})
+
+	// Fresh DB has no opened rows.
+	got, err := store.History(r, 200)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("initial history: %v %+v", err, got)
+	}
+
+	// Open A -> B -> A: A moves to top without duplicating; C stays excluded.
+	if err := store.TouchOpened(w, "a", 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TouchOpened(w, "b", 200); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.TouchOpened(w, "a", 300); err != nil {
+		t.Fatal(err)
+	}
+	// Unknown id is a silent no-op and must never insert a row.
+	if err := store.TouchOpened(w, "missing", 400); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err = store.History(r, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eqStrings(t, articleIDs(got), []string{"a", "b"})
+	if got[0].Content.String != "" {
+		t.Fatalf("History must strip content, got %q", got[0].Content.String)
+	}
+
+	// Star/unstar preserves last_opened_at.
+	if err := store.SaveState(w, model.Article{ID: "a", FeedID: "f1", Link: "http://f1/a"}, 1, 999); err != nil {
+		t.Fatal(err)
+	}
+
+	// Tie-breaker: equal last_opened_at orders by article_id DESC, and LIMIT caps output.
+	if err := store.TouchOpened(w, "c", 300); err != nil {
+		t.Fatal(err)
+	}
+	got, err = store.History(r, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eqStrings(t, articleIDs(got), []string{"c", "a"})
 }
 
 func TestLookupContent(t *testing.T) {

@@ -98,7 +98,16 @@ export interface SearchScope {
 // the list showing exactly the articles the bars counted (optionally one `day` of
 // them). It matches differently from search on purpose — see docs/plan-keyword-trend.md.
 export interface View {
-  type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search' | 'trend';
+  type:
+    | 'all'
+    | 'today'
+    | 'starred'
+    | 'podcast'
+    | 'history'
+    | 'feed'
+    | 'collection'
+    | 'search'
+    | 'trend';
   feed?: Feed;
   collection?: Collection;
   query?: string;

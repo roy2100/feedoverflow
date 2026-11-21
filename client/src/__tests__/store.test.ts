@@ -149,6 +149,15 @@ describe('selectArticle', () => {
     useStore.getState().selectArticle(article);
     expect(useStore.getState().selectedArticle).toEqual(article);
   });
+
+  it('skips duplicate POST when re-selecting the already selected article', () => {
+    const article = { id: 'a1' } as Article;
+    useStore.setState({ articles: [article], selectedArticle: null });
+    useStore.getState().selectArticle(article);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    useStore.getState().selectArticle(article);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─── fetchArticleById ────────────────────────────────────────────────────────
@@ -233,6 +242,8 @@ describe('loadArticles URL mapping', () => {
     [{ type: 'all' }, '/api/all-articles?mode=latest'],
     [{ type: 'today' }, '/api/today?mode=latest'],
     [{ type: 'starred' }, '/api/starred'],
+    [{ type: 'podcast' }, '/api/podcasts'],
+    [{ type: 'history' }, '/api/history'],
     [{ type: 'feed', feed: { id: '5' } as Feed }, '/api/feeds/5/articles'],
   ])('view %o requests %s', async (view, expectedUrl) => {
     await useStore.getState().loadArticles(view);

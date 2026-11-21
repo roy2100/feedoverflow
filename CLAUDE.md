@@ -131,7 +131,7 @@ the type gate — Vite does not type-check.
 
 **Data flow:** `store.ts` owns app state (`feeds`, `collections`, `articles`, `selectedView`,
 `selectedArticle`, `starredCount`); components subscribe via `useStore`. `selectedView`:
-`{ type: 'all' | 'today' | 'starred' | 'podcast' | 'feed' | 'collection' | 'search' | 'trend',
+`{ type: 'all' | 'today' | 'starred' | 'podcast' | 'history' | 'feed' | 'collection' | 'search' | 'trend',
 feed?, collection?, query?, scope?, days?, day? }`. Star uses optimistic updates — mutate local state immediately,
 fire-and-forget POST to sync.
 
@@ -313,7 +313,7 @@ language, drop stale/redundant chrome.
 **SQLite tables:**
 - `feeds(id, name, url, last_fetched_at, push_enabled, last_notified_ts)`
 - `collections(id, name, position, created_at)` + `collection_rules(id, collection_id, feed_id, include, exclude)` — saved multi-feed streams
-- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at, title_zh)` — durable record of every fetched article
+- `article_states(article_id, feed_id, feed_name, feed_url, title, link, pub_date, pub_ts, summary, content, author, audio_url, audio_duration, is_starred, updated_at, content_updated_at, play_position, play_updated_at, last_opened_at, title_zh)` — durable record of every fetched article
 - `settings(key, value)` — e.g. `rsshub_base_url`
 - `sessions(token, created_at)` — 30-day TTL
 - `favicon_cache(domain, image, content_type, fetched_at)` — 30-day positive / 1-day negative TTL
@@ -346,6 +346,7 @@ language, drop stale/redundant chrome.
 | GET | `/api/trend` | per-day match counts + totals for `?q=` (`a\|b` = synonyms) over `?days=7\|30\|90`; matching articles (≤500, `?limit=`), `?day=` narrows them |
 | GET | `/api/starred` | starred articles |
 | GET | `/api/podcasts` | episodes with a non-empty `audio_url` |
+| GET | `/api/history` | recently opened articles (`last_opened_at DESC`), default 200 (`?limit=1..500`, `?summary=1`) |
 | GET | `/api/starred/count` | badge count |
 | POST | `/api/articles/star` | upsert `is_starred` |
 | GET | `/api/articles/:id` | one article (content included) — used only by the push deep link |
