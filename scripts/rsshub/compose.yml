@@ -1,7 +1,10 @@
 services:
   rsshub:
-    image: diygod/rsshub:latest
+    build: .
+    image: feedoverflow-rsshub:v2026.11.21-8713.53e83fa
     container_name: rsshub
+    # Upstream npm start replaces NODE_OPTIONS, discarding the heap cap below.
+    command: ["node", "--max-http-header-size=32768", "dist/index.mjs"]
     ports:
       - "127.0.0.1:1200:1200"
     environment:

@@ -17,7 +17,31 @@ rollout never touches the service definition and a one-time setup never rebuilds
 | `lib.sh` | Shared config vars + launchd helpers (`reload_service`, `kickstart_service`, `health_check`) sourced by the deploy/service scripts. |
 | `burst-latency.sh` | Concurrent-burst latency smoke test against a running server (loopback `:4002`). |
 | `loc.sh` | Lines-of-code report for the repo. |
-| `rsshub/compose.yml` | Local OrbStack RSSHub container (`diygod/rsshub:latest` on `127.0.0.1:1200`, 320 MiB memory cap, replaces the VPS SSH tunnel). |
+| `rsshub/compose.yml` | Local OrbStack RSSHub container (pinned official image plus route fixes on `127.0.0.1:1200`, 320 MiB memory cap, replaces the VPS SSH tunnel). |
+
+## Local RSSHub
+
+Build and start from the repository root:
+
+```bash
+docker compose -f scripts/rsshub/compose.yml up -d --build
+```
+
+`rsshub/Dockerfile` pins official release `v2026.11.21-8713.53e83fa` by digest.
+`patch-routes.mjs` adds a rendered-category fallback for Jiemian's intermittent load-more
+404s and preserves the original xyzfm episode links (`?utm_source=rss`) when using the
+Xiaoyuzhou routes. The latter keeps article IDs, stars, and playback progress continuous.
+Xiaoyuzhou's page provides only the latest 15 episodes; older stored articles remain intact.
+The container runs Node directly because upstream `npm start` overwrites `NODE_OPTIONS`
+and discards the configured 256 MiB heap cap.
+
+For an upgrade, pull the new official image, update the Dockerfile digest and compose image
+tag, review the exact-match route patches, then rebuild and probe all subscribed routes.
+A source mismatch fails the build instead of silently dropping a fix. `compose pull` alone
+cannot update this locally built image. Remove a patch once the upstream route fixes the
+same issue, retaining the podcast URL identity guarantee.
+
+See `docs/plan-rsshub-upgrade-fetch-repair.md` for validation, remaining risks, and rollback.
 
 ## Env the Go plist sets
 

@@ -52,7 +52,9 @@ type Parsed struct {
 	Items []Item
 }
 
-const fetchTimeout = 10 * time.Second
+// RSSHub can fetch a category page plus every article body on a cold cache.
+// Zaobao routinely takes 13–18s; keep a finite bound without cancelling valid feeds.
+const fetchTimeout = 30 * time.Second
 
 // stripHtml / getSnippet mirror utils.stripHtml + utils.getSnippet in rss-parser:
 // first insert a newline around block-level tags, then strip every tag, then
@@ -152,7 +154,7 @@ func ParseBytes(data []byte) (*Parsed, error) {
 }
 
 // ParseURL fetches a feed (trailing slash stripped, like parse-url.ts) with a
-// hard 10s timeout and the RSS-Reader user-agent, then parses the bytes.
+// hard 30s timeout and the RSS-Reader user-agent, then parses the bytes.
 func ParseURL(ctx context.Context, url string) (*Parsed, error) {
 	target := strings.TrimSuffix(url, "/")
 	data, err := fetchXML(ctx, target)
